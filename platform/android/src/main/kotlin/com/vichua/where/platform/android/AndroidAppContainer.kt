@@ -8,6 +8,9 @@ import com.vichua.where.core.database.buildWhereDatabase
 import com.vichua.where.core.database.createAndroidDatabaseBuilder
 import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
+import com.vichua.where.core.database.transaction.ManualItemCreationStore
+import com.vichua.where.feature.item.creation.CreateManualItemUseCase
+import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
@@ -31,6 +34,8 @@ class AndroidAppContainer(
         RoomHouseholdInitializationRepository(initializationStore)
     private val homeSnapshotRepository =
         RoomHomeSnapshotRepository(HomeSnapshotStore(database))
+    private val manualItemCreationRepository =
+        RoomManualItemCreationRepository(ManualItemCreationStore(database))
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -45,6 +50,18 @@ class AndroidAppContainer(
 
     /** 加载首页最近记录、最近查找、常用位置和待确认数量的用例。 */
     val loadHomeSnapshotUseCase = LoadHomeSnapshotUseCase(homeSnapshotRepository)
+
+    /** 加载新增物品页面可选位置的用例。 */
+    val loadItemCreationContextUseCase =
+        LoadItemCreationContextUseCase(manualItemCreationRepository)
+
+    /** 创建基础手动物品的用例。 */
+    val createManualItemUseCase = CreateManualItemUseCase(
+        repository = manualItemCreationRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+        textNormalizer = DefaultTextNormalizer,
+    )
 
     /** 初始化页面使用的当前设备名称建议。 */
     val suggestedDeviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)
