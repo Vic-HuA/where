@@ -29,6 +29,8 @@ import com.vichua.where.feature.location.initialization.InitializeHouseholdReque
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
+import com.vichua.where.feature.search.text.ItemTextSearchResult
+import com.vichua.where.feature.search.text.SearchItemsUseCase
 import kotlinx.coroutines.launch
 
 /**
@@ -39,6 +41,7 @@ import kotlinx.coroutines.launch
  * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
  * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
  * @param createManualItemUseCase 保存基础手动物品的用例。
+ * @param searchItemsUseCase 执行本地文字搜索的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -49,6 +52,7 @@ fun WhereApp(
     loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
     loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
     createManualItemUseCase: CreateManualItemUseCase,
+    searchItemsUseCase: SearchItemsUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -65,6 +69,10 @@ fun WhereApp(
     var itemCreationError by remember { mutableStateOf<String?>(null) }
     var itemCreationAttempt by remember { mutableIntStateOf(0) }
     var itemCreationSubmitting by remember { mutableStateOf(false) }
+    var searchResults by remember { mutableStateOf<List<ItemTextSearchResult>?>(null) }
+    var searchInProgress by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var selectedItemName by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(startupAttempt) {
@@ -164,10 +172,34 @@ fun WhereApp(
                         destination = AppDestination.SETTINGS
                     },
                 )
-                AppDestination.SEARCH -> PendingFeatureScreen(
-                    title = "查找物品",
+                AppDestination.SEARCH -> SearchScreen(
+                    results = searchResults,
+                    searching = searchInProgress,
+                    errorMessage = searchError,
                     onBack = {
                         destination = AppDestination.HOME
+                    },
+                    onSearch = { query ->
+                        if (!searchInProgress) {
+                            coroutineScope.launch {
+                                searchInProgress = true
+                                searchError = null
+                                try {
+                                    searchResults = searchItemsUseCase(query)
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    searchError = "请输入要查找的物品。"
+                                } catch (_: Exception) {
+                                    searchError = "查找失败，请稍后重试。"
+                                } finally {
+                                    searchInProgress = false
+                                }
+                            }
+                        }
+                    },
+                    onResultClick = { result ->
+                        selectedItemName = result.name
+                        destination = AppDestination.ITEM_DETAIL
                     },
                 )
                 AppDestination.ADD_ITEM -> AddItemScreen(
@@ -211,6 +243,12 @@ fun WhereApp(
                     title = "设置与数据",
                     onBack = {
                         destination = AppDestination.HOME
+                    },
+                )
+                AppDestination.ITEM_DETAIL -> PendingFeatureScreen(
+                    title = selectedItemName.ifBlank { "物品详情" },
+                    onBack = {
+                        destination = AppDestination.SEARCH
                     },
                 )
             }
@@ -318,4 +356,5 @@ private enum class AppDestination {
     ADD_ITEM,
     LOCATION,
     SETTINGS,
+    ITEM_DETAIL,
 }

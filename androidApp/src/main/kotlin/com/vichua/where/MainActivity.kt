@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
                 loadHomeSnapshotUseCase = container.loadHomeSnapshotUseCase,
                 loadItemCreationContextUseCase = container.loadItemCreationContextUseCase,
                 createManualItemUseCase = container.createManualItemUseCase,
+                searchItemsUseCase = container.searchItemsUseCase,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )
