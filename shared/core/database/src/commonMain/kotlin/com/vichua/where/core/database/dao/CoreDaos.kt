@@ -38,6 +38,17 @@ interface HouseholdDao {
     /** 统计当前未删除家庭数量，MVP 初始化前必须为 0。 */
     @Query("SELECT COUNT(*) FROM households WHERE deleted_at IS NULL")
     suspend fun countActive(): Long
+
+    /** 查询本地首个未删除家庭。MVP 只允许存在一个未删除家庭。 */
+    @Query(
+        """
+        SELECT * FROM households
+        WHERE deleted_at IS NULL
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+        """,
+    )
+    suspend fun findFirstActive(): HouseholdEntity?
 }
 
 /**
@@ -56,6 +67,17 @@ interface DeviceDao {
     /** 查询指定设备。 */
     @Query("SELECT * FROM devices WHERE id = :id")
     suspend fun findById(id: String): DeviceEntity?
+
+    /** 查询家庭中首个仍未撤销的设备。 */
+    @Query(
+        """
+        SELECT * FROM devices
+        WHERE household_id = :householdId AND revoked_at IS NULL
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+        """,
+    )
+    suspend fun findFirstActiveByHousehold(householdId: String): DeviceEntity?
 
     /** 查询家庭下仍未撤销的设备。 */
     @Query(
@@ -183,6 +205,31 @@ interface ItemDao {
         limit: Int,
     ): Flow<List<ItemEntity>>
 
+    /** 加载首页最近更新的未删除物品。 */
+    @Query(
+        """
+        SELECT * FROM items
+        WHERE household_id = :householdId AND deleted_at IS NULL
+        ORDER BY updated_at DESC, created_at DESC, id ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun findRecentActive(
+        householdId: String,
+        limit: Int,
+    ): List<ItemEntity>
+
+    /** 统计家庭中位置待确认的未删除物品。 */
+    @Query(
+        """
+        SELECT COUNT(*) FROM items
+        WHERE household_id = :householdId
+          AND status = 'LOCATION_UNCONFIRMED'
+          AND deleted_at IS NULL
+        """,
+    )
+    suspend fun countLocationUnconfirmed(householdId: String): Long
+
     /** 统计直接关联指定位置的未删除物品数量。 */
     @Query(
         """
@@ -249,6 +296,18 @@ interface PhotoAssetDao {
         """,
     )
     suspend fun findAllByItem(itemId: String): List<PhotoAssetEntity>
+
+    /** 批量查询物品当前未删除封面照片。 */
+    @Query(
+        """
+        SELECT * FROM photo_assets
+        WHERE item_id IN (:itemIds)
+          AND is_cover = 1
+          AND deleted_at IS NULL
+        ORDER BY item_id ASC, id ASC
+        """,
+    )
+    suspend fun findActiveCovers(itemIds: List<String>): List<PhotoAssetEntity>
 }
 
 /**

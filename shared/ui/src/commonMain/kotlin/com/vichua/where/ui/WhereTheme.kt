@@ -59,6 +59,12 @@ private val WhereTypography = Typography(
         fontWeight = FontWeight.SemiBold,
         lineHeight = 18.sp,
     ),
+    titleLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Bold,
+        lineHeight = 24.sp,
+    ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontSize = 15.sp,

@@ -133,6 +133,32 @@ value class ChangeRecordId(val value: String) {
 }
 
 /**
+ * 常用位置引用的全局唯一标识。
+ *
+ * @property value 客户端生成的标识文本。
+ */
+@Serializable
+@JvmInline
+value class FavoriteLocationId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Favorite location ID must not be blank." }
+    }
+}
+
+/**
+ * 当前设备最近查找记录的唯一标识。
+ *
+ * @property value 当前设备生成的标识文本。
+ */
+@Serializable
+@JvmInline
+value class LocalSearchHistoryId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Local search history ID must not be blank." }
+    }
+}
+
+/**
  * 以 Unix Epoch 毫秒表示的 UTC 时间戳。
  *
  * 使用数值而不是格式化字符串保存时间，确保跨时区排序和迁移结果稳定。

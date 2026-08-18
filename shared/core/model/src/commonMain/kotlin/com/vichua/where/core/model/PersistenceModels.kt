@@ -60,6 +60,9 @@ enum class ChangeEntityType {
 
     /** 物品位置历史。 */
     ITEM_LOCATION_EVENT,
+
+    /** 用户主动固定的常用位置。 */
+    FAVORITE_LOCATION,
 }
 
 /**

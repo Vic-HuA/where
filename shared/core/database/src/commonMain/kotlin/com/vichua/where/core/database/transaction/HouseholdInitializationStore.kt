@@ -7,6 +7,7 @@ import com.vichua.where.core.model.ChangeOperation
 import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.Device
 import com.vichua.where.core.model.DomainValidators
+import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.Household
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationType
@@ -33,6 +34,7 @@ class HouseholdInitializationStore(
      * @param device 当前设备记录。
      * @param rootLocation 家庭唯一根位置。
      * @param roomLocations 根位置下至少一个基础房间。
+     * @param favoriteLocations 初始化页主动选择的常用房间引用。
      * @param changeRecords 家庭、设备和全部位置对应的创建变更记录。
      */
     suspend fun initialize(
@@ -40,6 +42,7 @@ class HouseholdInitializationStore(
         device: Device,
         rootLocation: LocationNode,
         roomLocations: List<LocationNode>,
+        favoriteLocations: List<FavoriteLocation>,
         changeRecords: List<ChangeRecord>,
     ) {
         validateInitialization(
@@ -47,6 +50,7 @@ class HouseholdInitializationStore(
             device = device,
             rootLocation = rootLocation,
             roomLocations = roomLocations,
+            favoriteLocations = favoriteLocations,
             changeRecords = changeRecords,
         )
 
@@ -60,6 +64,9 @@ class HouseholdInitializationStore(
             locationNodeDao().insertAll(
                 (listOf(rootLocation) + roomLocations).map(LocationNode::toEntity),
             )
+            homeSupportDao().insertFavoriteLocations(
+                favoriteLocations.map(FavoriteLocation::toEntity),
+            )
             changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
         }
     }
@@ -72,6 +79,7 @@ class HouseholdInitializationStore(
         device: Device,
         rootLocation: LocationNode,
         roomLocations: List<LocationNode>,
+        favoriteLocations: List<FavoriteLocation>,
         changeRecords: List<ChangeRecord>,
     ) {
         require(household.deletedAt == null) { "Initialized household must be active." }
@@ -102,6 +110,23 @@ class HouseholdInitializationStore(
             householdId = household.id,
             locations = listOf(rootLocation) + roomLocations,
         )
+        val roomIds = roomLocations.map(LocationNode::id).toSet()
+        require(favoriteLocations.size == roomLocations.size) {
+            "Initialization must create one favorite reference for every selected room."
+        }
+        require(favoriteLocations.all { favorite ->
+            favorite.householdId == household.id &&
+                favorite.locationNodeId in roomIds &&
+                favorite.deletedAt == null
+        }) {
+            "Initial favorite locations must reference active rooms in the new household."
+        }
+        require(
+            favoriteLocations.map(FavoriteLocation::locationNodeId).toSet().size ==
+                favoriteLocations.size,
+        ) {
+            "Initialization contains duplicate favorite room references."
+        }
 
         val expectedChangedEntities = buildSet {
             add(ChangeEntityType.HOUSEHOLD to household.id.value)
@@ -109,6 +134,9 @@ class HouseholdInitializationStore(
             add(ChangeEntityType.LOCATION_NODE to rootLocation.id.value)
             roomLocations.forEach { room ->
                 add(ChangeEntityType.LOCATION_NODE to room.id.value)
+            }
+            favoriteLocations.forEach { favorite ->
+                add(ChangeEntityType.FAVORITE_LOCATION to favorite.id.value)
             }
         }
         val actualChangedEntities = changeRecords.map { record ->

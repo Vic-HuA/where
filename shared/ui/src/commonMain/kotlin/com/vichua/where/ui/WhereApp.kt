@@ -24,6 +24,8 @@ import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
+import com.vichua.where.feature.search.home.HomeSnapshot
+import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import kotlinx.coroutines.launch
 
 /**
@@ -31,6 +33,7 @@ import kotlinx.coroutines.launch
  *
  * @param hasActiveHouseholdUseCase 查询本地是否已有家庭的用例。
  * @param initializeHouseholdUseCase 保存首个家庭的用例。
+ * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -38,6 +41,7 @@ import kotlinx.coroutines.launch
 fun WhereApp(
     hasActiveHouseholdUseCase: HasActiveHouseholdUseCase,
     initializeHouseholdUseCase: InitializeHouseholdUseCase,
+    loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -45,6 +49,10 @@ fun WhereApp(
     var startupAttempt by remember { mutableIntStateOf(0) }
     var initializationInProgress by remember { mutableStateOf(false) }
     var initializationError by remember { mutableStateOf<String?>(null) }
+    var homeSnapshot by remember { mutableStateOf<HomeSnapshot?>(null) }
+    var homeLoading by remember { mutableStateOf(false) }
+    var homeError by remember { mutableStateOf<String?>(null) }
+    var homeLoadAttempt by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(startupAttempt) {
@@ -57,6 +65,20 @@ fun WhereApp(
             }
         } catch (_: Exception) {
             AppDestination.STARTUP_ERROR
+        }
+    }
+
+    LaunchedEffect(destination, homeLoadAttempt) {
+        if (destination == AppDestination.HOME) {
+            homeLoading = true
+            homeError = null
+            try {
+                homeSnapshot = loadHomeSnapshotUseCase()
+            } catch (_: Exception) {
+                homeError = "暂时无法读取首页数据。"
+            } finally {
+                homeLoading = false
+            }
         }
     }
 
@@ -96,8 +118,86 @@ fun WhereApp(
                         }
                     },
                 )
-                AppDestination.HOME -> HomeScreen()
+                AppDestination.HOME -> HomeScreen(
+                    snapshot = homeSnapshot,
+                    loading = homeLoading,
+                    errorMessage = homeError,
+                    onRetry = {
+                        homeLoadAttempt += 1
+                    },
+                    onSearchClick = {
+                        destination = AppDestination.SEARCH
+                    },
+                    onRecordItemClick = {
+                        destination = AppDestination.ADD_ITEM
+                    },
+                    onLocationClick = {
+                        destination = AppDestination.LOCATION
+                    },
+                    onSettingsClick = {
+                        destination = AppDestination.SETTINGS
+                    },
+                )
+                AppDestination.SEARCH -> PendingFeatureScreen(
+                    title = "查找物品",
+                    onBack = {
+                        destination = AppDestination.HOME
+                    },
+                )
+                AppDestination.ADD_ITEM -> PendingFeatureScreen(
+                    title = "记录物品",
+                    onBack = {
+                        destination = AppDestination.HOME
+                    },
+                )
+                AppDestination.LOCATION -> PendingFeatureScreen(
+                    title = "位置管理",
+                    onBack = {
+                        destination = AppDestination.HOME
+                    },
+                )
+                AppDestination.SETTINGS -> PendingFeatureScreen(
+                    title = "设置与数据",
+                    onBack = {
+                        destination = AppDestination.HOME
+                    },
+                )
             }
+        }
+    }
+}
+
+/**
+ * 尚未接入业务用例的目标页占位状态，提供明确返回路径而不是无响应按钮。
+ */
+@Composable
+private fun PendingFeatureScreen(
+    title: String,
+    onBack: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            text = title,
+            color = WherePrimaryTextColor,
+            style = MaterialTheme.typography.headlineMedium,
+        )
+        Text(
+            modifier = Modifier.padding(top = 8.dp),
+            text = "页面业务正在接入。",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Button(
+            modifier = Modifier.padding(top = 24.dp),
+            onClick = onBack,
+        ) {
+            Text("返回首页")
         }
     }
 }
@@ -163,4 +263,8 @@ private enum class AppDestination {
     STARTUP_ERROR,
     INITIALIZATION,
     HOME,
+    SEARCH,
+    ADD_ITEM,
+    LOCATION,
+    SETTINGS,
 }

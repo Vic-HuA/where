@@ -1,6 +1,7 @@
 package com.vichua.where.core.database
 
 import androidx.room.ConstructedBy
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
@@ -8,6 +9,7 @@ import com.vichua.where.core.database.dao.CategoryDao
 import com.vichua.where.core.database.dao.ChangeRecordDao
 import com.vichua.where.core.database.dao.DeviceDao
 import com.vichua.where.core.database.dao.HouseholdDao
+import com.vichua.where.core.database.dao.HomeSupportDao
 import com.vichua.where.core.database.dao.ItemAliasDao
 import com.vichua.where.core.database.dao.ItemDao
 import com.vichua.where.core.database.dao.ItemDraftDao
@@ -19,12 +21,14 @@ import com.vichua.where.core.database.entity.CategoryEntity
 import com.vichua.where.core.database.entity.ChangeRecordEntity
 import com.vichua.where.core.database.entity.DeviceEntity
 import com.vichua.where.core.database.entity.HouseholdEntity
+import com.vichua.where.core.database.entity.FavoriteLocationEntity
 import com.vichua.where.core.database.entity.ItemAliasEntity
 import com.vichua.where.core.database.entity.ItemDraftEntity
 import com.vichua.where.core.database.entity.ItemEntity
 import com.vichua.where.core.database.entity.ItemLocationEventEntity
 import com.vichua.where.core.database.entity.ItemSearchFtsEntity
 import com.vichua.where.core.database.entity.LocationNodeEntity
+import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
 import com.vichua.where.core.database.entity.PhotoAssetEntity
 
 /**
@@ -45,9 +49,14 @@ import com.vichua.where.core.database.entity.PhotoAssetEntity
         ItemDraftEntity::class,
         ChangeRecordEntity::class,
         ItemSearchFtsEntity::class,
+        FavoriteLocationEntity::class,
+        LocalSearchHistoryEntity::class,
     ],
     version = WhereDatabase.VERSION,
     exportSchema = true,
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+    ],
 )
 @ConstructedBy(WhereDatabaseConstructor::class)
 abstract class WhereDatabase : RoomDatabase() {
@@ -84,9 +93,12 @@ abstract class WhereDatabase : RoomDatabase() {
     /** 返回可重建全文索引 DAO。 */
     abstract fun itemSearchDao(): ItemSearchDao
 
+    /** 返回首页常用位置和本机最近查找 DAO。 */
+    abstract fun homeSupportDao(): HomeSupportDao
+
     companion object {
         /** 当前 Room Schema 版本。 */
-        const val VERSION = 1
+        const val VERSION = 2
 
         /** 各平台使用的稳定数据库文件名。 */
         const val FILE_NAME = "where.db"

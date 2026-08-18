@@ -27,6 +27,7 @@ class RoomHouseholdInitializationRepository(
             device = initialization.device,
             rootLocation = initialization.rootLocation,
             roomLocations = initialization.roomLocations,
+            favoriteLocations = initialization.favoriteLocations,
             changeRecords = initialization.changeRecords,
         )
     }

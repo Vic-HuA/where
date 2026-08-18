@@ -48,12 +48,18 @@ class InitializeHouseholdUseCaseTest {
             room.parentId == initialization.rootLocation.id &&
                 room.householdId == householdId
         })
-        assertEquals(5, initialization.changeRecords.size)
+        assertEquals(2, initialization.favoriteLocations.size)
+        assertEquals(
+            initialization.roomLocations.map { room -> room.id },
+            initialization.favoriteLocations.map { favorite -> favorite.locationNodeId },
+        )
+        assertEquals(7, initialization.changeRecords.size)
         assertEquals(
             setOf(
                 ChangeEntityType.HOUSEHOLD,
                 ChangeEntityType.DEVICE,
                 ChangeEntityType.LOCATION_NODE,
+                ChangeEntityType.FAVORITE_LOCATION,
             ),
             initialization.changeRecords.map { it.entityType }.toSet(),
         )

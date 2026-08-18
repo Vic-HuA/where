@@ -12,6 +12,8 @@ import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.core.model.DomainValidators
 import com.vichua.where.core.model.EntityVersion
+import com.vichua.where.core.model.FavoriteLocation
+import com.vichua.where.core.model.FavoriteLocationId
 import com.vichua.where.core.model.Household
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.LocationNode
@@ -55,6 +57,7 @@ data class InitializeHouseholdRequest(
  * @property device 当前设备记录。
  * @property rootLocation 家庭唯一根位置。
  * @property roomLocations 根位置下的基础房间。
+ * @property favoriteLocations 用户在初始化页主动选择的常用房间引用。
  * @property changeRecords 与正式实体创建操作对应的变更记录。
  */
 data class HouseholdInitialization(
@@ -62,6 +65,7 @@ data class HouseholdInitialization(
     val device: Device,
     val rootLocation: LocationNode,
     val roomLocations: List<LocationNode>,
+    val favoriteLocations: List<FavoriteLocation>,
     val changeRecords: List<ChangeRecord>,
 )
 
@@ -187,6 +191,18 @@ class InitializeHouseholdUseCase(
                 sourceDeviceId = deviceId,
             )
         }
+        val favoriteLocations = roomLocations.map { room ->
+            FavoriteLocation(
+                id = FavoriteLocationId(idGenerator.generate()),
+                householdId = householdId,
+                locationNodeId = room.id,
+                sortOrder = room.sortOrder,
+                createdAt = now,
+                updatedAt = now,
+                version = initialVersion,
+                sourceDeviceId = deviceId,
+            )
+        }
 
         DomainValidators.validateLocationTree(
             householdId = householdId,
@@ -236,6 +252,18 @@ class InitializeHouseholdUseCase(
                     ),
                 )
             }
+            favoriteLocations.forEach { favorite ->
+                add(
+                    createChangeRecord(
+                        householdId = householdId,
+                        sourceDeviceId = deviceId,
+                        entityType = ChangeEntityType.FAVORITE_LOCATION,
+                        entityId = favorite.id.value,
+                        entityVersion = initialVersion,
+                        occurredAt = now,
+                    ),
+                )
+            }
         }
 
         repository.initialize(
@@ -244,6 +272,7 @@ class InitializeHouseholdUseCase(
                 device = device,
                 rootLocation = rootLocation,
                 roomLocations = roomLocations,
+                favoriteLocations = favoriteLocations,
                 changeRecords = changeRecords,
             ),
         )

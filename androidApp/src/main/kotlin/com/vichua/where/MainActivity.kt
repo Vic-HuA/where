@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
             WhereApp(
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
                 initializeHouseholdUseCase = container.initializeHouseholdUseCase,
+                loadHomeSnapshotUseCase = container.loadHomeSnapshotUseCase,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )

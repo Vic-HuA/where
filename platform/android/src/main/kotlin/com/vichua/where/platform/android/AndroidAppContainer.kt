@@ -6,9 +6,11 @@ import com.vichua.where.core.common.DefaultTextNormalizer
 import com.vichua.where.core.database.WhereDatabase
 import com.vichua.where.core.database.buildWhereDatabase
 import com.vichua.where.core.database.createAndroidDatabaseBuilder
+import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
+import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 
 /**
  * Android 进程级依赖容器。
@@ -27,6 +29,8 @@ class AndroidAppContainer(
     private val initializationStore = HouseholdInitializationStore(database)
     private val initializationRepository =
         RoomHouseholdInitializationRepository(initializationStore)
+    private val homeSnapshotRepository =
+        RoomHomeSnapshotRepository(HomeSnapshotStore(database))
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -38,6 +42,9 @@ class AndroidAppContainer(
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,
     )
+
+    /** 加载首页最近记录、最近查找、常用位置和待确认数量的用例。 */
+    val loadHomeSnapshotUseCase = LoadHomeSnapshotUseCase(homeSnapshotRepository)
 
     /** 初始化页面使用的当前设备名称建议。 */
     val suggestedDeviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)
