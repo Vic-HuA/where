@@ -60,7 +60,7 @@ fun WhereApp(
         }
     }
 
-    MaterialTheme {
+    WhereTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
