@@ -25,5 +25,5 @@ dependencies {
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:model"))
     implementation(project(":shared:core:platform-api"))
-    implementation(project(":shared:feature:location"))
+    api(project(":shared:feature:location"))
 }

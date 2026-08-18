@@ -85,6 +85,18 @@ interface HouseholdInitializationRepository {
 }
 
 /**
+ * 查询应用启动时是否已经存在可进入首页的家庭。
+ */
+class HasActiveHouseholdUseCase(
+    private val repository: HouseholdInitializationRepository,
+) {
+    /**
+     * 返回本地数据库是否存在未删除家庭。
+     */
+    suspend operator fun invoke(): Boolean = repository.hasActiveHousehold()
+}
+
+/**
  * 初始化首个本地家庭、当前设备和基础位置树。
  *
  * 用例只生成领域数据并执行跨记录校验，不直接依赖 Room、Android 或系统文件 API。

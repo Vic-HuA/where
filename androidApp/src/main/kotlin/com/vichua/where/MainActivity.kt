@@ -3,6 +3,7 @@ package com.vichua.where
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.ui.WhereApp
 
 /**
@@ -11,8 +12,14 @@ import com.vichua.where.ui.WhereApp
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val container = (application as WhereApplication).container
         setContent {
-            WhereApp()
+            WhereApp(
+                hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
+                initializeHouseholdUseCase = container.initializeHouseholdUseCase,
+                suggestedDeviceName = container.suggestedDeviceName,
+                devicePlatform = DevicePlatform.ANDROID,
+            )
         }
     }
 }

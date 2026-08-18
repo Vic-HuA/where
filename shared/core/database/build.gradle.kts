@@ -30,7 +30,7 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":shared:core:common"))
             implementation(project(":shared:core:model"))
-            implementation(libs.androidx.room.runtime)
+            api(libs.androidx.room.runtime)
             implementation(libs.androidx.sqlite.bundled)
         }
 

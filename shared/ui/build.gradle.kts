@@ -35,7 +35,7 @@ kotlin {
             implementation(project(":shared:core:common"))
             implementation(project(":shared:core:model"))
             implementation(project(":shared:feature:item"))
-            implementation(project(":shared:feature:location"))
+            api(project(":shared:feature:location"))
             implementation(project(":shared:feature:search"))
             implementation(project(":shared:feature:backup"))
             implementation(project(":shared:feature:settings"))
