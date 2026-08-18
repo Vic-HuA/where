@@ -18,6 +18,8 @@ class MainActivity : ComponentActivity() {
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
                 initializeHouseholdUseCase = container.initializeHouseholdUseCase,
                 loadHomeSnapshotUseCase = container.loadHomeSnapshotUseCase,
+                loadItemCreationContextUseCase = container.loadItemCreationContextUseCase,
+                createManualItemUseCase = container.createManualItemUseCase,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )

@@ -21,6 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
+import com.vichua.where.feature.item.creation.CreateManualItemUseCase
+import com.vichua.where.feature.item.creation.ItemCreationContext
+import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
@@ -34,6 +37,8 @@ import kotlinx.coroutines.launch
  * @param hasActiveHouseholdUseCase 查询本地是否已有家庭的用例。
  * @param initializeHouseholdUseCase 保存首个家庭的用例。
  * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
+ * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
+ * @param createManualItemUseCase 保存基础手动物品的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -42,6 +47,8 @@ fun WhereApp(
     hasActiveHouseholdUseCase: HasActiveHouseholdUseCase,
     initializeHouseholdUseCase: InitializeHouseholdUseCase,
     loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
+    loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
+    createManualItemUseCase: CreateManualItemUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -53,6 +60,11 @@ fun WhereApp(
     var homeLoading by remember { mutableStateOf(false) }
     var homeError by remember { mutableStateOf<String?>(null) }
     var homeLoadAttempt by remember { mutableIntStateOf(0) }
+    var itemCreationContext by remember { mutableStateOf<ItemCreationContext?>(null) }
+    var itemCreationLoading by remember { mutableStateOf(false) }
+    var itemCreationError by remember { mutableStateOf<String?>(null) }
+    var itemCreationAttempt by remember { mutableIntStateOf(0) }
+    var itemCreationSubmitting by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(startupAttempt) {
@@ -65,6 +77,20 @@ fun WhereApp(
             }
         } catch (_: Exception) {
             AppDestination.STARTUP_ERROR
+        }
+    }
+
+    LaunchedEffect(destination, itemCreationAttempt) {
+        if (destination == AppDestination.ADD_ITEM) {
+            itemCreationLoading = true
+            itemCreationError = null
+            try {
+                itemCreationContext = loadItemCreationContextUseCase()
+            } catch (_: Exception) {
+                itemCreationError = "暂时无法读取可用位置。"
+            } finally {
+                itemCreationLoading = false
+            }
         }
     }
 
@@ -144,10 +170,35 @@ fun WhereApp(
                         destination = AppDestination.HOME
                     },
                 )
-                AppDestination.ADD_ITEM -> PendingFeatureScreen(
-                    title = "记录物品",
+                AppDestination.ADD_ITEM -> AddItemScreen(
+                    context = itemCreationContext,
+                    loading = itemCreationLoading,
+                    submitting = itemCreationSubmitting,
+                    errorMessage = itemCreationError,
+                    onRetry = {
+                        itemCreationAttempt += 1
+                    },
                     onBack = {
                         destination = AppDestination.HOME
+                    },
+                    onSubmit = { request ->
+                        if (!itemCreationSubmitting) {
+                            coroutineScope.launch {
+                                itemCreationSubmitting = true
+                                itemCreationError = null
+                                try {
+                                    createManualItemUseCase(request)
+                                    homeLoadAttempt += 1
+                                    destination = AppDestination.HOME
+                                } catch (_: IllegalArgumentException) {
+                                    itemCreationError = "请检查物品名称和所在位置。"
+                                } catch (_: Exception) {
+                                    itemCreationError = "保存失败，请稍后重试。"
+                                } finally {
+                                    itemCreationSubmitting = false
+                                }
+                            }
+                        }
                     },
                 )
                 AppDestination.LOCATION -> PendingFeatureScreen(
