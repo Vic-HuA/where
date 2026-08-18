@@ -34,6 +34,10 @@ interface HouseholdDao {
     /** 查询指定未删除家庭。 */
     @Query("SELECT * FROM households WHERE id = :id AND deleted_at IS NULL")
     suspend fun findActiveById(id: String): HouseholdEntity?
+
+    /** 统计当前未删除家庭数量，MVP 初始化前必须为 0。 */
+    @Query("SELECT COUNT(*) FROM households WHERE deleted_at IS NULL")
+    suspend fun countActive(): Long
 }
 
 /**
@@ -72,6 +76,10 @@ interface LocationNodeDao {
     /** 插入位置节点，ID 冲突时终止当前事务。 */
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: LocationNodeEntity)
+
+    /** 批量插入同一初始化事务中的位置节点。 */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(entities: List<LocationNodeEntity>)
 
     /** 更新位置节点，调用方必须先校验版本和环路。 */
     @Update
@@ -309,6 +317,10 @@ interface ChangeRecordDao {
     /** 插入变更记录；必须与对应正式实体写入处于同一事务。 */
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: ChangeRecordEntity)
+
+    /** 批量插入同一事务产生的正式数据变更记录。 */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(entities: List<ChangeRecordEntity>)
 
     /** 查询家庭在指定时间之后发生的变更。 */
     @Query(

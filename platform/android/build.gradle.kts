@@ -22,6 +22,8 @@ android {
 
 dependencies {
     implementation(project(":shared:core:common"))
+    implementation(project(":shared:core:database"))
     implementation(project(":shared:core:model"))
     implementation(project(":shared:core:platform-api"))
+    implementation(project(":shared:feature:location"))
 }
