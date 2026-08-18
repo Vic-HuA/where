@@ -14,10 +14,17 @@ kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
+
+        withHostTestBuilder {}
     }
 
     iosArm64()
     iosSimulatorArm64()
+
+    compilerOptions {
+        // Room KMP 通过 expect/actual 生成各平台数据库构造器，该能力当前仍标记为 Beta。
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
 
     sourceSets {
         commonMain.dependencies {
