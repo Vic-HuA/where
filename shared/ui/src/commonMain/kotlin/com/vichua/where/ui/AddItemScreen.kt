@@ -21,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.LocationNodeId
@@ -102,13 +104,13 @@ fun AddItemScreen(
         ) {
             PhotoActionCard(
                 modifier = Modifier.weight(1f),
-                symbol = "⌗",
+                icon = WhereIcons.Location,
                 title = "拍存放位置 ＋",
                 description = "拍房间、柜子或盒子",
             )
             PhotoActionCard(
                 modifier = Modifier.weight(1f),
-                symbol = "▣",
+                icon = WhereIcons.AddPhoto,
                 title = "拍物品 ＋",
                 description = "拍清楚物品外观",
             )
@@ -231,10 +233,11 @@ fun AddItemScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "♩",
-                    color = WherePrimaryColor,
-                    style = MaterialTheme.typography.bodyLarge,
+                Icon(
+                    modifier = Modifier.size(20.dp),
+                    imageVector = WhereIcons.Microphone,
+                    contentDescription = null,
+                    tint = WherePrimaryColor,
                 )
                 Text(
                     text = "按住说：放在书柜第二层蓝色盒子",
@@ -358,10 +361,11 @@ private fun AddItemHeader(onBack: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(
-                    text = "←",
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.titleLarge,
+                Icon(
+                    modifier = Modifier.size(24.dp),
+                    imageVector = WhereIcons.Back,
+                    contentDescription = "返回",
+                    tint = WherePrimaryTextColor,
                 )
             }
         }
@@ -433,7 +437,7 @@ private fun StepBadge(
 @Composable
 private fun PhotoActionCard(
     modifier: Modifier,
-    symbol: String,
+    icon: ImageVector,
     title: String,
     description: String,
 ) {
@@ -447,10 +451,11 @@ private fun PhotoActionCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                text = symbol,
-                color = WherePrimaryColor,
-                style = MaterialTheme.typography.headlineMedium,
+            Icon(
+                modifier = Modifier.size(32.dp),
+                imageVector = icon,
+                contentDescription = null,
+                tint = WherePrimaryColor,
             )
             Text(
                 modifier = Modifier.padding(top = 10.dp),

@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -66,7 +67,7 @@ fun SearchScreen(
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
+            Icon(
                 modifier = Modifier
                     .size(48.dp)
                     .clickable(
@@ -74,9 +75,9 @@ fun SearchScreen(
                         onClick = onBack,
                     )
                     .padding(12.dp),
-                text = "←",
-                color = WherePrimaryTextColor,
-                style = MaterialTheme.typography.titleLarge,
+                imageVector = WhereIcons.Back,
+                contentDescription = "返回",
+                tint = WherePrimaryTextColor,
             )
             Text(
                 text = "搜索结果",
@@ -106,7 +107,7 @@ fun SearchScreen(
                 unfocusedBorderColor = WhereOutlineColor,
             ),
             trailingIcon = {
-                Text(
+                Icon(
                     modifier = Modifier
                         .clickable(
                             enabled = !searching,
@@ -115,9 +116,9 @@ fun SearchScreen(
                             },
                         )
                         .padding(10.dp),
-                    text = "⌕",
-                    color = WherePrimaryColor,
-                    fontWeight = FontWeight.Bold,
+                    imageVector = WhereIcons.Search,
+                    contentDescription = "查找",
+                    tint = WherePrimaryColor,
                 )
             },
         )
@@ -229,10 +230,11 @@ private fun SearchResultCard(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Text(
-                        text = "▣",
-                        color = WherePrimaryColor,
-                        style = MaterialTheme.typography.headlineMedium,
+                    Icon(
+                        modifier = Modifier.size(30.dp),
+                        imageVector = WhereIcons.Image,
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
                     )
                 }
             }

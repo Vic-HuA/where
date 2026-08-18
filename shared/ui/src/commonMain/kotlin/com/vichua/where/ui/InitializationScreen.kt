@@ -24,6 +24,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -265,7 +266,6 @@ fun InitializationScreen(
                     key = "custom-${customRooms.size}-${roomName.lowercase()}",
                     name = roomName,
                     iconKey = CUSTOM_ROOM_ICON_KEY,
-                    symbol = "⌂",
                 )
                 customRooms = customRooms + newRoom
                 selectedRoomKeys = selectedRoomKeys + newRoom.key
@@ -353,9 +353,10 @@ private fun RoomChip(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = room.symbol,
-                style = MaterialTheme.typography.bodyMedium,
+            Icon(
+                modifier = Modifier.size(16.dp),
+                imageVector = WhereIcons.room(room.iconKey),
+                contentDescription = null,
             )
             Text(
                 text = if (selected) "${room.name} ✓" else room.name,
@@ -483,7 +484,6 @@ private data class RoomOption(
     val key: String,
     val name: String,
     val iconKey: String,
-    val symbol: String,
 )
 
 private const val DEFAULT_HOUSEHOLD_NAME = "我的家"
@@ -492,12 +492,12 @@ private const val CUSTOM_ROOM_ICON_KEY = "room.custom"
 private const val FIRST_ROOM_ROW_SIZE = 3
 
 private val INITIAL_ROOM_OPTIONS = listOf(
-    RoomOption(key = "living-room", name = "客厅", iconKey = "room.living", symbol = "⌂"),
-    RoomOption(key = "bedroom", name = "卧室", iconKey = "room.bedroom", symbol = "▣"),
-    RoomOption(key = "kitchen", name = "厨房", iconKey = "room.kitchen", symbol = "♨"),
-    RoomOption(key = "bathroom", name = "卫生间", iconKey = "room.bathroom", symbol = "⌁"),
-    RoomOption(key = "study", name = "书房", iconKey = "room.study", symbol = "▤"),
-    RoomOption(key = "storage", name = "储物间", iconKey = "room.storage", symbol = "▧"),
+    RoomOption(key = "living-room", name = "客厅", iconKey = "room.living"),
+    RoomOption(key = "bedroom", name = "卧室", iconKey = "room.bedroom"),
+    RoomOption(key = "kitchen", name = "厨房", iconKey = "room.kitchen"),
+    RoomOption(key = "bathroom", name = "卫生间", iconKey = "room.bathroom"),
+    RoomOption(key = "study", name = "书房", iconKey = "room.study"),
+    RoomOption(key = "storage", name = "储物间", iconKey = "room.storage"),
 )
 
 private val DEFAULT_SELECTED_ROOM_KEYS = setOf(

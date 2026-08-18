@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -29,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.feature.search.home.FavoriteLocationSummary
@@ -182,7 +184,7 @@ fun HomeScreen(
                 ) {
                     loadedSnapshot.recentSearches.take(MAX_VISIBLE_CHIPS).forEach { search ->
                         HomeChip(
-                            symbol = "⌕",
+                            icon = WhereIcons.Search,
                             text = search.displayQuery,
                         )
                     }
@@ -237,10 +239,11 @@ private fun HomeSearchSurface(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "♩",
-                color = WherePrimaryColor,
-                style = MaterialTheme.typography.bodyLarge,
+            Icon(
+                modifier = Modifier.size(20.dp),
+                imageVector = WhereIcons.Microphone,
+                contentDescription = null,
+                tint = WherePrimaryColor,
             )
             Text(
                 text = "按住说话查找物品",
@@ -294,10 +297,11 @@ private fun RecentItemCard(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Text(
-                        text = "▣",
-                        color = WherePrimaryColor,
-                        style = MaterialTheme.typography.headlineMedium,
+                    Icon(
+                        modifier = Modifier.size(30.dp),
+                        imageVector = WhereIcons.Image,
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
                     )
                 }
             }
@@ -364,7 +368,7 @@ private fun EmptyHomeCard(
  */
 @Composable
 private fun HomeChip(
-    symbol: String,
+    icon: ImageVector,
     text: String,
 ) {
     Surface(
@@ -379,10 +383,11 @@ private fun HomeChip(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = symbol,
-                color = WherePrimaryColor,
-                style = MaterialTheme.typography.bodySmall,
+            Icon(
+                modifier = Modifier.size(15.dp),
+                imageVector = icon,
+                contentDescription = null,
+                tint = WherePrimaryColor,
             )
             Text(
                 text = text,
@@ -399,7 +404,7 @@ private fun HomeChip(
 @Composable
 private fun FavoriteLocationChip(favorite: FavoriteLocationSummary) {
     HomeChip(
-        symbol = "⌂",
+        icon = WhereIcons.room(favorite.iconKey.orEmpty()),
         text = "${favorite.name} ${favorite.itemCount}",
     )
 }
@@ -454,19 +459,19 @@ private fun HomeBottomNavigation(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BottomNavigationItem(
-                symbol = "⌂",
+                icon = WhereIcons.Home,
                 label = "首页",
                 selected = true,
                 onClick = {},
             )
             BottomNavigationItem(
-                symbol = "▥",
+                icon = WhereIcons.Location,
                 label = "位置",
                 selected = false,
                 onClick = onLocationClick,
             )
             BottomNavigationItem(
-                symbol = "⚙",
+                icon = WhereIcons.Settings,
                 label = "设置",
                 selected = false,
                 onClick = onSettingsClick,
@@ -480,7 +485,7 @@ private fun HomeBottomNavigation(
  */
 @Composable
 private fun BottomNavigationItem(
-    symbol: String,
+    icon: ImageVector,
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -500,9 +505,10 @@ private fun BottomNavigationItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                text = symbol,
-                style = MaterialTheme.typography.bodyMedium,
+            Icon(
+                modifier = Modifier.size(18.dp),
+                imageVector = icon,
+                contentDescription = null,
             )
             Text(
                 modifier = Modifier.padding(top = 2.dp),
