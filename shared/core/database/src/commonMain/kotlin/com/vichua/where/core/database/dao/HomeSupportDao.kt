@@ -39,6 +39,21 @@ interface HomeSupportDao {
     @Upsert
     suspend fun upsertSearchHistory(entity: LocalSearchHistoryEntity)
 
+    /** 删除同设备、同标准化查询和同筛选条件的旧记录。 */
+    @Query(
+        """
+        DELETE FROM local_search_history
+        WHERE device_id = :deviceId
+          AND normalized_query = :normalizedQuery
+          AND filter_hash = :filterHash
+        """,
+    )
+    suspend fun deleteMatchingSearch(
+        deviceId: String,
+        normalizedQuery: String,
+        filterHash: String,
+    ): Int
+
     /** 查询当前设备最近执行的搜索。 */
     @Query(
         """

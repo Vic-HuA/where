@@ -7,6 +7,7 @@ import com.vichua.where.core.database.WhereDatabase
 import com.vichua.where.core.database.buildWhereDatabase
 import com.vichua.where.core.database.createAndroidDatabaseBuilder
 import com.vichua.where.core.database.query.HomeSnapshotStore
+import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
@@ -14,6 +15,7 @@ import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
+import com.vichua.where.feature.search.text.SearchItemsUseCase
 
 /**
  * Android 进程级依赖容器。
@@ -36,6 +38,8 @@ class AndroidAppContainer(
         RoomHomeSnapshotRepository(HomeSnapshotStore(database))
     private val manualItemCreationRepository =
         RoomManualItemCreationRepository(ManualItemCreationStore(database))
+    private val itemTextSearchRepository =
+        RoomItemTextSearchRepository(ItemTextSearchStore(database))
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -58,6 +62,14 @@ class AndroidAppContainer(
     /** 创建基础手动物品的用例。 */
     val createManualItemUseCase = CreateManualItemUseCase(
         repository = manualItemCreationRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+        textNormalizer = DefaultTextNormalizer,
+    )
+
+    /** 执行本地文字搜索并保存最近查找的用例。 */
+    val searchItemsUseCase = SearchItemsUseCase(
+        repository = itemTextSearchRepository,
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,
