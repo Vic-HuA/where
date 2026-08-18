@@ -1,3 +1,16 @@
 ﻿# Local Pencil backups
 *.pen.bak
 *.pen.bak*
+
+# Gradle and generated build output
+.gradle/
+.kotlin/
+**/build/
+
+# Local Android and IDE configuration
+.idea/
+*.iml
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
