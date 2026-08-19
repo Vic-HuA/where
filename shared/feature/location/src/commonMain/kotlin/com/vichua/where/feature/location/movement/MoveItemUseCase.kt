@@ -55,6 +55,17 @@ interface ItemMovementRepository {
 }
 
 /**
+ * 加载更新位置页面上下文。
+ */
+class LoadMoveItemContextUseCase(
+    private val repository: ItemMovementRepository,
+) {
+    /** 返回指定物品和可选位置。 */
+    suspend operator fun invoke(itemId: ItemId): MoveItemContext =
+        repository.loadContext(itemId)
+}
+
+/**
  * 原子更新单个物品当前位置。
  */
 class MoveItemUseCase(

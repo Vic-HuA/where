@@ -18,6 +18,7 @@ import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.location.movement.MoveItemUseCase
+import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.SearchItemsUseCase
 
@@ -92,6 +93,10 @@ class AndroidAppContainer(
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
     )
+
+    /** 加载更新位置页面上下文的用例。 */
+    val loadMoveItemContextUseCase =
+        LoadMoveItemContextUseCase(itemMovementRepository)
 
     /** 初始化页面使用的当前设备名称建议。 */
     val suggestedDeviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)

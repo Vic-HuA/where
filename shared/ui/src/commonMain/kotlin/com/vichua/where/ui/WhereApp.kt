@@ -30,6 +30,9 @@ import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
+import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
+import com.vichua.where.feature.location.movement.MoveItemContext
+import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
@@ -46,6 +49,8 @@ import kotlinx.coroutines.launch
  * @param createManualItemUseCase 保存基础手动物品的用例。
  * @param searchItemsUseCase 执行本地文字搜索的用例。
  * @param loadItemDetailUseCase 加载物品详情的用例。
+ * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
+ * @param moveItemUseCase 保存物品新位置的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -58,6 +63,8 @@ fun WhereApp(
     createManualItemUseCase: CreateManualItemUseCase,
     searchItemsUseCase: SearchItemsUseCase,
     loadItemDetailUseCase: LoadItemDetailUseCase,
+    loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
+    moveItemUseCase: MoveItemUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -82,6 +89,9 @@ fun WhereApp(
     var itemDetail by remember { mutableStateOf<ItemDetail?>(null) }
     var itemDetailLoading by remember { mutableStateOf(false) }
     var itemDetailError by remember { mutableStateOf<String?>(null) }
+    var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
+    var moveItemLoading by remember { mutableStateOf(false) }
+    var moveItemError by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val performSearch: (String) -> Unit = { query ->
         if (!searchInProgress) {
@@ -141,6 +151,21 @@ fun WhereApp(
                 itemDetailError = "暂时无法读取物品详情。"
             } finally {
                 itemDetailLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(destination, selectedItemId) {
+        val itemId = selectedItemId
+        if (destination == AppDestination.MOVE_ITEM && itemId != null) {
+            moveItemLoading = true
+            moveItemError = null
+            try {
+                moveItemContext = loadMoveItemContextUseCase(itemId)
+            } catch (_: Exception) {
+                moveItemError = "暂时无法读取可选位置。"
+            } finally {
+                moveItemLoading = false
             }
         }
     }
@@ -291,7 +316,34 @@ fun WhereApp(
                     },
                     onReadLocation = {},
                     onUpdateLocation = {
-                        destination = AppDestination.LOCATION
+                        destination = AppDestination.MOVE_ITEM
+                    },
+                )
+                AppDestination.MOVE_ITEM -> MoveItemScreen(
+                    context = moveItemContext,
+                    loading = moveItemLoading,
+                    errorMessage = moveItemError,
+                    onBack = {
+                        destination = AppDestination.ITEM_DETAIL
+                    },
+                    onSave = { locationId ->
+                        val itemId = selectedItemId
+                        if (itemId != null && !moveItemLoading) {
+                            coroutineScope.launch {
+                                moveItemLoading = true
+                                moveItemError = null
+                                try {
+                                    moveItemUseCase(itemId, locationId)
+                                    itemDetail = loadItemDetailUseCase(itemId)
+                                    homeLoadAttempt += 1
+                                    destination = AppDestination.ITEM_DETAIL
+                                } catch (_: Exception) {
+                                    moveItemError = "更新位置失败，请重试。"
+                                } finally {
+                                    moveItemLoading = false
+                                }
+                            }
+                        }
                     },
                 )
             }
@@ -400,4 +452,5 @@ private enum class AppDestination {
     LOCATION,
     SETTINGS,
     ITEM_DETAIL,
+    MOVE_ITEM,
 }
