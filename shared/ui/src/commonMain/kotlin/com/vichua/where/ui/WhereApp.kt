@@ -27,6 +27,10 @@ import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
+import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
+import com.vichua.where.feature.item.draft.ItemDraftContent
+import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
+import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
@@ -51,6 +55,9 @@ import kotlinx.coroutines.launch
  * @param initializeHouseholdUseCase 保存首个家庭的用例。
  * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
  * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
+ * @param loadLatestItemDraftUseCase 加载当前设备未过期草稿的用例。
+ * @param saveItemDraftUseCase 保存新增物品未完成输入的用例。
+ * @param discardLatestItemDraftUseCase 放弃当前草稿的用例。
  * @param createManualItemUseCase 保存基础手动物品的用例。
  * @param searchItemsUseCase 执行本地文字搜索的用例。
  * @param loadItemDetailUseCase 加载物品详情的用例。
@@ -69,6 +76,9 @@ fun WhereApp(
     initializeHouseholdUseCase: InitializeHouseholdUseCase,
     loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
     loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
+    loadLatestItemDraftUseCase: LoadLatestItemDraftUseCase,
+    saveItemDraftUseCase: SaveItemDraftUseCase,
+    discardLatestItemDraftUseCase: DiscardLatestItemDraftUseCase,
     createManualItemUseCase: CreateManualItemUseCase,
     searchItemsUseCase: SearchItemsUseCase,
     loadItemDetailUseCase: LoadItemDetailUseCase,
@@ -94,6 +104,7 @@ fun WhereApp(
     var itemCreationError by remember { mutableStateOf<String?>(null) }
     var itemCreationAttempt by remember { mutableIntStateOf(0) }
     var itemCreationSubmitting by remember { mutableStateOf(false) }
+    var itemDraft by remember { mutableStateOf<ItemDraftContent?>(null) }
     var searchResults by remember { mutableStateOf<List<ItemTextSearchResult>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var searchInProgress by remember { mutableStateOf(false) }
@@ -150,6 +161,7 @@ fun WhereApp(
             itemCreationError = null
             try {
                 itemCreationContext = loadItemCreationContextUseCase()
+                itemDraft = loadLatestItemDraftUseCase()
             } catch (_: Exception) {
                 itemCreationError = "暂时无法读取可用位置。"
             } finally {
@@ -298,6 +310,7 @@ fun WhereApp(
                 )
                 AppDestination.ADD_ITEM -> AddItemScreen(
                     context = itemCreationContext,
+                    draft = itemDraft,
                     loading = itemCreationLoading,
                     submitting = itemCreationSubmitting,
                     errorMessage = itemCreationError,
@@ -307,6 +320,46 @@ fun WhereApp(
                     onBack = {
                         destination = AppDestination.HOME
                     },
+                    onSaveDraft = { content ->
+                        val creationContext = itemCreationContext
+                        if (creationContext != null && !itemCreationSubmitting) {
+                            coroutineScope.launch {
+                                itemCreationSubmitting = true
+                                itemCreationError = null
+                                try {
+                                    saveItemDraftUseCase(
+                                        householdId = creationContext.householdId,
+                                        deviceId = creationContext.sourceDeviceId,
+                                        content = content,
+                                    )
+                                    destination = AppDestination.HOME
+                                } catch (_: IllegalArgumentException) {
+                                    itemCreationError = "请先填写物品名称、位置或备注。"
+                                } catch (_: Exception) {
+                                    itemCreationError = "草稿保存失败，请稍后重试。"
+                                } finally {
+                                    itemCreationSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onDiscardDraft = {
+                        if (!itemCreationSubmitting) {
+                            coroutineScope.launch {
+                                itemCreationSubmitting = true
+                                itemCreationError = null
+                                try {
+                                    discardLatestItemDraftUseCase()
+                                    itemDraft = null
+                                    destination = AppDestination.HOME
+                                } catch (_: Exception) {
+                                    itemCreationError = "放弃草稿失败，请稍后重试。"
+                                } finally {
+                                    itemCreationSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onSubmit = { request ->
                         if (!itemCreationSubmitting) {
                             coroutineScope.launch {
@@ -314,6 +367,7 @@ fun WhereApp(
                                 itemCreationError = null
                                 try {
                                     createManualItemUseCase(request)
+                                    itemDraft = null
                                     homeLoadAttempt += 1
                                     destination = AppDestination.HOME
                                 } catch (_: IllegalArgumentException) {

@@ -71,6 +71,11 @@ class ItemWriteStore(
             itemLocationEventDao().insert(initialLocationEvent.toEntity())
             changeRecordDao().insert(changeRecord.toEntity())
             itemSearchDao().insert(searchDocument.toEntity())
+            // 正式物品与草稿清理必须同事务，避免保存成功后仍恢复旧输入。
+            itemDraftDao().deleteByDeviceAndHousehold(
+                deviceId = item.sourceDeviceId.value,
+                householdId = item.householdId.value,
+            )
         }
     }
 

@@ -409,6 +409,18 @@ interface ItemDraftDao {
         id: String,
         deviceId: String,
     ): Int
+
+    /** 删除当前设备和家庭下的全部草稿，避免正式保存后仍恢复旧输入。 */
+    @Query(
+        """
+        DELETE FROM item_drafts
+        WHERE device_id = :deviceId AND household_id = :householdId
+        """,
+    )
+    suspend fun deleteByDeviceAndHousehold(
+        deviceId: String,
+        householdId: String,
+    ): Int
 }
 
 /**

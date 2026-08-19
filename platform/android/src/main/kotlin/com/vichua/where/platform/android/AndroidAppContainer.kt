@@ -10,11 +10,15 @@ import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.query.ItemDetailStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
+import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
+import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
+import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
@@ -56,6 +60,10 @@ class AndroidAppContainer(
         RoomItemMovementRepository(ItemMovementStore(database))
     private val locationManagementRepository =
         RoomLocationManagementRepository(LocationManagementStore(database))
+    private val itemDraftRepository = RoomItemDraftRepository(
+        store = ItemDraftStore(database),
+        nowMillis = AndroidEpochMillisecondsClock::now,
+    )
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -74,6 +82,19 @@ class AndroidAppContainer(
     /** 加载新增物品页面可选位置的用例。 */
     val loadItemCreationContextUseCase =
         LoadItemCreationContextUseCase(manualItemCreationRepository)
+
+    /** 加载当前设备未过期物品草稿的用例。 */
+    val loadLatestItemDraftUseCase = LoadLatestItemDraftUseCase(itemDraftRepository)
+
+    /** 保存新增物品未完成输入的用例。 */
+    val saveItemDraftUseCase = SaveItemDraftUseCase(
+        repository = itemDraftRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 放弃当前设备最近一份物品草稿的用例。 */
+    val discardLatestItemDraftUseCase = DiscardLatestItemDraftUseCase(itemDraftRepository)
 
     /** 创建基础手动物品的用例。 */
     val createManualItemUseCase = CreateManualItemUseCase(

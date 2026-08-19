@@ -43,6 +43,7 @@ import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.feature.item.creation.CreateManualItemRequest
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.ItemCreationLocation
+import com.vichua.where.feature.item.draft.ItemDraftContent
 
 /**
  * 按 Pencil 原型展示新增物品基础页面，并支持不依赖相机、语音或 AI 的手动保存路径。
@@ -52,26 +53,39 @@ import com.vichua.where.feature.item.creation.ItemCreationLocation
  * @param submitting 是否正在保存物品。
  * @param errorMessage 可展示的中文错误。
  * @param onRetry 重试读取可选位置。
+ * @param draft 当前设备可恢复的未过期草稿；没有时为空。
  * @param onBack 返回首页。
+ * @param onSaveDraft 保存当前未完成输入为设备本地草稿。
+ * @param onDiscardDraft 放弃当前草稿并离开页面。
  * @param onSubmit 确认后提交基础手动物品请求。
  */
 @Composable
 fun AddItemScreen(
     context: ItemCreationContext?,
+    draft: ItemDraftContent?,
     loading: Boolean,
     submitting: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onSaveDraft: (ItemDraftContent) -> Unit,
+    onDiscardDraft: () -> Unit,
     onSubmit: (CreateManualItemRequest) -> Unit,
 ) {
-    var itemName by remember { mutableStateOf("") }
-    var selectedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
-    var locationDescription by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var moreInformationExpanded by remember { mutableStateOf(false) }
+    var itemName by remember(draft) { mutableStateOf(draft?.name.orEmpty()) }
+    var selectedLocationId by remember(draft) { mutableStateOf(draft?.locationId) }
+    var locationDescription by remember(draft) {
+        mutableStateOf(draft?.locationDescription.orEmpty())
+    }
+    var note by remember(draft) { mutableStateOf(draft?.note.orEmpty()) }
+    var moreInformationExpanded by remember(draft) {
+        mutableStateOf(
+            !draft?.locationDescription.isNullOrBlank() || !draft?.note.isNullOrBlank(),
+        )
+    }
     var locationDialogVisible by remember { mutableStateOf(false) }
     var confirmationDialogVisible by remember { mutableStateOf(false) }
+    var leaveDialogVisible by remember { mutableStateOf(false) }
     val selectedLocation = context?.availableLocations?.singleOrNull { location ->
         location.locationId == selectedLocationId
     }
@@ -79,6 +93,19 @@ fun AddItemScreen(
         selectedLocation != null &&
         !loading &&
         !submitting
+    val currentDraft = ItemDraftContent(
+        name = itemName,
+        locationId = selectedLocationId,
+        locationDescription = locationDescription,
+        note = note,
+    )
+    val requestLeave: () -> Unit = {
+        if (currentDraft.hasUserInput) {
+            leaveDialogVisible = true
+        } else {
+            onBack()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -87,13 +114,21 @@ fun AddItemScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
-        AddItemHeader(onBack = onBack)
+        AddItemHeader(onBack = requestLeave)
         Text(
             modifier = Modifier.padding(top = 8.dp),
             text = "拍照或说一句，确认名称和位置后保存。",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )
+        if (draft != null && draft.hasUserInput) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "已恢复未完成草稿，可继续编辑或放弃。",
+                color = WherePrimaryColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
         AddItemSteps(modifier = Modifier.padding(top = 18.dp))
 
         Row(
@@ -314,6 +349,22 @@ fun AddItemScreen(
         )
     }
 
+    if (leaveDialogVisible) {
+        LeaveAddItemDialog(
+            onDismiss = {
+                leaveDialogVisible = false
+            },
+            onSaveDraft = {
+                leaveDialogVisible = false
+                onSaveDraft(currentDraft)
+            },
+            onDiscard = {
+                leaveDialogVisible = false
+                onDiscardDraft()
+            },
+        )
+    }
+
     if (confirmationDialogVisible && selectedLocation != null) {
         ConfirmManualItemDialog(
             itemName = itemName.trim(),
@@ -337,6 +388,34 @@ fun AddItemScreen(
             },
         )
     }
+}
+
+/**
+ * 离开新增页且已有输入时，提示保存草稿或放弃修改。
+ */
+@Composable
+private fun LeaveAddItemDialog(
+    onDismiss: () -> Unit,
+    onSaveDraft: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("保存未完成内容？") },
+        text = {
+            Text("草稿只保存在当前设备，7 天后自动失效，不会进入家庭备份。")
+        },
+        confirmButton = {
+            TextButton(onClick = onSaveDraft) {
+                Text("保存草稿")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDiscard) {
+                Text("放弃修改")
+            }
+        },
+    )
 }
 
 /**
