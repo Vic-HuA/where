@@ -70,10 +70,30 @@ fun WhereApp(
     var itemCreationAttempt by remember { mutableIntStateOf(0) }
     var itemCreationSubmitting by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<ItemTextSearchResult>?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
     var searchInProgress by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var selectedItemName by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
+    val performSearch: (String) -> Unit = { query ->
+        if (!searchInProgress) {
+            searchQuery = query
+            coroutineScope.launch {
+                searchInProgress = true
+                searchError = null
+                try {
+                    searchResults = searchItemsUseCase(query)
+                    homeLoadAttempt += 1
+                } catch (_: IllegalArgumentException) {
+                    searchError = "请输入要查找的物品。"
+                } catch (_: Exception) {
+                    searchError = "查找失败，请稍后重试。"
+                } finally {
+                    searchInProgress = false
+                }
+            }
+        }
+    }
 
     LaunchedEffect(startupAttempt) {
         destination = AppDestination.LOADING
@@ -159,7 +179,13 @@ fun WhereApp(
                     onRetry = {
                         homeLoadAttempt += 1
                     },
-                    onSearchClick = {
+                    onTextSearch = { query ->
+                        destination = AppDestination.SEARCH
+                        performSearch(query)
+                    },
+                    onVoiceSearchRequested = {
+                        searchResults = null
+                        searchError = "语音识别尚未接入，请先使用键盘输入。"
                         destination = AppDestination.SEARCH
                     },
                     onRecordItemClick = {
@@ -173,30 +199,14 @@ fun WhereApp(
                     },
                 )
                 AppDestination.SEARCH -> SearchScreen(
+                    initialQuery = searchQuery,
                     results = searchResults,
                     searching = searchInProgress,
                     errorMessage = searchError,
                     onBack = {
                         destination = AppDestination.HOME
                     },
-                    onSearch = { query ->
-                        if (!searchInProgress) {
-                            coroutineScope.launch {
-                                searchInProgress = true
-                                searchError = null
-                                try {
-                                    searchResults = searchItemsUseCase(query)
-                                    homeLoadAttempt += 1
-                                } catch (_: IllegalArgumentException) {
-                                    searchError = "请输入要查找的物品。"
-                                } catch (_: Exception) {
-                                    searchError = "查找失败，请稍后重试。"
-                                } finally {
-                                    searchInProgress = false
-                                }
-                            }
-                        }
-                    },
+                    onSearch = performSearch,
                     onResultClick = { result ->
                         selectedItemName = result.name
                         destination = AppDestination.ITEM_DETAIL

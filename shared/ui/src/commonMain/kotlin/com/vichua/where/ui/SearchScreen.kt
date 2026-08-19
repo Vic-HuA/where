@@ -39,6 +39,7 @@ import com.vichua.where.feature.search.text.ItemTextSearchResult
 /**
  * 本地文字搜索与结果页面。
  *
+ * @param initialQuery 从首页键盘入口带入的查询文本。
  * @param results 最近一次查询结果，尚未查询时为空。
  * @param searching 是否正在执行本地查询。
  * @param errorMessage 可展示的中文错误。
@@ -48,6 +49,7 @@ import com.vichua.where.feature.search.text.ItemTextSearchResult
  */
 @Composable
 fun SearchScreen(
+    initialQuery: String,
     results: List<ItemTextSearchResult>?,
     searching: Boolean,
     errorMessage: String?,
@@ -55,7 +57,7 @@ fun SearchScreen(
     onSearch: (String) -> Unit,
     onResultClick: (ItemTextSearchResult) -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by remember(initialQuery) { mutableStateOf(initialQuery) }
 
     Column(
         modifier = Modifier

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Kitchen
+import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -39,6 +40,9 @@ object WhereIcons {
 
     /** 语音图标。 */
     val Microphone: ImageVector = Icons.Outlined.Mic
+
+    /** 切换到文字输入的键盘图标。 */
+    val Keyboard: ImageVector = Icons.Outlined.Keyboard
 
     /** 拍照图标。 */
     val Camera: ImageVector = Icons.Outlined.PhotoCamera

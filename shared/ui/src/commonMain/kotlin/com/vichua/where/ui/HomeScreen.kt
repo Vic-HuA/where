@@ -2,6 +2,8 @@ package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -22,16 +25,27 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.vichua.where.feature.search.home.FavoriteLocationSummary
 import com.vichua.where.feature.search.home.HomeItemSummary
@@ -44,7 +58,8 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param loading 是否正在读取本地数据。
  * @param errorMessage 可展示的中文读取错误。
  * @param onRetry 重试加载首页数据。
- * @param onSearchClick 打开文字或语音查找。
+ * @param onTextSearch 提交首页键盘查询。
+ * @param onVoiceSearchRequested 长按语音区域后请求语音查找。
  * @param onRecordItemClick 打开新增物品流程。
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
@@ -55,7 +70,8 @@ fun HomeScreen(
     loading: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
-    onSearchClick: () -> Unit,
+    onTextSearch: (String) -> Unit,
+    onVoiceSearchRequested: () -> Unit,
     onRecordItemClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -90,7 +106,8 @@ fun HomeScreen(
 
             HomeSearchSurface(
                 modifier = Modifier.padding(top = 18.dp),
-                onClick = onSearchClick,
+                onTextSearch = onTextSearch,
+                onVoiceSearchRequested = onVoiceSearchRequested,
             )
             Button(
                 modifier = Modifier
@@ -218,38 +235,118 @@ fun HomeScreen(
  * 首页语音和文字查找入口。
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun HomeSearchSurface(
     modifier: Modifier,
-    onClick: () -> Unit,
+    onTextSearch: (String) -> Unit,
+    onVoiceSearchRequested: () -> Unit,
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clickable(
-                role = Role.Button,
-                onClick = onClick,
+    var textModeEnabled by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    if (textModeEnabled) {
+        OutlinedTextField(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            value = query,
+            onValueChange = { value ->
+                query = value
+            },
+            placeholder = {
+                Text("输入物品名称、别名或位置")
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = WhereIcons.Search,
+                    contentDescription = null,
+                    tint = WherePrimaryColor,
+                )
+            },
+            trailingIcon = {
+                IconButton(
+                    onClick = {
+                        textModeEnabled = false
+                        keyboardController?.hide()
+                    },
+                ) {
+                    Icon(
+                        imageVector = WhereIcons.Microphone,
+                        contentDescription = "切换到语音查找",
+                        tint = WherePrimaryColor,
+                    )
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = WhereSelectedContainerColor,
+                unfocusedContainerColor = WhereSelectedContainerColor,
+                focusedBorderColor = WherePrimaryColor,
+                unfocusedBorderColor = WherePrimaryColor.copy(alpha = 0.35f),
             ),
-        color = WhereSelectedContainerColor,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, WherePrimaryColor.copy(alpha = 0.35f)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    if (query.isNotBlank()) {
+                        keyboardController?.hide()
+                        onTextSearch(query)
+                    }
+                },
+            ),
+        )
+    } else {
+        Surface(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            color = WhereSelectedContainerColor,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, WherePrimaryColor.copy(alpha = 0.35f)),
         ) {
-            Icon(
-                modifier = Modifier.size(20.dp),
-                imageVector = WhereIcons.Microphone,
-                contentDescription = null,
-                tint = WherePrimaryColor,
-            )
-            Text(
-                text = "按住说话查找物品",
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            Row(
+                modifier = Modifier.padding(end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .combinedClickable(
+                            role = Role.Button,
+                            onClick = {},
+                            onLongClick = onVoiceSearchRequested,
+                            onLongClickLabel = "按住说话查找物品",
+                        )
+                        .padding(start = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        imageVector = WhereIcons.Microphone,
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
+                    )
+                    Text(
+                        text = "按住说话查找物品",
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        textModeEnabled = true
+                    },
+                ) {
+                    Icon(
+                        imageVector = WhereIcons.Keyboard,
+                        contentDescription = "切换到键盘输入",
+                        tint = WherePrimaryColor,
+                    )
+                }
+            }
         }
     }
 }
