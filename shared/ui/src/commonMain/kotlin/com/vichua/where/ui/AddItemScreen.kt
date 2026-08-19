@@ -40,10 +40,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.MvpLimits
+import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.feature.item.creation.CreateManualItemRequest
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.ItemCreationLocation
 import com.vichua.where.feature.item.draft.ItemDraftContent
+import com.vichua.where.feature.item.photo.ImportedItemPhoto
 
 /**
  * 按 Pencil 原型展示新增物品基础页面，并支持不依赖相机、语音或 AI 的手动保存路径。
@@ -54,7 +57,10 @@ import com.vichua.where.feature.item.draft.ItemDraftContent
  * @param errorMessage 可展示的中文错误。
  * @param onRetry 重试读取可选位置。
  * @param draft 当前设备可恢复的未过期草稿；没有时为空。
+ * @param photos 本次已导入但尚未正式保存的照片。
+ * @param resolveMediaPath 把受控标识解析为本地绝对路径。
  * @param onBack 返回首页。
+ * @param onPickPhoto 从相册导入指定用途的照片。
  * @param onSaveDraft 保存当前未完成输入为设备本地草稿。
  * @param onDiscardDraft 放弃当前草稿并离开页面。
  * @param onSubmit 确认后提交基础手动物品请求。
@@ -63,11 +69,14 @@ import com.vichua.where.feature.item.draft.ItemDraftContent
 fun AddItemScreen(
     context: ItemCreationContext?,
     draft: ItemDraftContent?,
+    photos: List<ImportedItemPhoto>,
+    resolveMediaPath: (String) -> String?,
     loading: Boolean,
     submitting: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onPickPhoto: (PhotoRole) -> Unit,
     onSaveDraft: (ItemDraftContent) -> Unit,
     onDiscardDraft: () -> Unit,
     onSubmit: (CreateManualItemRequest) -> Unit,
@@ -100,7 +109,7 @@ fun AddItemScreen(
         note = note,
     )
     val requestLeave: () -> Unit = {
-        if (currentDraft.hasUserInput) {
+        if (currentDraft.hasUserInput || photos.isNotEmpty()) {
             leaveDialogVisible = true
         } else {
             onBack()
@@ -142,15 +151,39 @@ fun AddItemScreen(
                 icon = WhereIcons.Location,
                 title = "拍存放位置 ＋",
                 description = "拍房间、柜子或盒子",
+                enabled = !submitting,
+                onClick = {
+                    onPickPhoto(PhotoRole.ENVIRONMENT)
+                },
             )
             PhotoActionCard(
                 modifier = Modifier.weight(1f),
                 icon = WhereIcons.AddPhoto,
                 title = "拍物品 ＋",
                 description = "拍清楚物品外观",
+                enabled = !submitting,
+                onClick = {
+                    onPickPhoto(PhotoRole.ITEM)
+                },
             )
         }
-        PhotoThumbnailRow(modifier = Modifier.padding(top = 12.dp))
+        PhotoThumbnailRow(
+            modifier = Modifier.padding(top = 12.dp),
+            photos = photos,
+            resolveMediaPath = resolveMediaPath,
+            enabled = !submitting,
+            onAddPhoto = {
+                onPickPhoto(PhotoRole.SUPPLEMENTARY)
+            },
+        )
+        if (photos.size >= MvpLimits.ITEM_PHOTO_WARNING_THRESHOLD) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "当前已有 ${photos.size} 张照片，存储占用会继续增加。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
 
         AddItemFieldLabel(
             modifier = Modifier.padding(top = 18.dp),
@@ -511,7 +544,7 @@ private fun StepBadge(
 }
 
 /**
- * 原型中的拍摄入口卡片；平台相机接入前保持视觉入口但不申请权限。
+ * 相册导入入口卡片。当前使用系统照片选择器，不申请相机或相册权限。
  */
 @Composable
 private fun PhotoActionCard(
@@ -519,9 +552,17 @@ private fun PhotoActionCard(
     icon: ImageVector,
     title: String,
     description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
 ) {
     Surface(
-        modifier = modifier.height(146.dp),
+        modifier = modifier
+            .height(146.dp)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
     ) {
@@ -554,34 +595,72 @@ private fun PhotoActionCard(
 }
 
 /**
- * 多照片类型缩略图占位行。
+ * 已导入照片缩略图和继续添加入口。
  */
 @Composable
-private fun PhotoThumbnailRow(modifier: Modifier) {
+private fun PhotoThumbnailRow(
+    modifier: Modifier,
+    photos: List<ImportedItemPhoto>,
+    resolveMediaPath: (String) -> String?,
+    enabled: Boolean,
+    onAddPhoto: () -> Unit,
+) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ThumbnailPlaceholder(
-            modifier = Modifier.weight(1f),
-            label = "位置照片",
-            selected = true,
-        )
-        ThumbnailPlaceholder(
-            modifier = Modifier.weight(1f),
-            label = "物品照片",
-            selected = false,
-        )
-        ThumbnailPlaceholder(
-            modifier = Modifier.weight(1f),
-            label = "更多照片",
-            selected = false,
-        )
-        ThumbnailPlaceholder(
-            modifier = Modifier.weight(1f),
-            label = "＋ 添加",
-            selected = false,
-        )
+        photos.take(THUMBNAIL_SLOT_COUNT - 1).forEach { photo ->
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(66.dp),
+                color = WhereSelectedContainerColor,
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                LocalStorageImage(
+                    absolutePath = resolveMediaPath(photo.media.thumbnailTempStorageKey),
+                    contentDescription = thumbnailRoleLabel(photo.role),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    ThumbnailPlaceholder(
+                        modifier = Modifier.fillMaxSize(),
+                        label = thumbnailRoleLabel(photo.role),
+                        selected = true,
+                    )
+                }
+            }
+        }
+        repeat((THUMBNAIL_SLOT_COUNT - 1 - photos.size).coerceAtLeast(0)) {
+            ThumbnailPlaceholder(
+                modifier = Modifier.weight(1f),
+                label = "待添加",
+                selected = false,
+            )
+        }
+        Surface(
+            modifier = Modifier
+                .weight(1f)
+                .height(66.dp)
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onAddPhoto,
+                ),
+            color = WhereSurfaceColor,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, WhereOutlineColor),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = "＋ 添加",
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 
@@ -780,3 +859,15 @@ private fun addItemTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = WherePrimaryTextColor,
     unfocusedTextColor = WherePrimaryTextColor,
 )
+
+/**
+ * 将导入照片用途转换为缩略图短标签。
+ */
+private fun thumbnailRoleLabel(role: PhotoRole): String = when (role) {
+    PhotoRole.ENVIRONMENT -> "位置照片"
+    PhotoRole.ITEM -> "物品照片"
+    PhotoRole.LABEL -> "标签照片"
+    PhotoRole.SUPPLEMENTARY -> "更多照片"
+}
+
+private const val THUMBNAIL_SLOT_COUNT = 4

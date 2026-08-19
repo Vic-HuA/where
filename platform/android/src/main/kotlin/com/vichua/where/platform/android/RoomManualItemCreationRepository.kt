@@ -36,6 +36,7 @@ class RoomManualItemCreationRepository(
     override suspend fun create(creation: ManualItemCreation) {
         store.create(
             item = creation.item,
+            photos = creation.photos,
             locationEvent = creation.initialLocationEvent,
             changeRecord = creation.changeRecord,
             searchDocument = ItemSearchDocument(

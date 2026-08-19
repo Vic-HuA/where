@@ -14,8 +14,10 @@ import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
+import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
 import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
@@ -64,6 +66,8 @@ class AndroidAppContainer(
         store = ItemDraftStore(database),
         nowMillis = AndroidEpochMillisecondsClock::now,
     )
+    private val mediaFileStore: ControlledMediaFileStore =
+        AndroidControlledMediaFileStore(applicationContext)
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -96,9 +100,19 @@ class AndroidAppContainer(
     /** 放弃当前设备最近一份物品草稿的用例。 */
     val discardLatestItemDraftUseCase = DiscardLatestItemDraftUseCase(itemDraftRepository)
 
+    /** 把相册图片导入私有临时目录的用例。 */
+    val importItemPhotoUseCase = ImportItemPhotoUseCase(mediaFileStore)
+
+    /** 解析受控照片路径，供首页和详情解码本地缩略图。 */
+    val resolveMediaPath: (String) -> String? = mediaFileStore::resolveAbsolutePath
+
+    /** 放弃新增页未转正的临时照片。 */
+    val discardImportedPhotos: suspend (Collection<String>) -> Unit = mediaFileStore::discard
+
     /** 创建基础手动物品的用例。 */
     val createManualItemUseCase = CreateManualItemUseCase(
         repository = manualItemCreationRepository,
+        mediaFileStore = mediaFileStore,
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,

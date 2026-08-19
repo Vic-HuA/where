@@ -40,10 +40,19 @@ import com.vichua.where.core.model.PhotoRole
 
 /**
  * 按 Pencil 原型展示物品照片、当前位置、历史和主要操作。
+ *
+ * @param detail 已加载的物品详情；加载中或失败时为空。
+ * @param resolveMediaPath 把受控照片标识解析为本地绝对路径。
+ * @param loading 是否正在读取详情。
+ * @param errorMessage 可展示的中文读取错误。
+ * @param onBack 返回上一页。
+ * @param onReadLocation 朗读当前位置。
+ * @param onUpdateLocation 打开更新位置页。
  */
 @Composable
 fun ItemDetailScreen(
     detail: ItemDetail?,
+    resolveMediaPath: (String) -> String?,
     loading: Boolean,
     errorMessage: String?,
     onBack: () -> Unit,
@@ -101,31 +110,51 @@ fun ItemDetailScreen(
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(20.dp),
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+            val selectedPhoto = detail.photos.getOrNull(
+                selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex.coerceAtLeast(0)),
+            )
+            LocalStorageImage(
+                absolutePath = selectedPhoto?.let { photo ->
+                    resolveMediaPath(photo.storageKey) ?: resolveMediaPath(photo.thumbnailStorageKey)
+                },
+                contentDescription = detail.name,
+                modifier = Modifier.fillMaxSize(),
             ) {
-                Icon(
-                    modifier = Modifier.size(52.dp),
-                    imageVector = WhereIcons.Image,
-                    contentDescription = null,
-                    tint = WherePrimaryColor,
-                )
-                Text(
-                    modifier = Modifier.padding(top = 8.dp),
-                    text = if (detail.photos.isEmpty()) {
-                        "暂无照片"
-                    } else {
-                        "${photoRoleLabel(detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)].role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}"
-                    },
-                    color = WhereSecondaryTextColor,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(52.dp),
+                        imageVector = WhereIcons.Image,
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = if (detail.photos.isEmpty()) {
+                            "暂无照片"
+                        } else {
+                            "${photoRoleLabel(selectedPhoto?.role ?: PhotoRole.ITEM)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}"
+                        },
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
+        }
+        if (detail.photos.isNotEmpty()) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "${photoRoleLabel(detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)].role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
         PhotoThumbnailSelector(
             photos = detail.photos,
             selectedIndex = selectedPhotoIndex,
+            resolveMediaPath = resolveMediaPath,
             onSelect = { index ->
                 selectedPhotoIndex = index
             },
@@ -245,6 +274,7 @@ fun ItemDetailScreen(
 private fun PhotoThumbnailSelector(
     photos: List<ItemDetailPhoto>,
     selectedIndex: Int,
+    resolveMediaPath: (String) -> String?,
     onSelect: (Int) -> Unit,
 ) {
     Row(
@@ -272,26 +302,32 @@ private fun PhotoThumbnailSelector(
                 shape = RoundedCornerShape(11.dp),
                 border = BorderStroke(1.dp, WhereOutlineColor),
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                LocalStorageImage(
+                    absolutePath = resolveMediaPath(photo.thumbnailStorageKey),
+                    contentDescription = photoRoleLabel(photo.role),
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    Icon(
-                        modifier = Modifier.size(20.dp),
-                        imageVector = WhereIcons.Image,
-                        contentDescription = null,
-                        tint = WherePrimaryColor,
-                    )
-                    Text(
-                        modifier = Modifier.padding(top = 3.dp),
-                        text = photoRoleLabel(photo.role),
-                        color = if (index == selectedIndex) {
-                            WherePrimaryColor
-                        } else {
-                            WhereSecondaryTextColor
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(20.dp),
+                            imageVector = WhereIcons.Image,
+                            contentDescription = null,
+                            tint = WherePrimaryColor,
+                        )
+                        Text(
+                            modifier = Modifier.padding(top = 3.dp),
+                            text = photoRoleLabel(photo.role),
+                            color = if (index == selectedIndex) {
+                                WherePrimaryColor
+                            } else {
+                                WhereSecondaryTextColor
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         }

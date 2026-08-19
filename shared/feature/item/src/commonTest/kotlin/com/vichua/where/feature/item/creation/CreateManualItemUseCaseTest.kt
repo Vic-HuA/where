@@ -6,11 +6,17 @@ import com.vichua.where.core.common.UniqueIdGenerator
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.PhotoRole
+import com.vichua.where.core.platform.ControlledMediaFileStore
+import com.vichua.where.core.platform.ImportedMediaFile
+import com.vichua.where.core.platform.MediaFilePromotion
+import com.vichua.where.feature.item.photo.ImportedItemPhoto
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * 验证基础手动物品录入用例的输入校验和聚合生成。
@@ -41,6 +47,46 @@ class CreateManualItemUseCaseTest {
         assertEquals(creation.item.version, creation.changeRecord.entityVersion)
         assertEquals("护照", creation.searchContent.name)
         assertEquals(TEST_LOCATION_PATH, creation.searchContent.locationPathText)
+        assertEquals(emptyList(), creation.photos)
+    }
+
+    /** 验证导入照片会写入正式记录，并在数据库成功后转正临时文件。 */
+    @Test
+    fun `导入照片会生成封面并转正文件`() = runTest {
+        val repository = FakeManualItemCreationRepository()
+        val mediaFileStore = FakeControlledMediaFileStore()
+        val useCase = createUseCase(repository, mediaFileStore)
+        val importedPhoto = ImportedItemPhoto(
+            role = PhotoRole.ITEM,
+            media = ImportedMediaFile(
+                tempStorageKey = "tmp/import-1.jpg",
+                thumbnailTempStorageKey = "tmp/thumb-import-1.jpg",
+                mimeType = "image/jpeg",
+                width = 800,
+                height = 600,
+                sizeBytes = 1024L,
+                contentHash = "hash-1",
+            ),
+        )
+
+        useCase(
+            CreateManualItemRequest(
+                name = "钥匙",
+                locationId = TEST_LOCATION_ID,
+                photos = listOf(importedPhoto),
+            ),
+        )
+
+        val creation = assertNotNull(repository.savedCreation)
+        assertEquals(1, creation.photos.size)
+        assertTrue(creation.photos.single().isCover)
+        assertEquals(PhotoRole.ITEM, creation.photos.single().role)
+        assertEquals(2, mediaFileStore.promoted.size)
+        assertEquals("tmp/import-1.jpg", mediaFileStore.promoted[0].tempStorageKey)
+        assertEquals(
+            creation.photos.single().storageKey,
+            mediaFileStore.promoted[0].finalStorageKey,
+        )
     }
 
     /** 验证空白名称不会进入仓储。 */
@@ -82,10 +128,12 @@ class CreateManualItemUseCaseTest {
      */
     private fun createUseCase(
         repository: ManualItemCreationRepository,
+        mediaFileStore: ControlledMediaFileStore = FakeControlledMediaFileStore(),
     ): CreateManualItemUseCase {
         var nextId = 0
         return CreateManualItemUseCase(
             repository = repository,
+            mediaFileStore = mediaFileStore,
             idGenerator = UniqueIdGenerator {
                 nextId += 1
                 "id-$nextId"
@@ -93,6 +141,26 @@ class CreateManualItemUseCaseTest {
             clock = EpochMillisecondsClock { TEST_TIME },
             textNormalizer = DefaultTextNormalizer,
         )
+    }
+
+    /**
+     * 记录文件转正请求的内存文件存储。
+     */
+    private class FakeControlledMediaFileStore : ControlledMediaFileStore {
+        val promoted = mutableListOf<MediaFilePromotion>()
+
+        override suspend fun importImage(
+            bytes: ByteArray,
+            sourceMimeType: String?,
+        ): ImportedMediaFile = error("Import is not used by create-item tests.")
+
+        override suspend fun promote(promotions: List<MediaFilePromotion>) {
+            promoted += promotions
+        }
+
+        override suspend fun discard(storageKeys: Collection<String>) = Unit
+
+        override fun resolveAbsolutePath(storageKey: String): String? = null
     }
 
     /**

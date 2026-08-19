@@ -17,7 +17,15 @@ import com.vichua.where.core.model.ItemLocationEventId
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.MediaIntegrityStatus
+import com.vichua.where.core.model.PhotoAsset
+import com.vichua.where.core.model.PhotoAssetId
+import com.vichua.where.core.model.SortOrder
 import com.vichua.where.core.model.UtcTimestamp
+import com.vichua.where.core.platform.ControlledMediaFileStore
+import com.vichua.where.core.platform.MediaFilePromotion
+import com.vichua.where.core.platform.StorageKeys
+import com.vichua.where.feature.item.photo.ImportedItemPhoto
 
 /**
  * 新增物品页面可选择的位置。
@@ -50,12 +58,14 @@ data class ItemCreationContext(
  * @property locationId 用户选择的位置 ID。
  * @property locationDescription 可选位置补充说明。
  * @property note 可选备注。
+ * @property photos 已导入的临时照片；可为空，第一张会成为封面。
  */
 data class CreateManualItemRequest(
     val name: String,
     val locationId: LocationNodeId,
     val locationDescription: String? = null,
     val note: String? = null,
+    val photos: List<ImportedItemPhoto> = emptyList(),
 )
 
 /**
@@ -81,12 +91,14 @@ data class ItemSearchContent(
  * 手动创建物品时需要原子保存的领域聚合。
  *
  * @property item 新物品档案。
+ * @property photos 与物品同时提交的正式照片记录。
  * @property initialLocationEvent 首次位置历史事件。
  * @property changeRecord 物品创建变更记录。
  * @property searchContent 全文索引内容。
  */
 data class ManualItemCreation(
     val item: Item,
+    val photos: List<PhotoAsset> = emptyList(),
     val initialLocationEvent: ItemLocationEvent,
     val changeRecord: ChangeRecord,
     val searchContent: ItemSearchContent,
@@ -120,10 +132,11 @@ class LoadItemCreationContextUseCase(
 }
 
 /**
- * 创建不依赖相机、语音或 AI 的基础物品记录。
+ * 创建不依赖相机、语音或 AI 的基础物品记录，并可附带已导入的本地照片。
  */
 class CreateManualItemUseCase(
     private val repository: ManualItemCreationRepository,
+    private val mediaFileStore: ControlledMediaFileStore,
     private val idGenerator: UniqueIdGenerator,
     private val clock: EpochMillisecondsClock,
     private val textNormalizer: TextNormalizer,
@@ -201,16 +214,107 @@ class CreateManualItemUseCase(
             noteText = note.orEmpty(),
             locationPathText = selectedLocation.displayPath,
         )
+        val photos = request.photos.mapIndexed { index, importedPhoto ->
+            toPhotoAsset(
+                importedPhoto = importedPhoto,
+                item = item,
+                sortOrder = index,
+                now = now,
+            )
+        }
 
         repository.create(
             ManualItemCreation(
                 item = item,
+                photos = photos,
                 initialLocationEvent = locationEvent,
                 changeRecord = changeRecord,
                 searchContent = searchContent,
             ),
         )
+        // 先提交数据库再转正文件，避免事务失败后留下引用不存在文件的正式记录。
+        promoteImportedPhotos(request.photos, photos)
         return itemId
+    }
+
+    /**
+     * 把临时导入结果转换成带正式 storageKey 的照片记录。
+     *
+     * 第一张有效照片作为封面，后续照片保持导入顺序。
+     */
+    private fun toPhotoAsset(
+        importedPhoto: ImportedItemPhoto,
+        item: Item,
+        sortOrder: Int,
+        now: UtcTimestamp,
+    ): PhotoAsset {
+        val photoId = PhotoAssetId(idGenerator.generate())
+        val extension = mimeTypeToExtension(importedPhoto.media.mimeType)
+        return PhotoAsset(
+            id = photoId,
+            householdId = item.householdId,
+            itemId = item.id,
+            role = importedPhoto.role,
+            storageKey = StorageKeys.itemOriginal(item.id.value, photoId.value, extension),
+            thumbnailStorageKey = StorageKeys.itemThumbnail(item.id.value, photoId.value),
+            mimeType = importedPhoto.media.mimeType,
+            width = importedPhoto.media.width,
+            height = importedPhoto.media.height,
+            sizeBytes = importedPhoto.media.sizeBytes,
+            contentHash = importedPhoto.media.contentHash,
+            integrityStatus = MediaIntegrityStatus.AVAILABLE,
+            lastIntegrityCheckedAt = now,
+            sortOrder = SortOrder(sortOrder),
+            isCover = sortOrder == 0,
+            createdAt = now,
+            updatedAt = now,
+            version = item.version,
+            sourceDeviceId = item.sourceDeviceId,
+        )
+    }
+
+    /**
+     * 数据库成功后把临时原图和缩略图移动到正式标识。
+     *
+     * 转正失败时仍保留照片记录，界面按缺失文件回退占位图，避免回滚已对用户可见的物品。
+     */
+    private suspend fun promoteImportedPhotos(
+        importedPhotos: List<ImportedItemPhoto>,
+        photos: List<PhotoAsset>,
+    ) {
+        if (importedPhotos.isEmpty()) {
+            return
+        }
+        require(importedPhotos.size == photos.size) {
+            "Imported photos and persisted photo records must align."
+        }
+        val promotions = importedPhotos.flatMapIndexed { index, importedPhoto ->
+            val photo = photos[index]
+            listOf(
+                MediaFilePromotion(importedPhoto.media.tempStorageKey, photo.storageKey),
+                MediaFilePromotion(
+                    importedPhoto.media.thumbnailTempStorageKey,
+                    photo.thumbnailStorageKey,
+                ),
+            )
+        }
+        try {
+            mediaFileStore.promote(promotions)
+        } catch (_: Exception) {
+            // Intentionally keep the item after a failed file promotion.
+        }
+    }
+
+    /**
+     * 把已校验 MIME 映射为受控扩展名。
+     */
+    private fun mimeTypeToExtension(mimeType: String): String {
+        return when (mimeType.lowercase()) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            else -> error("Unsupported photo MIME type.")
+        }
     }
 
     private companion object {

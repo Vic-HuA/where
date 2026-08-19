@@ -13,6 +13,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as WhereApplication).container
+        val photoPickerGateway = AndroidPhotoPickerGateway(this)
         setContent {
             WhereApp(
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
@@ -22,6 +23,10 @@ class MainActivity : ComponentActivity() {
                 loadLatestItemDraftUseCase = container.loadLatestItemDraftUseCase,
                 saveItemDraftUseCase = container.saveItemDraftUseCase,
                 discardLatestItemDraftUseCase = container.discardLatestItemDraftUseCase,
+                importItemPhotoUseCase = container.importItemPhotoUseCase,
+                photoPickerGateway = photoPickerGateway,
+                resolveMediaPath = container.resolveMediaPath,
+                discardImportedPhotos = container.discardImportedPhotos,
                 createManualItemUseCase = container.createManualItemUseCase,
                 searchItemsUseCase = container.searchItemsUseCase,
                 loadItemDetailUseCase = container.loadItemDetailUseCase,

@@ -55,6 +55,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * 按 Pencil 原型展示首页搜索入口和本地摘要。
  *
  * @param snapshot 已加载的首页快照；加载中或失败时为空。
+ * @param resolveMediaPath 把封面缩略图标识解析为本地绝对路径。
  * @param loading 是否正在读取本地数据。
  * @param errorMessage 可展示的中文读取错误。
  * @param onRetry 重试加载首页数据。
@@ -68,6 +69,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
 @Composable
 fun HomeScreen(
     snapshot: HomeSnapshot?,
+    resolveMediaPath: (String) -> String?,
     loading: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
@@ -186,6 +188,7 @@ fun HomeScreen(
                     RecentItemCard(
                         modifier = Modifier.padding(top = 12.dp),
                         item = item,
+                        thumbnailPath = item.thumbnailStorageKey?.let(resolveMediaPath),
                         onClick = {
                             onItemClick(item)
                         },
@@ -380,6 +383,7 @@ private fun HomeSectionTitle(
 private fun RecentItemCard(
     modifier: Modifier,
     item: HomeItemSummary,
+    thumbnailPath: String?,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -401,16 +405,22 @@ private fun RecentItemCard(
                 color = WhereSelectedContainerColor,
                 shape = RoundedCornerShape(12.dp),
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                LocalStorageImage(
+                    absolutePath = thumbnailPath,
+                    contentDescription = item.name,
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    Icon(
-                        modifier = Modifier.size(30.dp),
-                        imageVector = WhereIcons.Image,
-                        contentDescription = null,
-                        tint = WherePrimaryColor,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(30.dp),
+                            imageVector = WhereIcons.Image,
+                            contentDescription = null,
+                            tint = WherePrimaryColor,
+                        )
+                    }
                 }
             }
             Column(

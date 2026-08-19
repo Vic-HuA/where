@@ -34,5 +34,7 @@ android {
 dependencies {
     implementation(project(":shared:ui"))
     implementation(project(":platform:android"))
+    implementation(project(":shared:core:platform-api"))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.kotlinx.coroutines.core)
 }

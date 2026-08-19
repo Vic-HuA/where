@@ -11,6 +11,7 @@ import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
+import com.vichua.where.core.model.PhotoAsset
 
 /**
  * 数据库层提供的物品可选位置。
@@ -82,6 +83,7 @@ class ManualItemCreationStore(
      */
     suspend fun create(
         item: Item,
+        photos: List<PhotoAsset>,
         locationEvent: ItemLocationEvent,
         changeRecord: ChangeRecord,
         searchDocument: ItemSearchDocument,
@@ -89,7 +91,7 @@ class ManualItemCreationStore(
         itemWriteStore.createItem(
             item = item,
             aliases = emptyList(),
-            photos = emptyList(),
+            photos = photos,
             initialLocationEvent = locationEvent,
             changeRecord = changeRecord,
             searchDocument = searchDocument,

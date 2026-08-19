@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.platform.PhotoPickerGateway
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
@@ -31,6 +32,8 @@ import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.ItemDraftContent
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
+import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
+import com.vichua.where.feature.item.photo.ImportedItemPhoto
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
@@ -58,6 +61,10 @@ import kotlinx.coroutines.launch
  * @param loadLatestItemDraftUseCase 加载当前设备未过期草稿的用例。
  * @param saveItemDraftUseCase 保存新增物品未完成输入的用例。
  * @param discardLatestItemDraftUseCase 放弃当前草稿的用例。
+ * @param importItemPhotoUseCase 把相册图片写入临时目录的用例。
+ * @param photoPickerGateway 系统相册选择入口。
+ * @param resolveMediaPath 把受控标识解析为本地绝对路径。
+ * @param discardImportedPhotos 删除未转正的临时照片。
  * @param createManualItemUseCase 保存基础手动物品的用例。
  * @param searchItemsUseCase 执行本地文字搜索的用例。
  * @param loadItemDetailUseCase 加载物品详情的用例。
@@ -79,6 +86,10 @@ fun WhereApp(
     loadLatestItemDraftUseCase: LoadLatestItemDraftUseCase,
     saveItemDraftUseCase: SaveItemDraftUseCase,
     discardLatestItemDraftUseCase: DiscardLatestItemDraftUseCase,
+    importItemPhotoUseCase: ImportItemPhotoUseCase,
+    photoPickerGateway: PhotoPickerGateway,
+    resolveMediaPath: (String) -> String?,
+    discardImportedPhotos: suspend (Collection<String>) -> Unit,
     createManualItemUseCase: CreateManualItemUseCase,
     searchItemsUseCase: SearchItemsUseCase,
     loadItemDetailUseCase: LoadItemDetailUseCase,
@@ -105,6 +116,7 @@ fun WhereApp(
     var itemCreationAttempt by remember { mutableIntStateOf(0) }
     var itemCreationSubmitting by remember { mutableStateOf(false) }
     var itemDraft by remember { mutableStateOf<ItemDraftContent?>(null) }
+    var pendingItemPhotos by remember { mutableStateOf<List<ImportedItemPhoto>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<ItemTextSearchResult>?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var searchInProgress by remember { mutableStateOf(false) }
@@ -266,6 +278,7 @@ fun WhereApp(
                 )
                 AppDestination.HOME -> HomeScreen(
                     snapshot = homeSnapshot,
+                    resolveMediaPath = resolveMediaPath,
                     loading = homeLoading,
                     errorMessage = homeError,
                     onRetry = {
@@ -311,6 +324,8 @@ fun WhereApp(
                 AppDestination.ADD_ITEM -> AddItemScreen(
                     context = itemCreationContext,
                     draft = itemDraft,
+                    photos = pendingItemPhotos,
+                    resolveMediaPath = resolveMediaPath,
                     loading = itemCreationLoading,
                     submitting = itemCreationSubmitting,
                     errorMessage = itemCreationError,
@@ -319,6 +334,25 @@ fun WhereApp(
                     },
                     onBack = {
                         destination = AppDestination.HOME
+                    },
+                    onPickPhoto = { role ->
+                        if (!itemCreationSubmitting) {
+                            coroutineScope.launch {
+                                itemCreationError = null
+                                try {
+                                    val pickedImage = photoPickerGateway.pickImage() ?: return@launch
+                                    pendingItemPhotos = pendingItemPhotos + importItemPhotoUseCase(
+                                        bytes = pickedImage.bytes,
+                                        sourceMimeType = pickedImage.mimeType,
+                                        role = role,
+                                    )
+                                } catch (_: IllegalArgumentException) {
+                                    itemCreationError = "无法使用所选照片，请换一张后重试。"
+                                } catch (_: Exception) {
+                                    itemCreationError = "照片导入失败，请稍后重试。"
+                                }
+                            }
+                        }
                     },
                     onSaveDraft = { content ->
                         val creationContext = itemCreationContext
@@ -332,6 +366,11 @@ fun WhereApp(
                                         deviceId = creationContext.sourceDeviceId,
                                         content = content,
                                     )
+                                    discardPendingPhotos(
+                                        photos = pendingItemPhotos,
+                                        discardImportedPhotos = discardImportedPhotos,
+                                    )
+                                    pendingItemPhotos = emptyList()
                                     destination = AppDestination.HOME
                                 } catch (_: IllegalArgumentException) {
                                     itemCreationError = "请先填写物品名称、位置或备注。"
@@ -350,6 +389,11 @@ fun WhereApp(
                                 itemCreationError = null
                                 try {
                                     discardLatestItemDraftUseCase()
+                                    discardPendingPhotos(
+                                        photos = pendingItemPhotos,
+                                        discardImportedPhotos = discardImportedPhotos,
+                                    )
+                                    pendingItemPhotos = emptyList()
                                     itemDraft = null
                                     destination = AppDestination.HOME
                                 } catch (_: Exception) {
@@ -366,7 +410,10 @@ fun WhereApp(
                                 itemCreationSubmitting = true
                                 itemCreationError = null
                                 try {
-                                    createManualItemUseCase(request)
+                                    createManualItemUseCase(
+                                        request.copy(photos = pendingItemPhotos),
+                                    )
+                                    pendingItemPhotos = emptyList()
                                     itemDraft = null
                                     homeLoadAttempt += 1
                                     destination = AppDestination.HOME
@@ -458,6 +505,7 @@ fun WhereApp(
                 )
                 AppDestination.ITEM_DETAIL -> ItemDetailScreen(
                     detail = itemDetail,
+                    resolveMediaPath = resolveMediaPath,
                     loading = itemDetailLoading,
                     errorMessage = itemDetailError,
                     onBack = {
@@ -586,6 +634,22 @@ private fun StartupErrorScreen(
             Text("重试")
         }
     }
+}
+
+/**
+ * 删除尚未转正的临时原图和缩略图，避免放弃录入后占用私有目录。
+ */
+private suspend fun discardPendingPhotos(
+    photos: List<ImportedItemPhoto>,
+    discardImportedPhotos: suspend (Collection<String>) -> Unit,
+) {
+    if (photos.isEmpty()) {
+        return
+    }
+    val storageKeys = photos.flatMap { photo ->
+        listOf(photo.media.tempStorageKey, photo.media.thumbnailTempStorageKey)
+    }
+    discardImportedPhotos(storageKeys)
 }
 
 /**
