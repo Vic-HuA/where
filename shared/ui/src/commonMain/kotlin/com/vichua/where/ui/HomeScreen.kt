@@ -60,6 +60,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onRetry 重试加载首页数据。
  * @param onTextSearch 提交首页键盘查询。
  * @param onVoiceSearchRequested 长按语音区域后请求语音查找。
+ * @param onItemClick 打开最近物品详情。
  * @param onRecordItemClick 打开新增物品流程。
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
@@ -72,6 +73,7 @@ fun HomeScreen(
     onRetry: () -> Unit,
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
+    onItemClick: (HomeItemSummary) -> Unit,
     onRecordItemClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -184,6 +186,9 @@ fun HomeScreen(
                     RecentItemCard(
                         modifier = Modifier.padding(top = 12.dp),
                         item = item,
+                        onClick = {
+                            onItemClick(item)
+                        },
                     )
                 }
             }
@@ -375,9 +380,15 @@ private fun HomeSectionTitle(
 private fun RecentItemCard(
     modifier: Modifier,
     item: HomeItemSummary,
+    onClick: () -> Unit,
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                role = Role.Button,
+                onClick = onClick,
+            ),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
     ) {

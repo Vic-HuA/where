@@ -21,9 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
+import com.vichua.where.core.model.ItemId
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.detail.ItemDetail
+import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
@@ -42,6 +45,7 @@ import kotlinx.coroutines.launch
  * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
  * @param createManualItemUseCase 保存基础手动物品的用例。
  * @param searchItemsUseCase 执行本地文字搜索的用例。
+ * @param loadItemDetailUseCase 加载物品详情的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -53,6 +57,7 @@ fun WhereApp(
     loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
     createManualItemUseCase: CreateManualItemUseCase,
     searchItemsUseCase: SearchItemsUseCase,
+    loadItemDetailUseCase: LoadItemDetailUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -73,7 +78,10 @@ fun WhereApp(
     var searchQuery by remember { mutableStateOf("") }
     var searchInProgress by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
-    var selectedItemName by remember { mutableStateOf("") }
+    var selectedItemId by remember { mutableStateOf<ItemId?>(null) }
+    var itemDetail by remember { mutableStateOf<ItemDetail?>(null) }
+    var itemDetailLoading by remember { mutableStateOf(false) }
+    var itemDetailError by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val performSearch: (String) -> Unit = { query ->
         if (!searchInProgress) {
@@ -118,6 +126,21 @@ fun WhereApp(
                 itemCreationError = "暂时无法读取可用位置。"
             } finally {
                 itemCreationLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(destination, selectedItemId) {
+        val itemId = selectedItemId
+        if (destination == AppDestination.ITEM_DETAIL && itemId != null) {
+            itemDetailLoading = true
+            itemDetailError = null
+            try {
+                itemDetail = loadItemDetailUseCase(itemId)
+            } catch (_: Exception) {
+                itemDetailError = "暂时无法读取物品详情。"
+            } finally {
+                itemDetailLoading = false
             }
         }
     }
@@ -188,6 +211,10 @@ fun WhereApp(
                         searchError = "语音识别尚未接入，请先使用键盘输入。"
                         destination = AppDestination.SEARCH
                     },
+                    onItemClick = { item ->
+                        selectedItemId = item.itemId
+                        destination = AppDestination.ITEM_DETAIL
+                    },
                     onRecordItemClick = {
                         destination = AppDestination.ADD_ITEM
                     },
@@ -208,7 +235,7 @@ fun WhereApp(
                     },
                     onSearch = performSearch,
                     onResultClick = { result ->
-                        selectedItemName = result.name
+                        selectedItemId = result.itemId
                         destination = AppDestination.ITEM_DETAIL
                     },
                 )
@@ -255,10 +282,16 @@ fun WhereApp(
                         destination = AppDestination.HOME
                     },
                 )
-                AppDestination.ITEM_DETAIL -> PendingFeatureScreen(
-                    title = selectedItemName.ifBlank { "物品详情" },
+                AppDestination.ITEM_DETAIL -> ItemDetailScreen(
+                    detail = itemDetail,
+                    loading = itemDetailLoading,
+                    errorMessage = itemDetailError,
                     onBack = {
-                        destination = AppDestination.SEARCH
+                        destination = AppDestination.HOME
+                    },
+                    onReadLocation = {},
+                    onUpdateLocation = {
+                        destination = AppDestination.LOCATION
                     },
                 )
             }

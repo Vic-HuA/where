@@ -21,6 +21,7 @@ class MainActivity : ComponentActivity() {
                 loadItemCreationContextUseCase = container.loadItemCreationContextUseCase,
                 createManualItemUseCase = container.createManualItemUseCase,
                 searchItemsUseCase = container.searchItemsUseCase,
+                loadItemDetailUseCase = container.loadItemDetailUseCase,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )
