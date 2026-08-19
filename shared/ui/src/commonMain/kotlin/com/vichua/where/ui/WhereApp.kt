@@ -30,6 +30,11 @@ import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
+import com.vichua.where.feature.location.management.CreateLocationUseCase
+import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
+import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
+import com.vichua.where.feature.location.management.LocationTreeSnapshot
+import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveItemUseCase
@@ -51,6 +56,10 @@ import kotlinx.coroutines.launch
  * @param loadItemDetailUseCase 加载物品详情的用例。
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
+ * @param loadLocationTreeUseCase 加载位置管理树的用例。
+ * @param createLocationUseCase 新增位置的用例。
+ * @param renameLocationUseCase 重命名位置的用例。
+ * @param deleteEmptyLocationUseCase 删除空位置的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -65,6 +74,10 @@ fun WhereApp(
     loadItemDetailUseCase: LoadItemDetailUseCase,
     loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
     moveItemUseCase: MoveItemUseCase,
+    loadLocationTreeUseCase: LoadLocationTreeUseCase,
+    createLocationUseCase: CreateLocationUseCase,
+    renameLocationUseCase: RenameLocationUseCase,
+    deleteEmptyLocationUseCase: DeleteEmptyLocationUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -92,6 +105,11 @@ fun WhereApp(
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
+    var locationTree by remember { mutableStateOf<LocationTreeSnapshot?>(null) }
+    var locationTreeLoading by remember { mutableStateOf(false) }
+    var locationTreeSubmitting by remember { mutableStateOf(false) }
+    var locationTreeError by remember { mutableStateOf<String?>(null) }
+    var locationTreeAttempt by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
     val performSearch: (String) -> Unit = { query ->
         if (!searchInProgress) {
@@ -166,6 +184,20 @@ fun WhereApp(
                 moveItemError = "暂时无法读取可选位置。"
             } finally {
                 moveItemLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(destination, locationTreeAttempt) {
+        if (destination == AppDestination.LOCATION) {
+            locationTreeLoading = true
+            locationTreeError = null
+            try {
+                locationTree = loadLocationTreeUseCase()
+            } catch (_: Exception) {
+                locationTreeError = "暂时无法读取位置。"
+            } finally {
+                locationTreeLoading = false
             }
         }
     }
@@ -295,10 +327,73 @@ fun WhereApp(
                         }
                     },
                 )
-                AppDestination.LOCATION -> PendingFeatureScreen(
-                    title = "位置管理",
+                AppDestination.LOCATION -> LocationManagementScreen(
+                    snapshot = locationTree,
+                    loading = locationTreeLoading,
+                    submitting = locationTreeSubmitting,
+                    errorMessage = locationTreeError,
+                    onRetry = {
+                        locationTreeAttempt += 1
+                    },
                     onBack = {
                         destination = AppDestination.HOME
+                    },
+                    onCreate = { request ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                locationTreeError = null
+                                try {
+                                    createLocationUseCase(request)
+                                    locationTree = loadLocationTreeUseCase()
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    locationTreeError = "请检查位置名称和类型。"
+                                } catch (_: Exception) {
+                                    locationTreeError = "保存位置失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onRename = { node, name ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                locationTreeError = null
+                                try {
+                                    renameLocationUseCase(node.locationId, name)
+                                    locationTree = loadLocationTreeUseCase()
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    locationTreeError = "请检查位置名称。"
+                                } catch (_: Exception) {
+                                    locationTreeError = "重命名失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onDelete = { node ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                locationTreeError = null
+                                try {
+                                    deleteEmptyLocationUseCase(node.locationId)
+                                    locationTree = loadLocationTreeUseCase()
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    locationTreeError = "请先处理该位置中的物品或下级位置。"
+                                } catch (_: Exception) {
+                                    locationTreeError = "删除失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
                     },
                 )
                 AppDestination.SETTINGS -> PendingFeatureScreen(

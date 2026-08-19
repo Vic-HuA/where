@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Upsert
 import com.vichua.where.core.database.entity.FavoriteLocationEntity
 import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
@@ -34,6 +35,30 @@ interface HomeSupportDao {
         householdId: String,
         limit: Int,
     ): List<FavoriteLocationEntity>
+
+    /** 查询家庭全部仍有效的常用位置引用，供位置管理删除时同步取消固定。 */
+    @Query(
+        """
+        SELECT * FROM favorite_locations
+        WHERE household_id = :householdId AND deleted_at IS NULL
+        ORDER BY sort_order ASC, id ASC
+        """,
+    )
+    suspend fun findAllActiveFavoriteLocations(householdId: String): List<FavoriteLocationEntity>
+
+    /** 查询指定位置当前仍有效的常用位置引用。 */
+    @Query(
+        """
+        SELECT * FROM favorite_locations
+        WHERE location_node_id = :locationNodeId AND deleted_at IS NULL
+        LIMIT 1
+        """,
+    )
+    suspend fun findActiveFavoriteByLocation(locationNodeId: String): FavoriteLocationEntity?
+
+    /** 更新常用位置的取消固定状态，调用方必须先完成版本校验。 */
+    @Update
+    suspend fun updateFavoriteLocation(entity: FavoriteLocationEntity): Int
 
     /** 保存当前设备去重后的最近查找记录。 */
     @Upsert

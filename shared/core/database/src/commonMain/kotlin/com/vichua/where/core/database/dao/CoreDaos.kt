@@ -242,6 +242,25 @@ interface ItemDao {
         """,
     )
     suspend fun countActiveAtLocation(locationId: String): Long
+
+    /** 统计家庭中全部未删除物品，供位置管理页展示物品总数。 */
+    @Query(
+        """
+        SELECT COUNT(*) FROM items
+        WHERE household_id = :householdId AND deleted_at IS NULL
+        """,
+    )
+    suspend fun countActiveByHousehold(householdId: String): Long
+
+    /** 加载家庭全部未删除物品，用于重建位置路径和统计各节点物品数。 */
+    @Query(
+        """
+        SELECT * FROM items
+        WHERE household_id = :householdId AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id ASC
+        """,
+    )
+    suspend fun findActiveByHousehold(householdId: String): List<ItemEntity>
 }
 
 /**

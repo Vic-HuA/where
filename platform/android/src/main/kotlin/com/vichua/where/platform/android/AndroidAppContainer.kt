@@ -10,6 +10,7 @@ import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.query.ItemDetailStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
+import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
@@ -17,6 +18,10 @@ import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
+import com.vichua.where.feature.location.management.CreateLocationUseCase
+import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
+import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
+import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
@@ -49,6 +54,8 @@ class AndroidAppContainer(
         RoomItemDetailRepository(ItemDetailStore(database))
     private val itemMovementRepository =
         RoomItemMovementRepository(ItemMovementStore(database))
+    private val locationManagementRepository =
+        RoomLocationManagementRepository(LocationManagementStore(database))
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -97,6 +104,32 @@ class AndroidAppContainer(
     /** 加载更新位置页面上下文的用例。 */
     val loadMoveItemContextUseCase =
         LoadMoveItemContextUseCase(itemMovementRepository)
+
+    /** 加载位置管理树和统计摘要的用例。 */
+    val loadLocationTreeUseCase = LoadLocationTreeUseCase(locationManagementRepository)
+
+    /** 在现有位置下新增子位置的用例。 */
+    val createLocationUseCase = CreateLocationUseCase(
+        repository = locationManagementRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+        textNormalizer = DefaultTextNormalizer,
+    )
+
+    /** 重命名非根位置的用例。 */
+    val renameLocationUseCase = RenameLocationUseCase(
+        repository = locationManagementRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+        textNormalizer = DefaultTextNormalizer,
+    )
+
+    /** 删除空位置的用例。 */
+    val deleteEmptyLocationUseCase = DeleteEmptyLocationUseCase(
+        repository = locationManagementRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
 
     /** 初始化页面使用的当前设备名称建议。 */
     val suggestedDeviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)

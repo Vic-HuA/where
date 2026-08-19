@@ -8,6 +8,12 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.Bathtub
 import androidx.compose.material.icons.outlined.Bed
+import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Inventory2
@@ -20,6 +26,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Weekend
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.vichua.where.core.model.LocationType
 
 /**
  * 将稳定 `iconKey` 映射到共享 Compose 线性矢量图标。
@@ -60,6 +67,18 @@ object WhereIcons {
     /** 添加操作图标。 */
     val Add: ImageVector = Icons.Outlined.Add
 
+    /** 重命名图标。 */
+    val Edit: ImageVector = Icons.Outlined.Edit
+
+    /** 删除图标。 */
+    val Delete: ImageVector = Icons.Outlined.Delete
+
+    /** 展开子位置图标。 */
+    val ExpandMore: ImageVector = Icons.Outlined.ExpandMore
+
+    /** 收起子位置图标。 */
+    val ExpandLess: ImageVector = Icons.Outlined.ExpandLess
+
     /** 返回图标。 */
     val Back: ImageVector = Icons.AutoMirrored.Outlined.ArrowBack
 
@@ -74,5 +93,35 @@ object WhereIcons {
         "room.study" -> Icons.AutoMirrored.Outlined.MenuBook
         "room.storage" -> Icons.Outlined.Inventory2
         else -> Icons.Outlined.LocationOn
+    }
+
+    /**
+     * 根据位置类型和受控图标键返回位置图标。
+     *
+     * 未知键回退到类型默认图标，避免位置管理页因缺失照片或旧图标键而空白。
+     */
+    fun location(
+        iconKey: String?,
+        type: LocationType,
+    ): ImageVector {
+        val resolvedIconKey = iconKey.orEmpty()
+        if (resolvedIconKey.startsWith("room.")) {
+            return room(resolvedIconKey)
+        }
+        return when (resolvedIconKey) {
+            "location.home" -> Home
+            "location.area" -> Icons.Outlined.GridView
+            "location.furniture" -> Icons.Outlined.Chair
+            "location.container" -> Icons.Outlined.Inventory2
+            "location.slot" -> Location
+            else -> when (type) {
+                LocationType.HOME -> Home
+                LocationType.ROOM -> Location
+                LocationType.AREA -> Icons.Outlined.GridView
+                LocationType.FURNITURE -> Icons.Outlined.Chair
+                LocationType.CONTAINER -> Icons.Outlined.Inventory2
+                LocationType.SLOT -> Location
+            }
+        }
     }
 }

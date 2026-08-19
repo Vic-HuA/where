@@ -24,6 +24,10 @@ class MainActivity : ComponentActivity() {
                 loadItemDetailUseCase = container.loadItemDetailUseCase,
                 loadMoveItemContextUseCase = container.loadMoveItemContextUseCase,
                 moveItemUseCase = container.moveItemUseCase,
+                loadLocationTreeUseCase = container.loadLocationTreeUseCase,
+                createLocationUseCase = container.createLocationUseCase,
+                renameLocationUseCase = container.renameLocationUseCase,
+                deleteEmptyLocationUseCase = container.deleteEmptyLocationUseCase,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )
