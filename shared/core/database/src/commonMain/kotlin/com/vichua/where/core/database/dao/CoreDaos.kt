@@ -159,6 +159,10 @@ interface CategoryDao {
     @Update
     suspend fun update(entity: CategoryEntity): Int
 
+    /** 查询指定未删除分类。 */
+    @Query("SELECT * FROM categories WHERE id = :id AND deleted_at IS NULL")
+    suspend fun findActiveById(id: String): CategoryEntity?
+
     /** 观察家庭中未删除分类。 */
     @Query(
         """
@@ -297,6 +301,16 @@ interface PhotoAssetDao {
     )
     suspend fun findAllByItem(itemId: String): List<PhotoAssetEntity>
 
+    /** 加载物品按画廊顺序排列的未删除照片。 */
+    @Query(
+        """
+        SELECT * FROM photo_assets
+        WHERE item_id = :itemId AND deleted_at IS NULL
+        ORDER BY sort_order ASC, id ASC
+        """,
+    )
+    suspend fun findActiveByItem(itemId: String): List<PhotoAssetEntity>
+
     /** 批量查询物品当前未删除封面照片。 */
     @Query(
         """
@@ -328,6 +342,16 @@ interface ItemLocationEventDao {
         """,
     )
     fun observeActiveByItem(itemId: String): Flow<List<ItemLocationEventEntity>>
+
+    /** 加载物品按时间倒序排列的未删除位置历史。 */
+    @Query(
+        """
+        SELECT * FROM item_location_events
+        WHERE item_id = :itemId AND deleted_at IS NULL
+        ORDER BY occurred_at DESC, id DESC
+        """,
+    )
+    suspend fun findActiveByItem(itemId: String): List<ItemLocationEventEntity>
 }
 
 /**

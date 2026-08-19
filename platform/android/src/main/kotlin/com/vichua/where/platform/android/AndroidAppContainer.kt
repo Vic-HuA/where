@@ -8,10 +8,12 @@ import com.vichua.where.core.database.buildWhereDatabase
 import com.vichua.where.core.database.createAndroidDatabaseBuilder
 import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
+import com.vichua.where.core.database.query.ItemDetailStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
@@ -40,6 +42,8 @@ class AndroidAppContainer(
         RoomManualItemCreationRepository(ManualItemCreationStore(database))
     private val itemTextSearchRepository =
         RoomItemTextSearchRepository(ItemTextSearchStore(database))
+    private val itemDetailRepository =
+        RoomItemDetailRepository(ItemDetailStore(database))
 
     /** 查询启动时是否已有家庭的用例。 */
     val hasActiveHouseholdUseCase = HasActiveHouseholdUseCase(initializationRepository)
@@ -74,6 +78,9 @@ class AndroidAppContainer(
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,
     )
+
+    /** 加载物品详情的用例。 */
+    val loadItemDetailUseCase = LoadItemDetailUseCase(itemDetailRepository)
 
     /** 初始化页面使用的当前设备名称建议。 */
     val suggestedDeviceName: String = listOf(Build.MANUFACTURER, Build.MODEL)
