@@ -2,6 +2,7 @@ package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,12 +25,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.feature.item.detail.ItemDetail
+import com.vichua.where.feature.item.detail.ItemDetailPhoto
+import com.vichua.where.core.model.PhotoRole
 
 /**
  * 按 Pencil 原型展示物品照片、当前位置、历史和主要操作。
@@ -43,6 +50,8 @@ fun ItemDetailScreen(
     onReadLocation: () -> Unit,
     onUpdateLocation: () -> Unit,
 ) {
+    var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -104,12 +113,23 @@ fun ItemDetailScreen(
                 )
                 Text(
                     modifier = Modifier.padding(top = 8.dp),
-                    text = if (detail.photos.isEmpty()) "暂无照片" else "现场照片",
+                    text = if (detail.photos.isEmpty()) {
+                        "暂无照片"
+                    } else {
+                        "${photoRoleLabel(detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)].role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}"
+                    },
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
+        PhotoThumbnailSelector(
+            photos = detail.photos,
+            selectedIndex = selectedPhotoIndex,
+            onSelect = { index ->
+                selectedPhotoIndex = index
+            },
+        )
 
         Text(
             modifier = Modifier.padding(top = 18.dp),
@@ -187,7 +207,7 @@ fun ItemDetailScreen(
                 onClick = onReadLocation,
             ) {
                 Icon(
-                    imageVector = WhereIcons.Microphone,
+                    imageVector = WhereIcons.ReadAloud,
                     contentDescription = null,
                 )
                 Text(
@@ -216,4 +236,98 @@ fun ItemDetailScreen(
             }
         }
     }
+}
+
+/**
+ * 展示可选择的照片缩略图和继续添加入口。
+ */
+@Composable
+private fun PhotoThumbnailSelector(
+    photos: List<ItemDetailPhoto>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        photos.forEachIndexed { index, photo ->
+            Surface(
+                modifier = Modifier
+                    .size(width = 82.dp, height = 58.dp)
+                    .clickable(
+                        role = Role.Button,
+                        onClick = {
+                            onSelect(index)
+                        },
+                    ),
+                color = if (index == selectedIndex) {
+                    WhereSelectedContainerColor
+                } else {
+                    WhereSurfaceColor
+                },
+                shape = RoundedCornerShape(11.dp),
+                border = BorderStroke(1.dp, WhereOutlineColor),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        imageVector = WhereIcons.Image,
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 3.dp),
+                        text = photoRoleLabel(photo.role),
+                        color = if (index == selectedIndex) {
+                            WherePrimaryColor
+                        } else {
+                            WhereSecondaryTextColor
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+        Surface(
+            modifier = Modifier.size(width = 82.dp, height = 58.dp),
+            color = WhereSurfaceColor,
+            shape = RoundedCornerShape(11.dp),
+            border = BorderStroke(1.dp, WhereOutlineColor),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    modifier = Modifier.size(20.dp),
+                    imageVector = WhereIcons.Add,
+                    contentDescription = null,
+                    tint = WhereSecondaryTextColor,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 3.dp),
+                    text = "添加",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 将照片用途转换为详情页短标签。
+ */
+private fun photoRoleLabel(role: PhotoRole): String = when (role) {
+    PhotoRole.ENVIRONMENT -> "环境照"
+    PhotoRole.ITEM -> "物品照"
+    PhotoRole.LABEL -> "标签照"
+    PhotoRole.SUPPLEMENTARY -> "补充照"
 }
