@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
                 updateAccessibilityPreferencesUseCase = container.updateAccessibilityPreferencesUseCase,
                 loadLatestBackupStatusUseCase = container.loadLatestBackupStatusUseCase,
                 createEncryptedBackupUseCase = container.createEncryptedBackupUseCase(documentGateway),
+                exportHouseholdDataUseCase = container.exportHouseholdDataUseCase(documentGateway),
                 verifyBackupPackageUseCase = container.verifyBackupPackageUseCase(documentGateway),
                 previewBackupRestoreUseCase = container.previewBackupRestoreUseCase(documentGateway),
                 applyBackupRestoreUseCase = container.applyBackupRestoreUseCase,

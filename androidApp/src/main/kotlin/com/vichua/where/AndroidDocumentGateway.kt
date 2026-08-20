@@ -1,13 +1,18 @@
 package com.vichua.where
 
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import com.vichua.where.core.platform.DocumentGateway
 import com.vichua.where.core.platform.SelectedDocument
+import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 通过系统文件选择器保存和打开加密备份，避免申请存储权限。
@@ -87,6 +92,40 @@ class AndroidDocumentGateway(
         }
     }
 
+    /**
+     * 把加密导出包写到应用缓存后再打开系统分享，避免申请存储权限。
+     */
+    override suspend fun shareDocument(
+        suggestedFileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ): SelectedDocument? {
+        require(bytes.isNotEmpty()) { "Export document bytes must not be empty." }
+        val cacheFile = withContext(Dispatchers.IO) {
+            writeExportCache(suggestedFileName, bytes)
+        } ?: return null
+        val uri = FileProvider.getUriForFile(activity, FILE_PROVIDER_AUTHORITY, cacheFile)
+        val opened = withContext(Dispatchers.Main) {
+            runCatching {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeType.ifBlank { DEFAULT_MIME_TYPE }
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    clipData = ClipData.newUri(activity.contentResolver, SHARE_CLIP_LABEL, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                activity.startActivity(Intent.createChooser(shareIntent, SHARE_CHOOSER_TITLE))
+            }.isSuccess
+        }
+        if (!opened) {
+            return null
+        }
+        return SelectedDocument(
+            displayName = cacheFile.name,
+            opaqueDocumentUri = uri.toString(),
+            bytes = bytes,
+        )
+    }
+
     private fun writeDocument(
         uri: Uri,
         bytes: ByteArray,
@@ -131,6 +170,27 @@ class AndroidDocumentGateway(
         uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { DEFAULT_DISPLAY_NAME }
             ?: DEFAULT_DISPLAY_NAME
 
+    /**
+     * 覆盖写入缓存导出文件，避免分享过期副本。
+     */
+    private fun writeExportCache(
+        suggestedFileName: String,
+        bytes: ByteArray,
+    ): File? = runCatching {
+        val safeName = suggestedFileName.substringAfterLast('/').ifBlank { DEFAULT_EXPORT_NAME }
+        require(!safeName.contains("..")) { "Export file name must not contain parent segments." }
+        val directory = File(activity.cacheDir, EXPORT_CACHE_DIRECTORY)
+        if (!directory.exists() && !directory.mkdirs()) {
+            error("Unable to create export cache directory.")
+        }
+        val file = File(directory, safeName)
+        file.outputStream().use { output ->
+            output.write(bytes)
+            output.flush()
+        }
+        file
+    }.getOrNull()
+
     private data class CreateRequest(
         val bytes: ByteArray,
         val deferred: CompletableDeferred<SelectedDocument?>,
@@ -139,5 +199,10 @@ class AndroidDocumentGateway(
     private companion object {
         const val DEFAULT_MIME_TYPE = "application/octet-stream"
         const val DEFAULT_DISPLAY_NAME = "where-backup.wherebak"
+        const val DEFAULT_EXPORT_NAME = "where-export.wherebak"
+        const val EXPORT_CACHE_DIRECTORY = "exports"
+        const val FILE_PROVIDER_AUTHORITY = "com.vichua.where.fileprovider"
+        const val SHARE_CLIP_LABEL = "where-exported-household"
+        const val SHARE_CHOOSER_TITLE = "导出完整家庭数据"
     }
 }

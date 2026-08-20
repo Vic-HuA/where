@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.ConflictResolution
+import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.RestoreMode
@@ -60,6 +61,7 @@ import com.vichua.where.core.model.RestoreSession
  * @param onElderFriendlyChange 切换适老展示。
  * @param onHighContrastChange 单独切换高对比度。
  * @param onCreateBackup 使用密码创建加密备份。
+ * @param onExportHousehold 使用密码导出完整家庭数据。
  * @param onVerifyBackup 使用密码只读验证备份。
  * @param onDismissVerification 关闭验证摘要。
  * @param householdSummary 当前家庭摘要，供恢复和清除二次确认使用。
@@ -88,6 +90,7 @@ fun SettingsScreen(
     onElderFriendlyChange: (Boolean) -> Unit,
     onHighContrastChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
+    onExportHousehold: (String, String, ExportDestination) -> Unit,
     onVerifyBackup: (String) -> Unit,
     onDismissVerification: () -> Unit,
     onRestoreBackup: (String) -> Unit,
@@ -97,6 +100,10 @@ fun SettingsScreen(
     onClearHousehold: () -> Unit,
 ) {
     var createPasswordDialogVisible by remember { mutableStateOf(false) }
+    var exportPasswordDialogVisible by remember { mutableStateOf(false) }
+    var exportDestinationDialogVisible by remember { mutableStateOf(false) }
+    var pendingExportPassword by remember { mutableStateOf<String?>(null) }
+    var pendingExportConfirmation by remember { mutableStateOf<String?>(null) }
     var verifyPasswordDialogVisible by remember { mutableStateOf(false) }
     var restorePasswordDialogVisible by remember { mutableStateOf(false) }
     var replaceConfirmVisible by remember { mutableStateOf(false) }
@@ -221,7 +228,14 @@ fun SettingsScreen(
                 restorePasswordDialogVisible = true
             },
         )
-        PendingSettingsRow("导出完整家庭数据", "尚未接入")
+        SettingsActionRow(
+            title = "导出完整家庭数据",
+            description = "使用与备份相同的加密数据包，由你选择保存或分享位置",
+            enabled = !submitting,
+            onClick = {
+                exportPasswordDialogVisible = true
+            },
+        )
 
         SettingsSectionTitle("危险操作")
         SettingsActionRow(
@@ -250,6 +264,47 @@ fun SettingsScreen(
             onConfirm = { password, confirmation ->
                 createPasswordDialogVisible = false
                 onCreateBackup(password, confirmation)
+            },
+        )
+    }
+    if (exportPasswordDialogVisible) {
+        BackupPasswordDialog(
+            title = "导出完整家庭数据",
+            confirmLabel = "继续",
+            requireConfirmation = true,
+            enabled = !submitting,
+            onDismiss = {
+                if (!submitting) {
+                    exportPasswordDialogVisible = false
+                }
+            },
+            onConfirm = { password, confirmation ->
+                pendingExportPassword = password
+                pendingExportConfirmation = confirmation
+                exportPasswordDialogVisible = false
+                exportDestinationDialogVisible = true
+            },
+        )
+    }
+    if (exportDestinationDialogVisible) {
+        ExportDestinationDialog(
+            enabled = !submitting,
+            onDismiss = {
+                if (!submitting) {
+                    pendingExportPassword = null
+                    pendingExportConfirmation = null
+                    exportDestinationDialogVisible = false
+                }
+            },
+            onSelect = { destination ->
+                val password = pendingExportPassword
+                val confirmation = pendingExportConfirmation
+                pendingExportPassword = null
+                pendingExportConfirmation = null
+                exportDestinationDialogVisible = false
+                if (password != null && confirmation != null) {
+                    onExportHousehold(password, confirmation, destination)
+                }
             },
         )
     }
@@ -620,6 +675,60 @@ private fun BackupPasswordDialog(
                 onClick = onDismiss,
             ) {
                 Text("取消")
+            }
+        },
+    )
+}
+
+/**
+ * 导出入口只在这里区分保存和分享，数据包格式与加密备份相同。
+ */
+@Composable
+private fun ExportDestinationDialog(
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (ExportDestination) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            if (enabled) {
+                onDismiss()
+            }
+        },
+        title = { Text("选择导出位置") },
+        text = {
+            Text(
+                text = "保存到文件会打开系统文件选择器。分享只会送出已经加密的数据包，不会附带家庭数据库。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = enabled,
+                onClick = {
+                    onSelect(ExportDestination.SAVE_DOCUMENT)
+                },
+            ) {
+                Text("保存到文件")
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(
+                    enabled = enabled,
+                    onClick = {
+                        onSelect(ExportDestination.SHARE)
+                    },
+                ) {
+                    Text("分享")
+                }
+                TextButton(
+                    enabled = enabled,
+                    onClick = onDismiss,
+                ) {
+                    Text("取消")
+                }
             }
         },
     )

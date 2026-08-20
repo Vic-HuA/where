@@ -68,12 +68,14 @@ import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.ConflictResolution
+import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.RestoreMode
 import com.vichua.where.core.model.RestoreSession
 import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
 import com.vichua.where.feature.backup.ClearHouseholdDataUseCase
 import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
+import com.vichua.where.feature.backup.ExportHouseholdDataUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
 import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
@@ -125,6 +127,7 @@ import kotlinx.coroutines.launch
  * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
  * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
  * @param createEncryptedBackupUseCase 创建加密备份的用例。
+ * @param exportHouseholdDataUseCase 导出完整家庭数据的用例。
  * @param verifyBackupPackageUseCase 只读验证备份的用例。
  * @param previewBackupRestoreUseCase 生成恢复预览的用例。
  * @param applyBackupRestoreUseCase 执行合并或替换恢复的用例。
@@ -171,6 +174,7 @@ fun WhereApp(
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
     loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
     createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
+    exportHouseholdDataUseCase: ExportHouseholdDataUseCase,
     verifyBackupPackageUseCase: VerifyBackupPackageUseCase,
     previewBackupRestoreUseCase: PreviewBackupRestoreUseCase,
     applyBackupRestoreUseCase: ApplyBackupRestoreUseCase,
@@ -829,6 +833,41 @@ fun WhereApp(
                                     backupProgressText = null
                                 } catch (_: Exception) {
                                     settingsError = "创建备份失败，请稍后重试。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onExportHousehold = { password, confirmation, destination ->
+                        if (!backupSubmitting) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = when (destination) {
+                                    ExportDestination.SAVE_DOCUMENT -> "正在导出完整家庭数据…"
+                                    ExportDestination.SHARE -> "正在准备分享导出包…"
+                                }
+                                settingsError = null
+                                backupVerificationResult = null
+                                try {
+                                    val result = exportHouseholdDataUseCase(
+                                        password,
+                                        confirmation,
+                                        destination,
+                                    )
+                                    if (result == null) {
+                                        backupProgressText = null
+                                        return@launch
+                                    }
+                                    latestBackupStatus = loadLatestBackupStatusUseCase()
+                                    backupVerificationResult = result
+                                    backupProgressText = null
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "请检查密码，或确认两次输入一致。"
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "导出家庭数据失败，请稍后重试。"
                                     backupProgressText = null
                                 } finally {
                                     backupSubmitting = false

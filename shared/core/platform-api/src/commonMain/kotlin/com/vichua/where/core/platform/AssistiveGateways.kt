@@ -121,4 +121,17 @@ interface DocumentGateway {
      * @return 选中的文档；用户取消时为空。
      */
     suspend fun openDocument(): SelectedDocument?
+
+    /**
+     * 通过系统分享面板送出完整导出数据包。
+     *
+     * 只分享调用方已经加密好的字节，不得附带运行中数据库或其他家庭文件。
+     *
+     * @return 已写出的缓存文档引用；无法打开分享面板时为空。
+     */
+    suspend fun shareDocument(
+        suggestedFileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ): SelectedDocument?
 }

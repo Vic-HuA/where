@@ -54,6 +54,7 @@ import com.vichua.where.core.platform.DocumentGateway
 import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
 import com.vichua.where.feature.backup.ClearHouseholdDataUseCase
 import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
+import com.vichua.where.feature.backup.ExportHouseholdDataUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
 import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
@@ -299,6 +300,21 @@ class AndroidAppContainer(
     fun createEncryptedBackupUseCase(
         documentGateway: DocumentGateway,
     ): CreateEncryptedBackupUseCase = CreateEncryptedBackupUseCase(
+        repository = householdBackupRepository,
+        mediaFileStore = mediaFileStore,
+        documentGateway = documentGateway,
+        backupCrypto = backupCrypto,
+        contentHasher = AndroidContentHasher,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /**
+     * 导出完整家庭数据用例。文档选择器绑定 Activity，因此在界面层注入。
+     */
+    fun exportHouseholdDataUseCase(
+        documentGateway: DocumentGateway,
+    ): ExportHouseholdDataUseCase = ExportHouseholdDataUseCase(
         repository = householdBackupRepository,
         mediaFileStore = mediaFileStore,
         documentGateway = documentGateway,

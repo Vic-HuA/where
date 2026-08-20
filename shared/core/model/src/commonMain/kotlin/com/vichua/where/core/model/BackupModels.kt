@@ -281,6 +281,20 @@ enum class RestoreMode {
 }
 
 /**
+ * 完整导出时由用户选择的数据包去向。
+ *
+ * 导出与加密备份共用同一格式，只区分保存位置和系统分享。
+ */
+@Serializable
+enum class ExportDestination {
+    /** 通过系统文件选择器保存到用户指定位置。 */
+    SAVE_DOCUMENT,
+
+    /** 通过系统分享面板交给用户选择的目标应用。 */
+    SHARE,
+}
+
+/**
  * 恢复预览中的一条冲突。
  *
  * 未选择处理方式时不能执行合并。
