@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -41,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
@@ -103,7 +106,7 @@ fun InitializationScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
-                .height(54.dp),
+                .heightIn(min = 54.dp),
             value = householdName,
             onValueChange = { newName ->
                 householdName = newName
@@ -169,8 +172,8 @@ fun InitializationScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(58.dp)
-                    .padding(horizontal = 14.dp),
+                    .heightIn(min = 58.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -214,7 +217,7 @@ fun InitializationScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 20.dp)
-                .height(54.dp),
+                .heightIn(min = 54.dp),
             enabled = canSubmit,
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
@@ -332,14 +335,17 @@ private fun RoomChip(
 ) {
     Surface(
         modifier = Modifier
-            .height(40.dp)
+            .heightIn(min = 48.dp)
             .widthIn(min = 72.dp)
             .selectable(
                 selected = selected,
                 enabled = enabled,
                 role = Role.Checkbox,
                 onClick = onClick,
-            ),
+            )
+            .semantics(mergeDescendants = true) {
+                stateDescription = if (selected) "已选中" else "未选中"
+            },
         color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
         contentColor = if (selected) WherePrimaryColor else WherePrimaryTextColor,
         shape = RoundedCornerShape(20.dp),
@@ -381,7 +387,7 @@ private fun ActionSurface(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp)
+            .heightIn(min = 54.dp)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,

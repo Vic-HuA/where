@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,6 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -183,7 +188,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 14.dp)
-                        .height(54.dp),
+                        .heightIn(min = 54.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = WherePrimaryColor,
@@ -324,7 +329,7 @@ private fun HomeSearchSurface(
         OutlinedTextField(
             modifier = modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .heightIn(min = 56.dp),
             value = query,
             onValueChange = { value ->
                 query = value
@@ -375,7 +380,7 @@ private fun HomeSearchSurface(
         Surface(
             modifier = modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .heightIn(min = 56.dp),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(1.dp, WherePrimaryColor.copy(alpha = 0.35f)),
@@ -390,10 +395,11 @@ private fun HomeSearchSurface(
                         .fillMaxHeight()
                         .combinedClickable(
                             role = Role.Button,
-                            onClick = {},
+                            onClick = onVoiceSearchRequested,
                             onLongClick = onVoiceSearchRequested,
                             onLongClickLabel = "按住说话查找物品",
                         )
+                        .semantics(mergeDescendants = true) {}
                         .padding(start = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -459,7 +465,8 @@ private fun RecentItemCard(
             .clickable(
                 role = Role.Button,
                 onClick = onClick,
-            ),
+            )
+            .semantics(mergeDescendants = true) {},
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
     ) {
@@ -474,7 +481,7 @@ private fun RecentItemCard(
             ) {
                 LocalStorageImage(
                     absolutePath = thumbnailPath,
-                    contentDescription = item.name,
+                    contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Column(
@@ -491,9 +498,7 @@ private fun RecentItemCard(
                 }
             }
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(84.dp),
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
@@ -531,7 +536,7 @@ private fun EmptyHomeCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(76.dp),
+            .heightIn(min = 76.dp),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
     ) {
@@ -563,8 +568,8 @@ private fun HomeChip(
     ) {
         Row(
             modifier = Modifier
-                .height(40.dp)
-                .padding(horizontal = 12.dp),
+                .heightIn(min = 40.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -638,7 +643,7 @@ private fun HomeBottomNavigation(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .height(74.dp)
+                .heightIn(min = 74.dp)
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
@@ -677,11 +682,16 @@ private fun BottomNavigationItem(
 ) {
     Surface(
         modifier = Modifier
-            .size(width = 80.dp, height = 50.dp)
+            .widthIn(min = 80.dp)
+            .heightIn(min = 48.dp)
             .clickable(
                 role = Role.Tab,
                 onClick = onClick,
-            ),
+            )
+            .semantics(mergeDescendants = true) {
+                this.selected = selected
+                stateDescription = if (selected) "当前页面" else "未选中"
+            },
         color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
         contentColor = if (selected) WherePrimaryColor else WhereSecondaryTextColor,
         shape = RoundedCornerShape(16.dp),
@@ -719,7 +729,7 @@ private fun ElderHomeActionButton(
     Button(
         modifier = modifier
             .fillMaxWidth()
-            .height(88.dp),
+            .heightIn(min = 88.dp),
         shape = RoundedCornerShape(20.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (primary) WherePrimaryColor else WhereSurfaceColor,

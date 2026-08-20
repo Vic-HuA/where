@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -333,7 +334,7 @@ fun ItemDetailScreen(
             Button(
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp),
+                    .heightIn(min = 52.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = WhereSurfaceColor,
                     contentColor = WherePrimaryTextColor,
@@ -353,7 +354,7 @@ fun ItemDetailScreen(
             Button(
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp),
+                    .heightIn(min = 52.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = WherePrimaryColor,
                     contentColor = WhereSurfaceColor,
@@ -916,7 +917,7 @@ private fun ItemDetailNoteAndHistory(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 14.dp)
-            .height(52.dp),
+            .heightIn(min = 52.dp),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, WhereOutlineColor),
@@ -953,7 +954,7 @@ private fun ItemDetailShareAndDelete(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 10.dp)
-            .height(52.dp),
+            .heightIn(min = 52.dp),
         enabled = !shareSubmitting && !speechSubmitting && !deletionSubmitting,
         colors = ButtonDefaults.buttonColors(
             containerColor = WhereSurfaceColor,
@@ -990,7 +991,7 @@ private fun ItemDetailShareAndDelete(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 10.dp)
-            .height(52.dp),
+            .heightIn(min = 52.dp),
         enabled = !deletionSubmitting && !photoSubmitting && !editorSubmitting,
         colors = ButtonDefaults.buttonColors(
             containerColor = WhereSurfaceColor,

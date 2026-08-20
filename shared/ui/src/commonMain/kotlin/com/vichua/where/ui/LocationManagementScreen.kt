@@ -284,8 +284,9 @@ private fun LocationTreeRow(
                 if (node.childCount > 0) {
                     Icon(
                         modifier = Modifier
+                            .size(48.dp)
                             .clickable(role = Role.Button, onClick = onToggle)
-                            .padding(4.dp),
+                            .padding(12.dp),
                         imageVector = if (expanded) WhereIcons.ExpandLess else WhereIcons.ExpandMore,
                         contentDescription = if (expanded) "收起" else "展开",
                     )

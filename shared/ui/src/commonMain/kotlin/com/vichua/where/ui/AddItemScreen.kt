@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -36,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -214,7 +217,7 @@ fun AddItemScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 6.dp)
-                .height(52.dp),
+                .heightIn(min = 52.dp),
             value = itemName,
             onValueChange = { value ->
                 itemName = value
@@ -246,14 +249,17 @@ fun AddItemScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp)
-                .height(48.dp)
+                .heightIn(min = 48.dp)
                 .clickable(
                     enabled = !submitting,
                     role = Role.Button,
                     onClick = {
                         moreInformationExpanded = !moreInformationExpanded
                     },
-                ),
+                )
+                .semantics(mergeDescendants = true) {
+                    stateDescription = if (moreInformationExpanded) "已展开" else "已收起"
+                },
             color = WhereSurfaceColor,
             shape = RoundedCornerShape(13.dp),
             border = BorderStroke(1.dp, WhereOutlineColor),
@@ -313,7 +319,7 @@ fun AddItemScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp)
-                .height(64.dp),
+                .heightIn(min = 64.dp),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(16.dp),
         ) {
@@ -364,7 +370,7 @@ fun AddItemScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 16.dp)
-                    .height(52.dp),
+                    .heightIn(min = 52.dp),
                 enabled = canContinue,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -625,7 +631,7 @@ private fun ElderAddItemActionButton(
     Button(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp),
+            .heightIn(min = 64.dp),
         enabled = enabled,
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
@@ -662,12 +668,13 @@ private fun PhotoActionCard(
 ) {
     Surface(
         modifier = modifier
-            .height(146.dp)
+            .heightIn(min = 146.dp)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
                 onClick = onClick,
-            ),
+            )
+            .semantics(mergeDescendants = true) {},
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
     ) {
@@ -757,7 +764,7 @@ private fun PhotoThumbnailRow(
         Surface(
             modifier = Modifier
                 .weight(1f)
-                .height(66.dp)
+                .heightIn(min = 66.dp)
                 .clickable(
                     enabled = enabled,
                     role = Role.Button,
@@ -798,12 +805,19 @@ private fun RolePhotoSlot(
 ) {
     Surface(
         modifier = modifier
-            .height(66.dp)
+            .heightIn(min = 66.dp)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
                 onClick = onClick,
-            ),
+            )
+            .semantics(mergeDescendants = true) {
+                stateDescription = when {
+                    photo != null && selected -> "已选择"
+                    photo != null -> "已添加"
+                    else -> "未添加"
+                }
+            },
         color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
         shape = RoundedCornerShape(12.dp),
         border = if (selected) null else BorderStroke(1.dp, WhereOutlineColor),
@@ -870,7 +884,7 @@ private fun LocationSelectionField(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .heightIn(min = 52.dp)
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
