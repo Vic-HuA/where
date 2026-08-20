@@ -135,3 +135,55 @@ interface DocumentGateway {
         bytes: ByteArray,
     ): SelectedDocument?
 }
+
+/**
+ * 一次语音识别的结果。
+ *
+ * 原始录音不得写入文件或诊断日志；界面只使用转写后的文字。
+ */
+sealed class SpeechRecognitionOutcome {
+    /** 识别到可编辑文字。 */
+    data class Success(val text: String) : SpeechRecognitionOutcome() {
+        init {
+            require(text.isNotBlank()) { "Speech recognition text must not be blank." }
+        }
+    }
+
+    /** 用户取消或松开后没有得到结果。 */
+    data object Cancelled : SpeechRecognitionOutcome()
+
+    /** 当前设备没有可用识别器。 */
+    data object Unavailable : SpeechRecognitionOutcome()
+
+    /** 用户拒绝麦克风权限。 */
+    data object PermissionDenied : SpeechRecognitionOutcome()
+
+    /** 听清了环境声但没有匹配到文字。 */
+    data object NoMatch : SpeechRecognitionOutcome()
+}
+
+/**
+ * 可选语音识别入口。
+ *
+ * 只有用户主动触发后才开始听；云端路径关闭时只使用设备离线识别。
+ */
+interface SpeechRecognitionGateway {
+    /**
+     * 当前是否具备可用识别器。
+     *
+     * @param allowNetwork 是否允许把这次主动录音交给系统联网识别。
+     */
+    fun isAvailable(allowNetwork: Boolean): Boolean
+
+    /**
+     * 开始听用户主动说的一句话，结束后返回转写结果。
+     *
+     * @param allowNetwork 是否允许联网识别；关闭时只走离线识别。
+     */
+    suspend fun listen(allowNetwork: Boolean): SpeechRecognitionOutcome
+
+    /**
+     * 立即停止当前识别，不保存录音。
+     */
+    fun cancel()
+}

@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +43,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoRole
@@ -68,7 +70,7 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * @param onDiscardDraft 放弃当前草稿并离开页面。
  * @param onSubmit 确认后提交基础手动物品请求。
  * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
- * @param onSpeakRequested 适老“说一句”入口；语音尚未接入时由上层提示。
+ * @param onSpeakRequested 用户主动说话后返回转写文字；取消或失败时为空。
  */
 @Composable
 fun AddItemScreen(
@@ -86,8 +88,10 @@ fun AddItemScreen(
     onDiscardDraft: () -> Unit,
     onSubmit: (CreateManualItemRequest) -> Unit,
     elderFriendlyMode: Boolean = false,
-    onSpeakRequested: () -> Unit = {},
+    onSpeakRequested: suspend () -> String? = { null },
 ) {
+    val speakScope = rememberCoroutineScope()
+    var speechSubmitting by remember { mutableStateOf(false) }
     var itemName by remember(draft) { mutableStateOf(draft?.name.orEmpty()) }
     var selectedLocationId by remember(draft) { mutableStateOf(draft?.locationId) }
     var locationDescription by remember(draft) {
@@ -115,6 +119,21 @@ fun AddItemScreen(
         locationDescription = locationDescription,
         note = note,
     )
+    val requestSpeech: () -> Unit = {
+        if (!speechSubmitting && !submitting) {
+            speakScope.launch {
+                speechSubmitting = true
+                try {
+                    val spoken = onSpeakRequested()
+                    if (!spoken.isNullOrBlank()) {
+                        itemName = spoken
+                    }
+                } finally {
+                    speechSubmitting = false
+                }
+            }
+        }
+    }
     val requestLeave: () -> Unit = {
         if (currentDraft.hasUserInput || photos.isNotEmpty()) {
             leaveDialogVisible = true
@@ -159,7 +178,7 @@ fun AddItemScreen(
                 onPickLocationPhoto = {
                     onPickPhoto(PhotoRole.ENVIRONMENT)
                 },
-                onSpeak = onSpeakRequested,
+                onSpeak = requestSpeech,
                 onContinue = {
                     confirmationDialogVisible = true
                 },
@@ -319,7 +338,12 @@ fun AddItemScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp)
-                .heightIn(min = 64.dp),
+                .heightIn(min = 64.dp)
+                .clickable(
+                    enabled = !submitting && !speechSubmitting,
+                    role = Role.Button,
+                    onClick = requestSpeech,
+                ),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(16.dp),
         ) {
@@ -331,11 +355,15 @@ fun AddItemScreen(
                 Icon(
                     modifier = Modifier.size(20.dp),
                     imageVector = WhereIcons.Microphone,
-                    contentDescription = null,
+                    contentDescription = "说一句填写名称",
                     tint = WherePrimaryColor,
                 )
                 Text(
-                    text = "按住说：放在书柜第二层蓝色盒子",
+                    text = if (speechSubmitting) {
+                        "正在听，请说话…"
+                    } else {
+                        "按住说：放在书柜第二层蓝色盒子"
+                    },
                     color = WherePrimaryColor,
                     fontWeight = FontWeight.Medium,
                     style = MaterialTheme.typography.bodyMedium,

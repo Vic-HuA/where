@@ -20,6 +20,7 @@ class MainActivity : ComponentActivity() {
         textToSpeechGateway = AndroidTextToSpeechGateway(this)
         val shareGateway = AndroidShareGateway(this)
         val documentGateway = AndroidDocumentGateway(this)
+        val speechRecognitionGateway = AndroidSpeechRecognitionGateway(this)
         setContent {
             WhereApp(
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
@@ -56,6 +57,10 @@ class MainActivity : ComponentActivity() {
                 deleteEmptyLocationUseCase = container.deleteEmptyLocationUseCase,
                 loadAccessibilityPreferencesUseCase = container.loadAccessibilityPreferencesUseCase,
                 updateAccessibilityPreferencesUseCase = container.updateAccessibilityPreferencesUseCase,
+                loadAppPreferencesUseCase = container.loadAppPreferencesUseCase,
+                updateAppPreferencesUseCase = container.updateAppPreferencesUseCase,
+                prepareVoiceSearchQueryUseCase = container.prepareVoiceSearchQueryUseCase,
+                speechRecognitionGateway = speechRecognitionGateway,
                 loadLatestBackupStatusUseCase = container.loadLatestBackupStatusUseCase,
                 createEncryptedBackupUseCase = container.createEncryptedBackupUseCase(documentGateway),
                 exportHouseholdDataUseCase = container.exportHouseholdDataUseCase(documentGateway),

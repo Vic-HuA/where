@@ -67,6 +67,9 @@ import com.vichua.where.core.common.VisibleDateTimeFormatter
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalAccessibilityPreferences
+import com.vichua.where.core.model.LocalAppPreferences
+import com.vichua.where.core.platform.SpeechRecognitionGateway
+import com.vichua.where.core.platform.SpeechRecognitionOutcome
 import com.vichua.where.core.model.ConflictResolution
 import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
@@ -83,8 +86,11 @@ import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
 import com.vichua.where.feature.search.text.SearchItemsUseCase
+import com.vichua.where.feature.search.text.PrepareVoiceSearchQueryUseCase
 import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
 import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.LoadAppPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.UpdateAppPreferencesUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -125,6 +131,10 @@ import kotlinx.coroutines.launch
  * @param deleteEmptyLocationUseCase 删除空位置的用例。
  * @param loadAccessibilityPreferencesUseCase 读取当前设备适老偏好的用例。
  * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
+ * @param loadAppPreferencesUseCase 读取当前设备应用开关的用例。
+ * @param updateAppPreferencesUseCase 更新当前设备应用开关的用例。
+ * @param prepareVoiceSearchQueryUseCase 把语音查找转写收成本地关键词。
+ * @param speechRecognitionGateway 可选语音识别入口。
  * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
  * @param createEncryptedBackupUseCase 创建加密备份的用例。
  * @param exportHouseholdDataUseCase 导出完整家庭数据的用例。
@@ -172,6 +182,10 @@ fun WhereApp(
     deleteEmptyLocationUseCase: DeleteEmptyLocationUseCase,
     loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
+    loadAppPreferencesUseCase: LoadAppPreferencesUseCase,
+    updateAppPreferencesUseCase: UpdateAppPreferencesUseCase,
+    prepareVoiceSearchQueryUseCase: PrepareVoiceSearchQueryUseCase,
+    speechRecognitionGateway: SpeechRecognitionGateway,
     loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
     createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
     exportHouseholdDataUseCase: ExportHouseholdDataUseCase,
@@ -233,6 +247,8 @@ fun WhereApp(
     var accessibilityPreferences by remember {
         mutableStateOf<LocalAccessibilityPreferences?>(null)
     }
+    var appPreferences by remember { mutableStateOf<LocalAppPreferences?>(null) }
+    var voiceListening by remember { mutableStateOf(false) }
     var settingsLoading by remember { mutableStateOf(false) }
     var settingsSubmitting by remember { mutableStateOf(false) }
     var settingsError by remember { mutableStateOf<String?>(null) }
@@ -413,6 +429,7 @@ fun WhereApp(
             settingsError = null
             try {
                 accessibilityPreferences = loadAccessibilityPreferencesUseCase()
+                appPreferences = loadAppPreferencesUseCase()
             } catch (_: Exception) {
                 settingsError = "暂时无法读取辅助设置。"
             } finally {
@@ -525,9 +542,42 @@ fun WhereApp(
                         performSearch(query)
                     },
                     onVoiceSearchRequested = {
-                        searchResults = null
-                        searchError = "语音识别尚未接入，请先使用键盘输入。"
-                        destination = AppDestination.SEARCH
+                        if (!voiceListening) {
+                            coroutineScope.launch {
+                                voiceListening = true
+                                searchError = null
+                                try {
+                                    val preferences = appPreferences ?: loadAppPreferencesUseCase()
+                                    appPreferences = preferences
+                                    val outcome = speechRecognitionGateway.listen(
+                                        allowNetwork = preferences.canUseCloudSpeech,
+                                    )
+                                    when (outcome) {
+                                        is SpeechRecognitionOutcome.Success -> {
+                                            destination = AppDestination.SEARCH
+                                            performSearch(
+                                                prepareVoiceSearchQueryUseCase(outcome.text),
+                                            )
+                                        }
+                                        SpeechRecognitionOutcome.Cancelled -> Unit
+                                        else -> {
+                                            searchResults = null
+                                            searchError = voiceRecognitionMessage(
+                                                outcome = outcome,
+                                                cloudSpeechEnabled = preferences.canUseCloudSpeech,
+                                            )
+                                            destination = AppDestination.SEARCH
+                                        }
+                                    }
+                                } catch (_: Exception) {
+                                    searchResults = null
+                                    searchError = "语音识别失败，请先使用键盘输入。"
+                                    destination = AppDestination.SEARCH
+                                } finally {
+                                    voiceListening = false
+                                }
+                            }
+                        }
                     },
                     onItemClick = { item ->
                         selectedItemId = item.itemId
@@ -543,6 +593,7 @@ fun WhereApp(
                         destination = AppDestination.SETTINGS
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    voiceListening = voiceListening,
                 )
                 AppDestination.SEARCH -> SearchScreen(
                     initialQuery = searchQuery,
@@ -664,8 +715,24 @@ fun WhereApp(
                         }
                     },
                     elderFriendlyMode = elderFriendlyMode,
-                    onSpeakRequested = {
-                        itemCreationError = "语音识别尚未接入，请先手动填写名称。"
+                    onSpeakRequested = suspend {
+                        val preferences = appPreferences ?: loadAppPreferencesUseCase()
+                        appPreferences = preferences
+                        val outcome = speechRecognitionGateway.listen(
+                            allowNetwork = preferences.canUseCloudSpeech,
+                        )
+                        when (outcome) {
+                            is SpeechRecognitionOutcome.Success -> outcome.text
+                            SpeechRecognitionOutcome.Cancelled -> null
+                            else -> {
+                                itemCreationError = voiceRecognitionMessage(
+                                    outcome = outcome,
+                                    cloudSpeechEnabled = preferences.canUseCloudSpeech,
+                                    forItemName = true,
+                                )
+                                null
+                            }
+                        }
                     },
                     onSubmit = { request ->
                         if (!itemCreationSubmitting) {
@@ -762,6 +829,7 @@ fun WhereApp(
                 )
                 AppDestination.SETTINGS -> SettingsScreen(
                     preferences = accessibilityPreferences,
+                    appPreferences = appPreferences,
                     loading = settingsLoading,
                     submitting = settingsSubmitting || backupSubmitting,
                     errorMessage = settingsError,
@@ -778,6 +846,7 @@ fun WhereApp(
                     },
                     onRetry = {
                         accessibilityPreferences = null
+                        appPreferences = null
                         settingsLoadAttempt += 1
                     },
                     onElderFriendlyChange = { enabled ->
@@ -790,6 +859,25 @@ fun WhereApp(
                                         updateAccessibilityPreferencesUseCase.setElderFriendly(enabled)
                                 } catch (_: Exception) {
                                     settingsError = "保存适老设置失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onCloudSpeechChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    appPreferences = if (enabled) {
+                                        updateAppPreferencesUseCase.enableCloudSpeechAfterDisclosure()
+                                    } else {
+                                        updateAppPreferencesUseCase.disableCloudSpeech()
+                                    }
+                                } catch (_: Exception) {
+                                    settingsError = "保存语音设置失败，请稍后重试。"
                                 } finally {
                                     settingsSubmitting = false
                                 }
@@ -1331,6 +1419,32 @@ private fun StartupErrorScreen(
             Text("重试")
         }
     }
+}
+
+/**
+ * 把识别失败收成可展示的中文原因，不包含转写原文。
+ */
+private fun voiceRecognitionMessage(
+    outcome: SpeechRecognitionOutcome,
+    cloudSpeechEnabled: Boolean,
+    forItemName: Boolean = false,
+): String = when (outcome) {
+    is SpeechRecognitionOutcome.Success,
+    SpeechRecognitionOutcome.Cancelled,
+    -> if (forItemName) {
+        "请先手动填写名称。"
+    } else {
+        "请先使用键盘输入。"
+    }
+    SpeechRecognitionOutcome.PermissionDenied ->
+        "未授予麦克风权限，请先使用键盘输入。"
+    SpeechRecognitionOutcome.Unavailable -> if (cloudSpeechEnabled) {
+        "当前设备无法语音识别，请先使用键盘输入。"
+    } else {
+        "离线识别不可用。可在设置中开启云端语音识别，或改用键盘。"
+    }
+    SpeechRecognitionOutcome.NoMatch ->
+        "没有听清，请再说一次或改用键盘。"
 }
 
 /**

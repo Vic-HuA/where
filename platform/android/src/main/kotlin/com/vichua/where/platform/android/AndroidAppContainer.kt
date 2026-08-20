@@ -58,8 +58,11 @@ import com.vichua.where.feature.backup.ExportHouseholdDataUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
 import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
+import com.vichua.where.feature.search.text.PrepareVoiceSearchQueryUseCase
 import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
 import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.LoadAppPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.UpdateAppPreferencesUseCase
 
 /**
  * Android 进程级依赖容器。
@@ -101,6 +104,11 @@ class AndroidAppContainer(
             store = AccessibilityPreferencesStore(database),
             clock = AndroidEpochMillisecondsClock,
         )
+    private val appPreferencesRepository = AndroidAppPreferencesRepository(
+        context = applicationContext,
+        database = database,
+        clock = AndroidEpochMillisecondsClock,
+    )
     private val householdBackupRepository = RoomHouseholdBackupRepository(
         snapshotStore = HouseholdBackupSnapshotStore(database),
         recordStore = LocalBackupRecordStore(database),
@@ -289,6 +297,18 @@ class AndroidAppContainer(
         repository = accessibilityPreferencesRepository,
         clock = AndroidEpochMillisecondsClock,
     )
+
+    /** 读取当前设备应用开关的用例。 */
+    val loadAppPreferencesUseCase = LoadAppPreferencesUseCase(appPreferencesRepository)
+
+    /** 更新当前设备应用开关的用例。 */
+    val updateAppPreferencesUseCase = UpdateAppPreferencesUseCase(
+        repository = appPreferencesRepository,
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 把语音查找转写收成本地关键词。 */
+    val prepareVoiceSearchQueryUseCase = PrepareVoiceSearchQueryUseCase()
 
     /** 读取最近一次已验证备份状态的用例。 */
     val loadLatestBackupStatusUseCase =

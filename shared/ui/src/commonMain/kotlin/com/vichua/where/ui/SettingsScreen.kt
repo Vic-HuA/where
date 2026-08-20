@@ -39,10 +39,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.BackupVerificationResult
+import com.vichua.where.core.model.CloudSpeechDisclosure
 import com.vichua.where.core.model.ConflictResolution
 import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.LocalAccessibilityPreferences
+import com.vichua.where.core.model.LocalAppPreferences
 import com.vichua.where.core.model.RestoreMode
 import com.vichua.where.core.model.RestoreSession
 
@@ -58,8 +60,10 @@ import com.vichua.where.core.model.RestoreSession
  * @param verificationResult 只读验证成功后的摘要。
  * @param onBack 返回首页。
  * @param onRetry 重新读取偏好。
+ * @param appPreferences 当前设备应用开关；加载失败时为空。
  * @param onElderFriendlyChange 切换适老展示。
  * @param onHighContrastChange 单独切换高对比度。
+ * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onCreateBackup 使用密码创建加密备份。
  * @param onExportHousehold 使用密码导出完整家庭数据。
  * @param onVerifyBackup 使用密码只读验证备份。
@@ -76,6 +80,7 @@ import com.vichua.where.core.model.RestoreSession
 @Composable
 fun SettingsScreen(
     preferences: LocalAccessibilityPreferences?,
+    appPreferences: LocalAppPreferences?,
     loading: Boolean,
     submitting: Boolean,
     errorMessage: String?,
@@ -89,6 +94,7 @@ fun SettingsScreen(
     onRetry: () -> Unit,
     onElderFriendlyChange: (Boolean) -> Unit,
     onHighContrastChange: (Boolean) -> Unit,
+    onCloudSpeechChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
     onExportHousehold: (String, String, ExportDestination) -> Unit,
     onVerifyBackup: (String) -> Unit,
@@ -99,6 +105,7 @@ fun SettingsScreen(
     onApplyRestore: (RestoreMode) -> Unit,
     onClearHousehold: () -> Unit,
 ) {
+    var cloudSpeechDisclosureVisible by remember { mutableStateOf(false) }
     var createPasswordDialogVisible by remember { mutableStateOf(false) }
     var exportPasswordDialogVisible by remember { mutableStateOf(false) }
     var exportDestinationDialogVisible by remember { mutableStateOf(false) }
@@ -174,7 +181,19 @@ fun SettingsScreen(
 
         SettingsSectionTitle("常用设置")
         PendingSettingsRow("AI 辅助", "首次安装默认关闭，尚未接入")
-        PendingSettingsRow("云端语音识别", "仅在用户主动说话后才会上传，尚未接入")
+        SettingsSwitchRow(
+            title = "云端语音识别",
+            description = "仅在你主动说话后才会把这次录音交给系统识别，不会后台持续听",
+            checked = appPreferences?.canUseCloudSpeech == true,
+            enabled = appPreferences != null && !submitting,
+            onCheckedChange = { enabled ->
+                if (enabled) {
+                    cloudSpeechDisclosureVisible = true
+                } else {
+                    onCloudSpeechChange(false)
+                }
+            },
+        )
 
         SettingsSectionTitle("辅助能力")
         SettingsSwitchRow(
@@ -250,6 +269,55 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(20.dp))
     }
 
+    if (cloudSpeechDisclosureVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!submitting) {
+                    cloudSpeechDisclosureVisible = false
+                }
+            },
+            title = { Text("开启云端语音识别") },
+            text = {
+                Column {
+                    Text("数据类型：${CloudSpeechDisclosure.DATA_TYPE}")
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = "服务供应商：${CloudSpeechDisclosure.VENDOR}",
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = "处理用途：${CloudSpeechDisclosure.PURPOSE}",
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 10.dp),
+                        text = "不会后台持续听，也不会保存原始录音。关闭后本地查找和手填不受影响。",
+                        color = WhereSecondaryTextColor,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !submitting,
+                    onClick = {
+                        cloudSpeechDisclosureVisible = false
+                        onCloudSpeechChange(true)
+                    },
+                ) {
+                    Text("确认开启")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !submitting,
+                    onClick = {
+                        cloudSpeechDisclosureVisible = false
+                    },
+                ) {
+                    Text("取消")
+                }
+            },
+        )
+    }
     if (createPasswordDialogVisible) {
         BackupPasswordDialog(
             title = "创建加密备份",

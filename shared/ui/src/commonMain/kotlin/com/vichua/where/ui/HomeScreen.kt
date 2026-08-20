@@ -76,6 +76,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
  * @param elderFriendlyMode 是否使用适老首页：两大入口替代搜索框和拍照记录按钮。
+ * @param voiceListening 是否正在听用户主动说的查找内容。
  */
 @Composable
 fun HomeScreen(
@@ -95,6 +96,7 @@ fun HomeScreen(
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
     elderFriendlyMode: Boolean = false,
+    voiceListening: Boolean = false,
 ) {
     Scaffold(
         containerColor = WhereBackgroundColor,
@@ -166,7 +168,11 @@ fun HomeScreen(
                     modifier = Modifier.padding(top = 18.dp),
                     icon = WhereIcons.Search,
                     title = "我要找东西",
-                    description = "先说要找什么，也可以改用键盘",
+                    description = if (voiceListening) {
+                        "正在听，请说话…"
+                    } else {
+                        "先说要找什么，也可以改用键盘"
+                    },
                     primary = true,
                     onClick = onVoiceSearchRequested,
                 )
@@ -183,6 +189,7 @@ fun HomeScreen(
                     modifier = Modifier.padding(top = 18.dp),
                     onTextSearch = onTextSearch,
                     onVoiceSearchRequested = onVoiceSearchRequested,
+                    voiceListening = voiceListening,
                 )
                 Button(
                     modifier = Modifier
@@ -320,6 +327,7 @@ private fun HomeSearchSurface(
     modifier: Modifier,
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
+    voiceListening: Boolean,
 ) {
     var textModeEnabled by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -411,7 +419,7 @@ private fun HomeSearchSurface(
                         tint = WherePrimaryColor,
                     )
                     Text(
-                        text = "按住说话查找物品",
+                        text = if (voiceListening) "正在听，请说话…" else "按住说话查找物品",
                         color = WhereSecondaryTextColor,
                         style = MaterialTheme.typography.bodyLarge,
                     )
