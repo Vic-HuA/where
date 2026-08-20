@@ -172,9 +172,7 @@ fun AddItemScreen(
             photos = photos,
             resolveMediaPath = resolveMediaPath,
             enabled = !submitting,
-            onAddPhoto = {
-                onPickPhoto(PhotoRole.SUPPLEMENTARY)
-            },
+            onPickPhoto = onPickPhoto,
         )
         if (photos.size >= MvpLimits.ITEM_PHOTO_WARNING_THRESHOLD) {
             Text(
@@ -595,7 +593,9 @@ private fun PhotoActionCard(
 }
 
 /**
- * 已导入照片缩略图和继续添加入口。
+ * 按原型固定展示位置照、物品照、更多照三个用途槽，避免空态变成无区别的待添加。
+ *
+ * 已导入照片按用途落入对应槽；空槽仍保留用途文案，点击后按该用途选图。
  */
 @Composable
 private fun PhotoThumbnailRow(
@@ -603,40 +603,50 @@ private fun PhotoThumbnailRow(
     photos: List<ImportedItemPhoto>,
     resolveMediaPath: (String) -> String?,
     enabled: Boolean,
-    onAddPhoto: () -> Unit,
+    onPickPhoto: (PhotoRole) -> Unit,
 ) {
+    val locationPhoto = photos.firstOrNull { photo -> photo.role == PhotoRole.ENVIRONMENT }
+    val itemPhoto = photos.firstOrNull { photo -> photo.role == PhotoRole.ITEM }
+    val morePhoto = photos.firstOrNull { photo ->
+        photo != locationPhoto && photo != itemPhoto
+    }
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        photos.take(THUMBNAIL_SLOT_COUNT - 1).forEach { photo ->
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(66.dp),
-                color = WhereSelectedContainerColor,
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                LocalStorageImage(
-                    absolutePath = resolveMediaPath(photo.media.thumbnailTempStorageKey),
-                    contentDescription = thumbnailRoleLabel(photo.role),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    ThumbnailPlaceholder(
-                        modifier = Modifier.fillMaxSize(),
-                        label = thumbnailRoleLabel(photo.role),
-                        selected = true,
-                    )
-                }
-            }
-        }
-        repeat((THUMBNAIL_SLOT_COUNT - 1 - photos.size).coerceAtLeast(0)) {
-            ThumbnailPlaceholder(
-                modifier = Modifier.weight(1f),
-                label = "待添加",
-                selected = false,
-            )
-        }
+        RolePhotoSlot(
+            modifier = Modifier.weight(1f),
+            label = "位置照片",
+            photo = locationPhoto,
+            resolveMediaPath = resolveMediaPath,
+            selected = locationPhoto != null || photos.isEmpty(),
+            enabled = enabled,
+            onClick = {
+                onPickPhoto(PhotoRole.ENVIRONMENT)
+            },
+        )
+        RolePhotoSlot(
+            modifier = Modifier.weight(1f),
+            label = "物品照片",
+            photo = itemPhoto,
+            resolveMediaPath = resolveMediaPath,
+            selected = itemPhoto != null,
+            enabled = enabled,
+            onClick = {
+                onPickPhoto(PhotoRole.ITEM)
+            },
+        )
+        RolePhotoSlot(
+            modifier = Modifier.weight(1f),
+            label = "更多照片",
+            photo = morePhoto,
+            resolveMediaPath = resolveMediaPath,
+            selected = morePhoto != null,
+            enabled = enabled,
+            onClick = {
+                onPickPhoto(PhotoRole.SUPPLEMENTARY)
+            },
+        )
         Surface(
             modifier = Modifier
                 .weight(1f)
@@ -644,7 +654,9 @@ private fun PhotoThumbnailRow(
                 .clickable(
                     enabled = enabled,
                     role = Role.Button,
-                    onClick = onAddPhoto,
+                    onClick = {
+                        onPickPhoto(PhotoRole.SUPPLEMENTARY)
+                    },
                 ),
             color = WhereSurfaceColor,
             shape = RoundedCornerShape(12.dp),
@@ -665,29 +677,58 @@ private fun PhotoThumbnailRow(
 }
 
 /**
- * 单个照片类型占位缩略图。
+ * 单个用途槽：有图显示缩略图，无图保留用途标签以便继续补拍。
  */
 @Composable
-private fun ThumbnailPlaceholder(
+private fun RolePhotoSlot(
     modifier: Modifier,
     label: String,
+    photo: ImportedItemPhoto?,
+    resolveMediaPath: (String) -> String?,
     selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
 ) {
     Surface(
-        modifier = modifier.height(66.dp),
+        modifier = modifier
+            .height(66.dp)
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
         color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
         shape = RoundedCornerShape(12.dp),
         border = if (selected) null else BorderStroke(1.dp, WhereOutlineColor),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = label,
-                color = WherePrimaryTextColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
+        if (photo == null) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = label,
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        } else {
+            LocalStorageImage(
+                absolutePath = resolveMediaPath(photo.media.thumbnailTempStorageKey),
+                contentDescription = label,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = label,
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
     }
 }
@@ -859,15 +900,3 @@ private fun addItemTextFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = WherePrimaryTextColor,
     unfocusedTextColor = WherePrimaryTextColor,
 )
-
-/**
- * 将导入照片用途转换为缩略图短标签。
- */
-private fun thumbnailRoleLabel(role: PhotoRole): String = when (role) {
-    PhotoRole.ENVIRONMENT -> "位置照片"
-    PhotoRole.ITEM -> "物品照片"
-    PhotoRole.LABEL -> "标签照片"
-    PhotoRole.SUPPLEMENTARY -> "更多照片"
-}
-
-private const val THUMBNAIL_SLOT_COUNT = 4
