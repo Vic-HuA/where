@@ -239,6 +239,129 @@ data class LatestBackupStatus(
 )
 
 /**
+ * 恢复或清除前展示的当前家庭数据摘要。
+ */
+data class HouseholdDataSummary(
+    val itemCount: Int,
+    val locationCount: Int,
+    val photoCount: Int,
+) {
+    init {
+        require(itemCount >= 0) { "Household summary item count must not be negative." }
+        require(locationCount >= 0) { "Household summary location count must not be negative." }
+        require(photoCount >= 0) { "Household summary photo count must not be negative." }
+    }
+}
+
+/**
+ * 恢复时对单条冲突的处理方式。
+ */
+@Serializable
+enum class ConflictResolution {
+    /** 保留当前设备上的值。 */
+    KEEP_LOCAL,
+
+    /** 采用备份中的值。 */
+    USE_INCOMING,
+
+    /** 仅对允许复制的实体生成新 ID 并同时保留双方。 */
+    KEEP_BOTH,
+}
+
+/**
+ * 用户确认后的恢复方式。
+ */
+@Serializable
+enum class RestoreMode {
+    /** 保留本机独有数据，只导入新增和可自动更新的内容。 */
+    MERGE,
+
+    /** 用备份覆盖当前家庭数据。 */
+    REPLACE,
+}
+
+/**
+ * 恢复预览中的一条冲突。
+ *
+ * 未选择处理方式时不能执行合并。
+ */
+data class ImportConflict(
+    val entityType: ChangeEntityType,
+    val entityId: String,
+    val entityLabel: String,
+    val conflictFields: List<String>,
+    val localValue: String,
+    val incomingValue: String,
+    val localVersion: Long,
+    val incomingVersion: Long,
+    val allowedResolutions: List<ConflictResolution>,
+) {
+    init {
+        require(entityId.isNotBlank()) { "Import conflict entity ID must not be blank." }
+        require(entityLabel.isNotBlank()) { "Import conflict label must not be blank." }
+        require(conflictFields.isNotEmpty()) { "Import conflict must name at least one field." }
+        require(localValue.isNotBlank()) { "Import conflict local value must not be blank." }
+        require(incomingValue.isNotBlank()) { "Import conflict incoming value must not be blank." }
+        require(localVersion >= 1L) { "Import conflict local version must be at least 1." }
+        require(incomingVersion >= 1L) { "Import conflict incoming version must be at least 1." }
+        require(allowedResolutions.isNotEmpty()) {
+            "Import conflict must provide at least one resolution."
+        }
+    }
+
+    /**
+     * 设置页和用作用例共用的冲突键，避免界面层自己拼接枚举名。
+     */
+    val key: String
+        get() = "${entityType.name}:$entityId"
+}
+
+/**
+ * 隔离在内存中生成的恢复预览，不写入正式家庭库。
+ */
+data class ImportPreview(
+    val manifest: BackupManifest,
+    val packageSizeBytes: Long,
+    val itemCount: Int,
+    val locationCount: Int,
+    val itemPhotoCount: Int,
+    val locationPhotoCount: Int,
+    val voiceLabelCount: Int,
+    val addedCount: Int,
+    val updatedCount: Int,
+    val deletedCount: Int,
+    val conflictCount: Int,
+    val conflicts: List<ImportConflict>,
+    val currentSummary: HouseholdDataSummary,
+    val differentHousehold: Boolean,
+) {
+    init {
+        require(itemCount >= 0) { "Import preview item count must not be negative." }
+        require(locationCount >= 0) { "Import preview location count must not be negative." }
+        require(itemPhotoCount >= 0) { "Import preview photo count must not be negative." }
+        require(locationPhotoCount >= 0) {
+            "Import preview location photo count must not be negative."
+        }
+        require(voiceLabelCount >= 0) { "Import preview voice label count must not be negative." }
+        require(addedCount >= 0) { "Import preview added count must not be negative." }
+        require(updatedCount >= 0) { "Import preview updated count must not be negative." }
+        require(deletedCount >= 0) { "Import preview deleted count must not be negative." }
+        require(conflictCount == conflicts.size) {
+            "Import preview conflict count must match the conflict list."
+        }
+        require(packageSizeBytes > 0L) { "Import preview package size must be greater than zero." }
+    }
+}
+
+/**
+ * 解密并校验通过后的恢复会话，只保存在内存中直到用户确认或取消。
+ */
+data class RestoreSession(
+    val preview: ImportPreview,
+    val envelope: BackupEnvelope,
+)
+
+/**
  * 备份数据包冻结常量。
  */
 object BackupFormat {

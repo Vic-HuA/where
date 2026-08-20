@@ -67,8 +67,15 @@ import com.vichua.where.core.common.VisibleDateTimeFormatter
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalAccessibilityPreferences
+import com.vichua.where.core.model.ConflictResolution
+import com.vichua.where.core.model.HouseholdDataSummary
+import com.vichua.where.core.model.RestoreMode
+import com.vichua.where.core.model.RestoreSession
+import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
+import com.vichua.where.feature.backup.ClearHouseholdDataUseCase
 import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
+import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
@@ -119,6 +126,9 @@ import kotlinx.coroutines.launch
  * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
  * @param createEncryptedBackupUseCase 创建加密备份的用例。
  * @param verifyBackupPackageUseCase 只读验证备份的用例。
+ * @param previewBackupRestoreUseCase 生成恢复预览的用例。
+ * @param applyBackupRestoreUseCase 执行合并或替换恢复的用例。
+ * @param clearHouseholdDataUseCase 清除家庭数据的用例。
  * @param visibleDateTimeFormatter 把备份时间格式化为本地可见文本。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
@@ -162,6 +172,9 @@ fun WhereApp(
     loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
     createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
     verifyBackupPackageUseCase: VerifyBackupPackageUseCase,
+    previewBackupRestoreUseCase: PreviewBackupRestoreUseCase,
+    applyBackupRestoreUseCase: ApplyBackupRestoreUseCase,
+    clearHouseholdDataUseCase: ClearHouseholdDataUseCase,
     visibleDateTimeFormatter: VisibleDateTimeFormatter,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
@@ -224,6 +237,9 @@ fun WhereApp(
     var backupSubmitting by remember { mutableStateOf(false) }
     var backupProgressText by remember { mutableStateOf<String?>(null) }
     var backupVerificationResult by remember { mutableStateOf<BackupVerificationResult?>(null) }
+    var householdSummary by remember { mutableStateOf<HouseholdDataSummary?>(null) }
+    var restoreSession by remember { mutableStateOf<RestoreSession?>(null) }
+    var conflictResolutions by remember { mutableStateOf<Map<String, ConflictResolution>>(emptyMap()) }
     var searchSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
@@ -402,6 +418,7 @@ fun WhereApp(
         if (destination == AppDestination.SETTINGS) {
             try {
                 latestBackupStatus = loadLatestBackupStatusUseCase()
+                householdSummary = clearHouseholdDataUseCase.loadSummary()
             } catch (_: Exception) {
                 if (latestBackupStatus == null) {
                     latestBackupStatus = LatestBackupStatus(
@@ -749,6 +766,9 @@ fun WhereApp(
                     },
                     backupProgressText = backupProgressText,
                     verificationResult = backupVerificationResult,
+                    householdSummary = householdSummary,
+                    restoreSession = restoreSession,
+                    conflictResolutions = conflictResolutions,
                     onBack = {
                         destination = AppDestination.HOME
                     },
@@ -846,6 +866,99 @@ fun WhereApp(
                     },
                     onDismissVerification = {
                         backupVerificationResult = null
+                    },
+                    onRestoreBackup = { password ->
+                        if (!backupSubmitting) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = "正在准备恢复预览…"
+                                settingsError = null
+                                restoreSession = null
+                                conflictResolutions = emptyMap()
+                                try {
+                                    val session = previewBackupRestoreUseCase(password)
+                                    if (session == null) {
+                                        backupProgressText = null
+                                        return@launch
+                                    }
+                                    restoreSession = session
+                                    householdSummary = session.preview.currentSummary
+                                    backupProgressText = null
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "密码错误、格式不兼容或备份已损坏。"
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "恢复预览失败，请稍后重试。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onDismissRestore = {
+                        restoreSession = null
+                        conflictResolutions = emptyMap()
+                    },
+                    onResolveConflict = { key, resolution ->
+                        conflictResolutions = conflictResolutions + (key to resolution)
+                    },
+                    onApplyRestore = { mode ->
+                        val session = restoreSession
+                        if (!backupSubmitting && session != null) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = if (mode == RestoreMode.REPLACE) {
+                                    "正在替换家庭数据…"
+                                } else {
+                                    "正在合并家庭数据…"
+                                }
+                                settingsError = null
+                                try {
+                                    applyBackupRestoreUseCase(session, mode, conflictResolutions)
+                                    restoreSession = null
+                                    conflictResolutions = emptyMap()
+                                    householdSummary = clearHouseholdDataUseCase.loadSummary()
+                                    latestBackupStatus = loadLatestBackupStatusUseCase()
+                                    homeLoadAttempt += 1
+                                    backupProgressText = if (mode == RestoreMode.REPLACE) {
+                                        "已用备份替换当前家庭。"
+                                    } else {
+                                        "已合并备份到当前家庭。"
+                                    }
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "未处理的冲突不能合并，或备份来自另一个家庭。"
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "恢复失败，已保留恢复前的家庭数据。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onClearHousehold = {
+                        if (!backupSubmitting) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = "正在清除家庭数据…"
+                                settingsError = null
+                                try {
+                                    clearHouseholdDataUseCase()
+                                    restoreSession = null
+                                    conflictResolutions = emptyMap()
+                                    homeSnapshot = null
+                                    destination = AppDestination.INITIALIZATION
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "清除家庭数据失败，请稍后重试。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
                     },
                 )
                 AppDestination.ITEM_DETAIL -> ItemDetailScreen(

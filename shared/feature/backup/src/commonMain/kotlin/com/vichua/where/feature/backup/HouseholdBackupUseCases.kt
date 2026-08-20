@@ -14,11 +14,14 @@ import com.vichua.where.core.model.BackupMediaPayload
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.HouseholdBackupSnapshot
+import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.HouseholdId
+import com.vichua.where.core.model.ItemDraft
 import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalBackupRecord
 import com.vichua.where.core.model.LocalBackupRecordId
 import com.vichua.where.core.model.LocalBackupStatus
+import com.vichua.where.core.model.PhotoAsset
 import com.vichua.where.core.model.UtcTimestamp
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.core.platform.DocumentGateway
@@ -54,6 +57,36 @@ interface HouseholdBackupRepository {
      * 保存一条本机备份记录。
      */
     suspend fun insertRecord(record: LocalBackupRecord)
+
+    /**
+     * 用目标快照覆盖家庭可导出实体。
+     */
+    suspend fun replaceSnapshot(snapshot: HouseholdBackupSnapshot)
+
+    /**
+     * 读取当前设备在当前家庭下的草稿。
+     */
+    suspend fun loadDrafts(): List<ItemDraft>
+
+    /**
+     * 写回校验后的草稿。
+     */
+    suspend fun saveDraft(draft: ItemDraft)
+
+    /**
+     * 读取清除或恢复确认所需的当前家庭摘要。
+     */
+    suspend fun loadSummary(): HouseholdDataSummary
+
+    /**
+     * 读取当前家庭照片元数据。
+     */
+    suspend fun loadPhotos(): List<PhotoAsset>
+
+    /**
+     * 清除当前家庭可导出数据，保留本机设备数据。
+     */
+    suspend fun clearHousehold(clearedAtMillis: Long)
 }
 
 /**

@@ -120,4 +120,8 @@ interface HomeSupportDao {
         """,
     )
     suspend fun findAllFavoriteLocationsByHousehold(householdId: String): List<FavoriteLocationEntity>
+
+    /** 删除家庭全部常用位置引用，供替换恢复或清除使用。 */
+    @Query("DELETE FROM favorite_locations WHERE household_id = :householdId")
+    suspend fun deleteFavoriteLocationsByHousehold(householdId: String): Int
 }

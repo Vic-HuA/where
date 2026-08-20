@@ -49,6 +49,14 @@ interface HouseholdDao {
         """,
     )
     suspend fun findFirstActive(): HouseholdEntity?
+
+    /** 按主键读取家庭，包括软删除记录，供恢复覆盖使用。 */
+    @Query("SELECT * FROM households WHERE id = :id")
+    suspend fun findById(id: String): HouseholdEntity?
+
+    /** 删除指定家庭根记录；调用方必须先删除或迁移关联实体。 */
+    @Query("DELETE FROM households WHERE id = :id")
+    suspend fun deleteById(id: String): Int
 }
 
 /**
@@ -98,6 +106,10 @@ interface DeviceDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<DeviceEntity>
+
+    /** 删除家庭下除当前设备外的设备记录，避免恢复覆盖时丢掉本机设备。 */
+    @Query("DELETE FROM devices WHERE household_id = :householdId AND id != :keepDeviceId")
+    suspend fun deleteByHouseholdExcept(householdId: String, keepDeviceId: String): Int
 }
 
 /**
@@ -164,6 +176,10 @@ interface LocationNodeDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<LocationNodeEntity>
+
+    /** 删除家庭全部位置节点，供替换恢复或清除使用。 */
+    @Query("DELETE FROM location_nodes WHERE household_id = :householdId")
+    suspend fun deleteByHousehold(householdId: String): Int
 }
 
 /**
@@ -202,6 +218,10 @@ interface CategoryDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<CategoryEntity>
+
+    /** 删除家庭全部分类，供替换恢复或清除使用。 */
+    @Query("DELETE FROM categories WHERE household_id = :householdId")
+    suspend fun deleteByHousehold(householdId: String): Int
 }
 
 /**
@@ -301,6 +321,10 @@ interface ItemDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<ItemEntity>
+
+    /** 删除家庭全部物品，供替换恢复或清除使用。 */
+    @Query("DELETE FROM items WHERE household_id = :householdId")
+    suspend fun deleteByHousehold(householdId: String): Int
 }
 
 /**
@@ -346,6 +370,15 @@ interface ItemAliasDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<ItemAliasEntity>
+
+    /** 删除家庭物品的全部别名，供替换恢复或清除使用。 */
+    @Query(
+        """
+        DELETE FROM item_aliases
+        WHERE item_id IN (SELECT id FROM items WHERE household_id = :householdId)
+        """,
+    )
+    suspend fun deleteByHousehold(householdId: String): Int
 }
 
 /**
@@ -413,6 +446,10 @@ interface PhotoAssetDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<PhotoAssetEntity>
+
+    /** 删除家庭全部照片元数据，供替换恢复或清除使用。 */
+    @Query("DELETE FROM photo_assets WHERE household_id = :householdId")
+    suspend fun deleteByHousehold(householdId: String): Int
 }
 
 /**
@@ -454,6 +491,15 @@ interface ItemLocationEventDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<ItemLocationEventEntity>
+
+    /** 删除家庭物品的全部位置历史，供替换恢复或清除使用。 */
+    @Query(
+        """
+        DELETE FROM item_location_events
+        WHERE item_id IN (SELECT id FROM items WHERE household_id = :householdId)
+        """,
+    )
+    suspend fun deleteByHousehold(householdId: String): Int
 }
 
 /**
@@ -504,6 +550,19 @@ interface ItemDraftDao {
         deviceId: String,
         householdId: String,
     ): Int
+
+    /** 查询指定设备在家庭下的全部草稿，供恢复后校验正式引用。 */
+    @Query(
+        """
+        SELECT * FROM item_drafts
+        WHERE device_id = :deviceId AND household_id = :householdId
+        ORDER BY updated_at DESC, id DESC
+        """,
+    )
+    suspend fun findAllByDeviceAndHousehold(
+        deviceId: String,
+        householdId: String,
+    ): List<ItemDraftEntity>
 }
 
 /**
@@ -541,4 +600,8 @@ interface ChangeRecordDao {
         """,
     )
     suspend fun findAllByHousehold(householdId: String): List<ChangeRecordEntity>
+
+    /** 删除家庭全部变更记录，供替换恢复或清除使用。 */
+    @Query("DELETE FROM change_records WHERE household_id = :householdId")
+    suspend fun deleteByHousehold(householdId: String): Int
 }

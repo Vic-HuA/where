@@ -163,6 +163,12 @@ class CreateManualItemUseCaseTest {
         override fun resolveAbsolutePath(storageKey: String): String? = null
 
         override suspend fun readBytes(storageKey: String): ByteArray? = null
+
+        override suspend fun writeRestoredPhoto(
+            storageKey: String,
+            thumbnailStorageKey: String,
+            bytes: ByteArray,
+        ) = Unit
     }
 
     /**

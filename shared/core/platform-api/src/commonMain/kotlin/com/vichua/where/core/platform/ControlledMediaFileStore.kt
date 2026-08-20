@@ -121,6 +121,17 @@ interface ControlledMediaFileStore {
      * 只用于备份打包，不把绝对路径暴露给功能层。
      */
     suspend fun readBytes(storageKey: String): ByteArray?
+
+    /**
+     * 按备份中的正式标识写入原图并重建缩略图。
+     *
+     * 只用于恢复回滚和正式应用，不允许写入临时目录以外的任意路径。
+     */
+    suspend fun writeRestoredPhoto(
+        storageKey: String,
+        thumbnailStorageKey: String,
+        bytes: ByteArray,
+    )
 }
 
 /**

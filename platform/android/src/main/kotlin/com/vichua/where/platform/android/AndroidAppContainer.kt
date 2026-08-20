@@ -12,7 +12,9 @@ import com.vichua.where.core.database.query.HouseholdBackupSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.query.ItemDetailStore
 import com.vichua.where.core.database.query.LocalBackupRecordStore
+import com.vichua.where.core.database.transaction.HouseholdClearStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
+import com.vichua.where.core.database.transaction.HouseholdRestoreStore
 import com.vichua.where.core.database.transaction.ItemDeletionStore
 import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
@@ -49,8 +51,11 @@ import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.SearchItemsUseCase
 import com.vichua.where.core.platform.DocumentGateway
+import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
+import com.vichua.where.feature.backup.ClearHouseholdDataUseCase
 import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
+import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
 import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
 import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
@@ -98,6 +103,8 @@ class AndroidAppContainer(
     private val householdBackupRepository = RoomHouseholdBackupRepository(
         snapshotStore = HouseholdBackupSnapshotStore(database),
         recordStore = LocalBackupRecordStore(database),
+        restoreStore = HouseholdRestoreStore(database),
+        clearStore = HouseholdClearStore(database),
     )
     private val backupCrypto = AndroidBackupCrypto()
     private val itemDraftRepository = RoomItemDraftRepository(
@@ -312,6 +319,36 @@ class AndroidAppContainer(
         backupCrypto = backupCrypto,
         contentHasher = AndroidContentHasher,
         idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /**
+     * 恢复预览用例。文档选择器绑定 Activity，因此在界面层注入。
+     */
+    fun previewBackupRestoreUseCase(
+        documentGateway: DocumentGateway,
+    ): PreviewBackupRestoreUseCase = PreviewBackupRestoreUseCase(
+        repository = householdBackupRepository,
+        documentGateway = documentGateway,
+        backupCrypto = backupCrypto,
+        contentHasher = AndroidContentHasher,
+    )
+
+    /**
+     * 确认后执行合并或替换恢复。
+     */
+    val applyBackupRestoreUseCase = ApplyBackupRestoreUseCase(
+        repository = householdBackupRepository,
+        mediaFileStore = mediaFileStore,
+        idGenerator = AndroidUniqueIdGenerator(),
+    )
+
+    /**
+     * 二次确认后清除家庭数据。
+     */
+    val clearHouseholdDataUseCase = ClearHouseholdDataUseCase(
+        repository = householdBackupRepository,
+        mediaFileStore = mediaFileStore,
         clock = AndroidEpochMillisecondsClock,
     )
 

@@ -112,6 +112,21 @@ class AndroidControlledMediaFileStore(
     }
 
     /**
+     * 把恢复包中的原图写到正式标识，并按现有规则重建缩略图。
+     */
+    override suspend fun writeRestoredPhoto(
+        storageKey: String,
+        thumbnailStorageKey: String,
+        bytes: ByteArray,
+    ) = withContext(Dispatchers.IO) {
+        require(bytes.isNotEmpty()) { "Restored image bytes must not be empty." }
+        StorageKeys.validate(storageKey)
+        StorageKeys.validate(thumbnailStorageKey)
+        writeAtomically(resolveExistingOrCreate(storageKey), bytes)
+        writeAtomically(resolveExistingOrCreate(thumbnailStorageKey), createThumbnailBytes(bytes))
+    }
+
+    /**
      * 按文件头识别真实类型，避免只信任系统相册给出的 MIME。
      */
     private fun resolveMimeType(bytes: ByteArray, sourceMimeType: String?): String {
