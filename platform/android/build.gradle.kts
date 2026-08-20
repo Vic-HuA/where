@@ -22,6 +22,7 @@ android {
 
 dependencies {
     implementation(project(":shared:core:common"))
+    implementation(project(":shared:core:crypto"))
     implementation(project(":shared:core:database"))
     implementation(project(":shared:core:model"))
     implementation(project(":shared:core:platform-api"))
@@ -30,4 +31,5 @@ dependencies {
     api(project(":shared:feature:location"))
     api(project(":shared:feature:search"))
     api(project(":shared:feature:settings"))
+    api(project(":shared:feature:backup"))
 }

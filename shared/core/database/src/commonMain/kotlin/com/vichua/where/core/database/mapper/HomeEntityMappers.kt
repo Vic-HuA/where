@@ -2,6 +2,7 @@ package com.vichua.where.core.database.mapper
 
 import com.vichua.where.core.database.entity.FavoriteLocationEntity
 import com.vichua.where.core.database.entity.LocalAccessibilityPreferencesEntity
+import com.vichua.where.core.database.entity.LocalBackupRecordEntity
 import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.DisplayMode
@@ -10,6 +11,9 @@ import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.FavoriteLocationId
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.LocalAccessibilityPreferences
+import com.vichua.where.core.model.LocalBackupRecord
+import com.vichua.where.core.model.LocalBackupRecordId
+import com.vichua.where.core.model.LocalBackupStatus
 import com.vichua.where.core.model.LocalSearchHistory
 import com.vichua.where.core.model.LocalSearchHistoryId
 import com.vichua.where.core.model.LocationNodeId
@@ -92,4 +96,30 @@ internal fun LocalAccessibilityPreferencesEntity.toDomain(): LocalAccessibilityP
         volumeHintEnabled = volumeHintEnabled,
         updatedAt = UtcTimestamp(updatedAt),
     )
+
+/** 将本机备份记录领域模型转换为 Room 实体。 */
+internal fun LocalBackupRecord.toEntity(): LocalBackupRecordEntity = LocalBackupRecordEntity(
+    id = id.value,
+    deviceId = deviceId.value,
+    householdId = householdId.value,
+    packageHash = packageHash,
+    sizeBytes = sizeBytes,
+    status = status.name,
+    opaqueDocumentUri = opaqueDocumentUri,
+    createdAt = createdAt.epochMilliseconds,
+    verifiedAt = verifiedAt?.epochMilliseconds,
+)
+
+/** 将本机备份记录 Room 实体还原为领域模型。 */
+internal fun LocalBackupRecordEntity.toDomain(): LocalBackupRecord = LocalBackupRecord(
+    id = LocalBackupRecordId(id),
+    deviceId = DeviceId(deviceId),
+    householdId = HouseholdId(householdId),
+    packageHash = packageHash,
+    sizeBytes = sizeBytes,
+    status = LocalBackupStatus.valueOf(status),
+    opaqueDocumentUri = opaqueDocumentUri,
+    createdAt = UtcTimestamp(createdAt),
+    verifiedAt = verifiedAt?.let(::UtcTimestamp),
+)
 

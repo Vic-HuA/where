@@ -114,6 +114,13 @@ interface ControlledMediaFileStore {
      * 把受控标识解析为当前设备上的绝对路径，文件不存在时返回空。
      */
     fun resolveAbsolutePath(storageKey: String): String?
+
+    /**
+     * 读取受控原图字节，文件不存在时返回空。
+     *
+     * 只用于备份打包，不把绝对路径暴露给功能层。
+     */
+    suspend fun readBytes(storageKey: String): ByteArray?
 }
 
 /**

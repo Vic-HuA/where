@@ -110,4 +110,14 @@ interface HomeSupportDao {
         deviceId: String,
         keepCount: Int,
     ): Int
+
+    /** 查询家庭全部常用位置引用，包括已取消固定记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM favorite_locations
+        WHERE household_id = :householdId
+        ORDER BY sort_order ASC, id ASC
+        """,
+    )
+    suspend fun findAllFavoriteLocationsByHousehold(householdId: String): List<FavoriteLocationEntity>
 }

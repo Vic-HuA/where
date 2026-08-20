@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.vichua.where.core.model.DevicePlatform
+import com.vichua.where.platform.android.AndroidVisibleDateTimeFormatter
 import com.vichua.where.ui.WhereApp
 
 /**
@@ -18,6 +19,7 @@ class MainActivity : ComponentActivity() {
         val photoPickerGateway = AndroidPhotoPickerGateway(this)
         textToSpeechGateway = AndroidTextToSpeechGateway(this)
         val shareGateway = AndroidShareGateway(this)
+        val documentGateway = AndroidDocumentGateway(this)
         setContent {
             WhereApp(
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
@@ -54,6 +56,10 @@ class MainActivity : ComponentActivity() {
                 deleteEmptyLocationUseCase = container.deleteEmptyLocationUseCase,
                 loadAccessibilityPreferencesUseCase = container.loadAccessibilityPreferencesUseCase,
                 updateAccessibilityPreferencesUseCase = container.updateAccessibilityPreferencesUseCase,
+                loadLatestBackupStatusUseCase = container.loadLatestBackupStatusUseCase,
+                createEncryptedBackupUseCase = container.createEncryptedBackupUseCase(documentGateway),
+                verifyBackupPackageUseCase = container.verifyBackupPackageUseCase(documentGateway),
+                visibleDateTimeFormatter = AndroidVisibleDateTimeFormatter,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )

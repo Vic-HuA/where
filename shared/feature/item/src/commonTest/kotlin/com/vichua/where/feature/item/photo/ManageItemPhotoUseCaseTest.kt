@@ -267,6 +267,8 @@ class ManageItemPhotoUseCaseTest {
         override suspend fun discard(storageKeys: Collection<String>) = Unit
 
         override fun resolveAbsolutePath(storageKey: String): String? = null
+
+        override suspend fun readBytes(storageKey: String): ByteArray? = null
     }
 
     private companion object {

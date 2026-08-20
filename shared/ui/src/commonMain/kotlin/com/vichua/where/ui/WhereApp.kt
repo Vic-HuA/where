@@ -63,7 +63,13 @@ import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveItemUseCase
+import com.vichua.where.core.common.VisibleDateTimeFormatter
+import com.vichua.where.core.model.BackupVerificationResult
+import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalAccessibilityPreferences
+import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
+import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
+import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
@@ -110,6 +116,10 @@ import kotlinx.coroutines.launch
  * @param deleteEmptyLocationUseCase 删除空位置的用例。
  * @param loadAccessibilityPreferencesUseCase 读取当前设备适老偏好的用例。
  * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
+ * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
+ * @param createEncryptedBackupUseCase 创建加密备份的用例。
+ * @param verifyBackupPackageUseCase 只读验证备份的用例。
+ * @param visibleDateTimeFormatter 把备份时间格式化为本地可见文本。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -149,6 +159,10 @@ fun WhereApp(
     deleteEmptyLocationUseCase: DeleteEmptyLocationUseCase,
     loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
+    loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
+    createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
+    verifyBackupPackageUseCase: VerifyBackupPackageUseCase,
+    visibleDateTimeFormatter: VisibleDateTimeFormatter,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -206,6 +220,10 @@ fun WhereApp(
     var settingsSubmitting by remember { mutableStateOf(false) }
     var settingsError by remember { mutableStateOf<String?>(null) }
     var settingsLoadAttempt by remember { mutableIntStateOf(0) }
+    var latestBackupStatus by remember { mutableStateOf<LatestBackupStatus?>(null) }
+    var backupSubmitting by remember { mutableStateOf(false) }
+    var backupProgressText by remember { mutableStateOf<String?>(null) }
+    var backupVerificationResult by remember { mutableStateOf<BackupVerificationResult?>(null) }
     var searchSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
@@ -379,6 +397,18 @@ fun WhereApp(
                 settingsError = "暂时无法读取辅助设置。"
             } finally {
                 settingsLoading = false
+            }
+        }
+        if (destination == AppDestination.SETTINGS) {
+            try {
+                latestBackupStatus = loadLatestBackupStatusUseCase()
+            } catch (_: Exception) {
+                if (latestBackupStatus == null) {
+                    latestBackupStatus = LatestBackupStatus(
+                        lastVerifiedAt = null,
+                        lastVerifiedSizeBytes = null,
+                    )
+                }
             }
         }
     }
@@ -712,8 +742,13 @@ fun WhereApp(
                 AppDestination.SETTINGS -> SettingsScreen(
                     preferences = accessibilityPreferences,
                     loading = settingsLoading,
-                    submitting = settingsSubmitting,
+                    submitting = settingsSubmitting || backupSubmitting,
                     errorMessage = settingsError,
+                    lastVerifiedBackupText = latestBackupStatus?.lastVerifiedAt?.let { timestamp ->
+                        "最近成功备份：${visibleDateTimeFormatter.format(timestamp.epochMilliseconds)}"
+                    },
+                    backupProgressText = backupProgressText,
+                    verificationResult = backupVerificationResult,
                     onBack = {
                         destination = AppDestination.HOME
                     },
@@ -752,6 +787,65 @@ fun WhereApp(
                                 }
                             }
                         }
+                    },
+                    onCreateBackup = { password, confirmation ->
+                        if (!backupSubmitting) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = "正在创建加密备份…"
+                                settingsError = null
+                                backupVerificationResult = null
+                                try {
+                                    val result = createEncryptedBackupUseCase(password, confirmation)
+                                    if (result == null) {
+                                        backupProgressText = null
+                                        return@launch
+                                    }
+                                    latestBackupStatus = loadLatestBackupStatusUseCase()
+                                    backupVerificationResult = result
+                                    backupProgressText = null
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "请检查密码，或确认两次输入一致。"
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "创建备份失败，请稍后重试。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onVerifyBackup = { password ->
+                        if (!backupSubmitting) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = "正在验证备份…"
+                                settingsError = null
+                                backupVerificationResult = null
+                                try {
+                                    val result = verifyBackupPackageUseCase(password)
+                                    if (result == null) {
+                                        backupProgressText = null
+                                        return@launch
+                                    }
+                                    latestBackupStatus = loadLatestBackupStatusUseCase()
+                                    backupVerificationResult = result
+                                    backupProgressText = null
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "密码错误、格式不兼容或备份已损坏。"
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "验证备份失败，请稍后重试。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onDismissVerification = {
+                        backupVerificationResult = null
                     },
                 )
                 AppDestination.ITEM_DETAIL -> ItemDetailScreen(

@@ -101,6 +101,17 @@ class AndroidControlledMediaFileStore(
     }
 
     /**
+     * 读取已通过校验的受控文件，缺失时返回空以便备份标记异常。
+     */
+    override suspend fun readBytes(storageKey: String): ByteArray? = withContext(Dispatchers.IO) {
+        val file = resolveValidatedFile(storageKey)
+        if (!file.isFile) {
+            return@withContext null
+        }
+        file.readBytes()
+    }
+
+    /**
      * 按文件头识别真实类型，避免只信任系统相册给出的 MIME。
      */
     private fun resolveMimeType(bytes: ByteArray, sourceMimeType: String?): String {

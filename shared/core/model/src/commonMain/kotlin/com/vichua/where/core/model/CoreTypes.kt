@@ -159,6 +159,19 @@ value class LocalSearchHistoryId(val value: String) {
 }
 
 /**
+ * 当前设备本地备份记录的唯一标识。
+ *
+ * @property value 当前设备生成的标识文本。
+ */
+@Serializable
+@JvmInline
+value class LocalBackupRecordId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Local backup record ID must not be blank." }
+    }
+}
+
+/**
  * 以 Unix Epoch 毫秒表示的 UTC 时间戳。
  *
  * 使用数值而不是格式化字符串保存时间，确保跨时区排序和迁移结果稳定。

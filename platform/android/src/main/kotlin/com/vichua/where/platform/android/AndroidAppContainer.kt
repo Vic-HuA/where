@@ -8,8 +8,10 @@ import com.vichua.where.core.database.buildWhereDatabase
 import com.vichua.where.core.database.createAndroidDatabaseBuilder
 import com.vichua.where.core.database.query.AccessibilityPreferencesStore
 import com.vichua.where.core.database.query.HomeSnapshotStore
+import com.vichua.where.core.database.query.HouseholdBackupSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.query.ItemDetailStore
+import com.vichua.where.core.database.query.LocalBackupRecordStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
 import com.vichua.where.core.database.transaction.ItemDeletionStore
 import com.vichua.where.core.database.transaction.ItemDraftStore
@@ -46,6 +48,10 @@ import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.SearchItemsUseCase
+import com.vichua.where.core.platform.DocumentGateway
+import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
+import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
+import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
 import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
 import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
 
@@ -89,6 +95,11 @@ class AndroidAppContainer(
             store = AccessibilityPreferencesStore(database),
             clock = AndroidEpochMillisecondsClock,
         )
+    private val householdBackupRepository = RoomHouseholdBackupRepository(
+        snapshotStore = HouseholdBackupSnapshotStore(database),
+        recordStore = LocalBackupRecordStore(database),
+    )
+    private val backupCrypto = AndroidBackupCrypto()
     private val itemDraftRepository = RoomItemDraftRepository(
         store = ItemDraftStore(database),
         nowMillis = AndroidEpochMillisecondsClock::now,
@@ -268,6 +279,39 @@ class AndroidAppContainer(
     /** 更新当前设备适老与辅助偏好的用例。 */
     val updateAccessibilityPreferencesUseCase = UpdateAccessibilityPreferencesUseCase(
         repository = accessibilityPreferencesRepository,
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 读取最近一次已验证备份状态的用例。 */
+    val loadLatestBackupStatusUseCase =
+        LoadLatestBackupStatusUseCase(householdBackupRepository)
+
+    /**
+     * 创建加密备份用例。文档选择器绑定 Activity，因此在界面层注入。
+     */
+    fun createEncryptedBackupUseCase(
+        documentGateway: DocumentGateway,
+    ): CreateEncryptedBackupUseCase = CreateEncryptedBackupUseCase(
+        repository = householdBackupRepository,
+        mediaFileStore = mediaFileStore,
+        documentGateway = documentGateway,
+        backupCrypto = backupCrypto,
+        contentHasher = AndroidContentHasher,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /**
+     * 只读验证备份用例。文档选择器绑定 Activity，因此在界面层注入。
+     */
+    fun verifyBackupPackageUseCase(
+        documentGateway: DocumentGateway,
+    ): VerifyBackupPackageUseCase = VerifyBackupPackageUseCase(
+        repository = householdBackupRepository,
+        documentGateway = documentGateway,
+        backupCrypto = backupCrypto,
+        contentHasher = AndroidContentHasher,
+        idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
     )
 

@@ -88,6 +88,16 @@ interface DeviceDao {
         """,
     )
     fun observeActiveByHousehold(householdId: String): Flow<List<DeviceEntity>>
+
+    /** 查询家庭全部设备，包括已撤销记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM devices
+        WHERE household_id = :householdId
+        ORDER BY created_at ASC, id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<DeviceEntity>
 }
 
 /**
@@ -144,6 +154,16 @@ interface LocationNodeDao {
         """,
     )
     suspend fun countActiveChildren(parentId: String): Long
+
+    /** 查询家庭全部位置，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM location_nodes
+        WHERE household_id = :householdId
+        ORDER BY parent_id ASC, sort_order ASC, id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<LocationNodeEntity>
 }
 
 /**
@@ -172,6 +192,16 @@ interface CategoryDao {
         """,
     )
     fun observeActiveByHousehold(householdId: String): Flow<List<CategoryEntity>>
+
+    /** 查询家庭全部分类，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM categories
+        WHERE household_id = :householdId
+        ORDER BY sort_order ASC, id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<CategoryEntity>
 }
 
 /**
@@ -261,6 +291,16 @@ interface ItemDao {
         """,
     )
     suspend fun findActiveByHousehold(householdId: String): List<ItemEntity>
+
+    /** 查询家庭全部物品，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM items
+        WHERE household_id = :householdId
+        ORDER BY created_at ASC, id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<ItemEntity>
 }
 
 /**
@@ -295,6 +335,17 @@ interface ItemAliasDao {
     /** 更新别名软删除状态。 */
     @Update
     suspend fun update(entity: ItemAliasEntity): Int
+
+    /** 查询家庭全部别名，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT item_aliases.* FROM item_aliases
+        INNER JOIN items ON items.id = item_aliases.item_id
+        WHERE items.household_id = :householdId
+        ORDER BY item_aliases.id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<ItemAliasEntity>
 }
 
 /**
@@ -351,6 +402,17 @@ interface PhotoAssetDao {
         """,
     )
     suspend fun findActiveCovers(itemIds: List<String>): List<PhotoAssetEntity>
+
+    /** 查询家庭全部照片元数据，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT photo_assets.* FROM photo_assets
+        INNER JOIN items ON items.id = photo_assets.item_id
+        WHERE items.household_id = :householdId
+        ORDER BY photo_assets.item_id ASC, photo_assets.sort_order ASC, photo_assets.id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<PhotoAssetEntity>
 }
 
 /**
@@ -381,6 +443,17 @@ interface ItemLocationEventDao {
         """,
     )
     suspend fun findActiveByItem(itemId: String): List<ItemLocationEventEntity>
+
+    /** 查询家庭全部位置历史，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT item_location_events.* FROM item_location_events
+        INNER JOIN items ON items.id = item_location_events.item_id
+        WHERE items.household_id = :householdId
+        ORDER BY item_location_events.occurred_at ASC, item_location_events.id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<ItemLocationEventEntity>
 }
 
 /**
@@ -458,4 +531,14 @@ interface ChangeRecordDao {
         householdId: String,
         afterTime: Long,
     ): List<ChangeRecordEntity>
+
+    /** 查询家庭全部变更记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM change_records
+        WHERE household_id = :householdId
+        ORDER BY occurred_at ASC, id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<ChangeRecordEntity>
 }

@@ -58,3 +58,67 @@ interface ShareGateway {
      */
     suspend fun share(payload: SharePayload)
 }
+
+/**
+ * 用户通过系统文件选择器保存或打开的文档。
+ *
+ * @property displayName 用户可见文件名。
+ * @property opaqueDocumentUri 平台文档 URI，只作为受控引用。
+ * @property bytes 完整文件字节。
+ */
+data class SelectedDocument(
+    val displayName: String,
+    val opaqueDocumentUri: String,
+    val bytes: ByteArray,
+) {
+    init {
+        require(displayName.isNotBlank()) { "Selected document name must not be blank." }
+        require(opaqueDocumentUri.isNotBlank()) { "Selected document URI must not be blank." }
+        require(bytes.isNotEmpty()) { "Selected document must not be empty." }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is SelectedDocument) return false
+        return displayName == other.displayName &&
+            opaqueDocumentUri == other.opaqueDocumentUri &&
+            bytes.contentEquals(other.bytes)
+    }
+
+    override fun hashCode(): Int {
+        var result = displayName.hashCode()
+        result = 31 * result + opaqueDocumentUri.hashCode()
+        result = 31 * result + bytes.contentHashCode()
+        return result
+    }
+}
+
+/**
+ * 系统文件选择器入口，用于加密备份的保存和只读打开。
+ *
+ * 取消选择时返回空，不能让设置页主流程崩溃。
+ */
+interface DocumentGateway {
+    /**
+     * 当前设备是否可以打开系统文件选择器。
+     */
+    fun isAvailable(): Boolean
+
+    /**
+     * 让用户选择保存位置并写入完整备份字节。
+     *
+     * @return 写出后的文档引用；用户取消时为空。
+     */
+    suspend fun createDocument(
+        suggestedFileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+    ): SelectedDocument?
+
+    /**
+     * 让用户选择已有备份文件并读取完整字节。
+     *
+     * @return 选中的文档；用户取消时为空。
+     */
+    suspend fun openDocument(): SelectedDocument?
+}
