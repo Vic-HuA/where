@@ -1,7 +1,12 @@
 package com.vichua.where.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,11 +14,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -22,8 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -185,7 +193,7 @@ fun SettingsScreen(
             title = "云端语音识别",
             description = "仅在你主动说话后才会把这次录音交给系统识别，不会后台持续听",
             checked = appPreferences?.canUseCloudSpeech == true,
-            enabled = appPreferences != null && !submitting,
+            enabled = appPreferences != null,
             onCheckedChange = { enabled ->
                 if (enabled) {
                     cloudSpeechDisclosureVisible = true
@@ -200,14 +208,14 @@ fun SettingsScreen(
             title = "适老模式",
             description = "首页改为两大入口，并切换录入、搜索、详情和更新位置的适老展示",
             checked = preferences?.elderFriendly == true,
-            enabled = preferences != null && !submitting,
+            enabled = preferences != null,
             onCheckedChange = onElderFriendlyChange,
         )
         SettingsSwitchRow(
             title = "高对比度",
             description = "独立设备偏好；启用适老模式时默认开启，可单独关闭",
             checked = preferences?.highContrastEnabled == true,
-            enabled = preferences != null && !submitting,
+            enabled = preferences != null,
             onCheckedChange = onHighContrastChange,
         )
         PendingSettingsRow("自动朗读确认结果", "字段已预留，行为尚未接入")
@@ -593,18 +601,80 @@ private fun SettingsSwitchRow(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Switch(
+            SettingsToggle(
                 checked = checked,
                 enabled = enabled,
                 onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedTrackColor = WherePrimaryColor,
-                    checkedThumbColor = WhereSurfaceColor,
-                ),
             )
         }
     }
 }
+
+/**
+ * 按原型绘制开/关：同一颗白圆点，只换轨道颜色和位置。
+ *
+ * 不用 Material3 Switch，避免关闭态缩成描边胶囊、打开态变成对勾。
+ * 保存中不改 enabled，避免三个开关一起闪成禁用色。
+ * 点击水波纹关掉，否则会画在 48dp 方框上闪出正方形。
+ */
+@Composable
+private fun SettingsToggle(
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) {
+            WherePrimaryColor
+        } else {
+            WhereSwitchUncheckedTrackColor
+        },
+        label = "settingsToggleTrack",
+    )
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) {
+            SettingsToggleWidth - SettingsToggleThumbSize - SettingsToggleThumbPadding
+        } else {
+            SettingsToggleThumbPadding
+        },
+        label = "settingsToggleThumb",
+    )
+    Box(
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                interactionSource = interactionSource,
+                indication = null,
+                onValueChange = onCheckedChange,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = SettingsToggleWidth, height = SettingsToggleHeight)
+                .clip(RoundedCornerShape(SettingsToggleHeight / 2))
+                .background(trackColor),
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = thumbOffset)
+                    .size(SettingsToggleThumbSize)
+                    .clip(CircleShape)
+                    .background(WhereSurfaceColor),
+            )
+        }
+    }
+}
+
+private val SettingsToggleWidth = 52.dp
+private val SettingsToggleHeight = 32.dp
+private val SettingsToggleThumbSize = 24.dp
+private val SettingsToggleThumbPadding = 4.dp
 
 @Composable
 private fun SettingsActionRow(

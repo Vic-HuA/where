@@ -31,6 +31,9 @@ val WhereSurfaceColor = Color(0xFFFFFFFF)
 /** 输入框和卡片使用的弱边框色。 */
 val WhereOutlineColor = Color(0xFFE1E3E0)
 
+/** 原型关闭态开关轨道色 `$line`。 */
+val WhereSwitchUncheckedTrackColor = Color(0xFFD7DAD8)
+
 private val WhereColorScheme = lightColorScheme(
     primary = WherePrimaryColor,
     onPrimary = WhereSurfaceColor,
