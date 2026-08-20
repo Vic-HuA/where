@@ -1,9 +1,12 @@
 package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,9 +42,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.vichua.where.core.model.MvpLimits
+import com.vichua.where.core.model.PhotoAssetId
+import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.ItemDetailPhoto
-import com.vichua.where.core.model.PhotoRole
 
 /**
  * 按 Pencil 原型展示物品照片、当前位置、历史和主要操作。
@@ -58,6 +66,13 @@ import com.vichua.where.core.model.PhotoRole
  * @param onEditProfile 打开档案编辑对话框。
  * @param onDismissEditor 关闭档案编辑对话框。
  * @param onSaveProfile 保存名称、位置说明和备注。
+ * @param photoSubmitting 是否正在保存照片变更。
+ * @param photoErrorMessage 可展示的中文照片错误。
+ * @param onAddPhoto 选择用途后从相册追加照片。
+ * @param onSetPhotoCover 把指定照片设为封面。
+ * @param onSetPhotoRole 修改指定照片用途。
+ * @param onMovePhoto 与相邻照片交换画廊顺序。
+ * @param onDeletePhoto 软删除指定照片。
  */
 @Composable
 fun ItemDetailScreen(
@@ -74,8 +89,32 @@ fun ItemDetailScreen(
     onEditProfile: () -> Unit,
     onDismissEditor: () -> Unit,
     onSaveProfile: (String, String?, String?) -> Unit,
+    photoSubmitting: Boolean,
+    photoErrorMessage: String?,
+    onAddPhoto: (PhotoRole) -> Unit,
+    onSetPhotoCover: (PhotoAssetId) -> Unit,
+    onSetPhotoRole: (PhotoAssetId, PhotoRole) -> Unit,
+    onMovePhoto: (PhotoAssetId, Int) -> Unit,
+    onDeletePhoto: (PhotoAssetId) -> Unit,
 ) {
     var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
+    var lastPhotoCount by remember(detail?.itemId) { mutableIntStateOf(detail?.photos?.size ?: 0) }
+    var addRoleDialogVisible by remember { mutableStateOf(false) }
+    var managedPhotoId by remember { mutableStateOf<PhotoAssetId?>(null) }
+    var deletePhotoId by remember { mutableStateOf<PhotoAssetId?>(null) }
+    var fullscreenVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(detail?.photos?.size) {
+        val photoCount = detail?.photos?.size ?: 0
+        if (photoCount > lastPhotoCount) {
+            selectedPhotoIndex = photoCount - 1
+        } else if (photoCount == 0) {
+            selectedPhotoIndex = 0
+        } else if (selectedPhotoIndex >= photoCount) {
+            selectedPhotoIndex = photoCount - 1
+        }
+        lastPhotoCount = photoCount
+    }
 
     Column(
         modifier = Modifier
@@ -122,7 +161,14 @@ fun ItemDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(190.dp)
-                .padding(top = 10.dp),
+                .padding(top = 10.dp)
+                .clickable(
+                    enabled = detail.photos.isNotEmpty(),
+                    role = Role.Button,
+                    onClick = {
+                        fullscreenVisible = true
+                    },
+                ),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(20.dp),
         ) {
@@ -160,21 +206,58 @@ fun ItemDetailScreen(
             }
         }
         if (detail.photos.isNotEmpty()) {
-            Text(
-                modifier = Modifier.padding(top = 8.dp),
-                text = "${photoRoleLabel(detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)].role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}",
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            val selectedPhoto = detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)]
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    modifier = Modifier.weight(1f).padding(top = 8.dp),
+                    text = "${photoRoleLabel(selectedPhoto.role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(
+                    enabled = !photoSubmitting,
+                    onClick = {
+                        managedPhotoId = selectedPhoto.photoId
+                    },
+                ) {
+                    Text("管理")
+                }
+            }
         }
         PhotoThumbnailSelector(
             photos = detail.photos,
             selectedIndex = selectedPhotoIndex,
             resolveMediaPath = resolveMediaPath,
+            enabled = !photoSubmitting,
             onSelect = { index ->
                 selectedPhotoIndex = index
             },
+            onManage = { photoId ->
+                managedPhotoId = photoId
+            },
+            onAdd = {
+                addRoleDialogVisible = true
+            },
         )
+        if (detail.photos.size >= MvpLimits.ITEM_PHOTO_WARNING_THRESHOLD) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "当前已有 ${detail.photos.size} 张照片，存储占用会继续增加。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (photoErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = photoErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
 
         Row(
             modifier = Modifier
@@ -349,6 +432,97 @@ fun ItemDetailScreen(
             onConfirm = onSaveProfile,
         )
     }
+    if (addRoleDialogVisible && detail != null) {
+        AddPhotoRoleDialog(
+            submitting = photoSubmitting,
+            onDismiss = {
+                if (!photoSubmitting) {
+                    addRoleDialogVisible = false
+                }
+            },
+            onConfirm = { role ->
+                addRoleDialogVisible = false
+                onAddPhoto(role)
+            },
+        )
+    }
+    val managedPhotos = detail?.photos
+    val managedPhoto = managedPhotos?.firstOrNull { photo -> photo.photoId == managedPhotoId }
+    if (managedPhotos != null && managedPhoto != null) {
+        ManagePhotoDialog(
+            photo = managedPhoto,
+            canMovePrevious = managedPhotos.indexOf(managedPhoto) > 0,
+            canMoveNext = managedPhotos.indexOf(managedPhoto) < managedPhotos.lastIndex,
+            submitting = photoSubmitting,
+            onDismiss = {
+                if (!photoSubmitting) {
+                    managedPhotoId = null
+                }
+            },
+            onSetCover = {
+                onSetPhotoCover(managedPhoto.photoId)
+            },
+            onSetRole = { role ->
+                onSetPhotoRole(managedPhoto.photoId, role)
+            },
+            onMove = { offset ->
+                onMovePhoto(managedPhoto.photoId, offset)
+            },
+            onDelete = {
+                deletePhotoId = managedPhoto.photoId
+            },
+        )
+    }
+    val pendingDeletePhoto = detail?.photos?.firstOrNull { photo -> photo.photoId == deletePhotoId }
+    if (pendingDeletePhoto != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!photoSubmitting) {
+                    deletePhotoId = null
+                }
+            },
+            title = { Text("删除照片") },
+            text = {
+                Text("删除后这张${photoRoleLabel(pendingDeletePhoto.role)}将不再显示。物品档案会保留。")
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !photoSubmitting,
+                    onClick = {
+                        val photoId = pendingDeletePhoto.photoId
+                        deletePhotoId = null
+                        managedPhotoId = null
+                        onDeletePhoto(photoId)
+                    },
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !photoSubmitting,
+                    onClick = {
+                        deletePhotoId = null
+                    },
+                ) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+    if (fullscreenVisible && detail != null && detail.photos.isNotEmpty()) {
+        PhotoFullscreenDialog(
+            photos = detail.photos,
+            selectedIndex = selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex),
+            resolveMediaPath = resolveMediaPath,
+            onSelect = { index ->
+                selectedPhotoIndex = index
+            },
+            onDismiss = {
+                fullscreenVisible = false
+            },
+        )
+    }
 }
 
 /**
@@ -445,13 +619,19 @@ private fun EditItemProfileDialog(
 
 /**
  * 展示可选择的照片缩略图和继续添加入口。
+ *
+ * 短按切换当前照片，长按进入管理，避免和选择手势冲突。
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun PhotoThumbnailSelector(
     photos: List<ItemDetailPhoto>,
     selectedIndex: Int,
     resolveMediaPath: (String) -> String?,
+    enabled: Boolean,
     onSelect: (Int) -> Unit,
+    onManage: (PhotoAssetId) -> Unit,
+    onAdd: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -464,10 +644,14 @@ private fun PhotoThumbnailSelector(
             Surface(
                 modifier = Modifier
                     .size(width = 82.dp, height = 58.dp)
-                    .clickable(
+                    .combinedClickable(
+                        enabled = enabled,
                         role = Role.Button,
                         onClick = {
                             onSelect(index)
+                        },
+                        onLongClick = {
+                            onManage(photo.photoId)
                         },
                     ),
                 color = if (index == selectedIndex) {
@@ -478,29 +662,41 @@ private fun PhotoThumbnailSelector(
                 shape = RoundedCornerShape(11.dp),
                 border = BorderStroke(1.dp, WhereOutlineColor),
             ) {
-                LocalStorageImage(
-                    absolutePath = resolveMediaPath(photo.thumbnailStorageKey),
-                    contentDescription = photoRoleLabel(photo.role),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LocalStorageImage(
+                        absolutePath = resolveMediaPath(photo.thumbnailStorageKey),
+                        contentDescription = photoRoleLabel(photo.role),
+                        modifier = Modifier.fillMaxSize(),
                     ) {
-                        Icon(
-                            modifier = Modifier.size(20.dp),
-                            imageVector = WhereIcons.Image,
-                            contentDescription = null,
-                            tint = WherePrimaryColor,
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                modifier = Modifier.size(20.dp),
+                                imageVector = WhereIcons.Image,
+                                contentDescription = null,
+                                tint = WherePrimaryColor,
+                            )
+                            Text(
+                                modifier = Modifier.padding(top = 3.dp),
+                                text = photoRoleLabel(photo.role),
+                                color = if (index == selectedIndex) {
+                                    WherePrimaryColor
+                                } else {
+                                    WhereSecondaryTextColor
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                    if (photo.isCover) {
                         Text(
-                            modifier = Modifier.padding(top = 3.dp),
-                            text = photoRoleLabel(photo.role),
-                            color = if (index == selectedIndex) {
-                                WherePrimaryColor
-                            } else {
-                                WhereSecondaryTextColor
-                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(3.dp),
+                            text = "封面",
+                            color = WherePrimaryColor,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -508,7 +704,13 @@ private fun PhotoThumbnailSelector(
             }
         }
         Surface(
-            modifier = Modifier.size(width = 82.dp, height = 58.dp),
+            modifier = Modifier
+                .size(width = 82.dp, height = 58.dp)
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onAdd,
+                ),
             color = WhereSurfaceColor,
             shape = RoundedCornerShape(11.dp),
             border = BorderStroke(1.dp, WhereOutlineColor),
@@ -529,6 +731,239 @@ private fun PhotoThumbnailSelector(
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 追加照片前先确认用途，避免相册选择后再打断导入流程。
+ */
+@Composable
+private fun AddPhotoRoleDialog(
+    submitting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (PhotoRole) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("添加照片") },
+        text = {
+            Column {
+                Text("请选择这张照片的用途。")
+                PhotoRole.entries.forEach { role ->
+                    TextButton(
+                        enabled = !submitting,
+                        onClick = {
+                            onConfirm(role)
+                        },
+                    ) {
+                        Text(photoRoleLabel(role))
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(
+                enabled = !submitting,
+                onClick = onDismiss,
+            ) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+/**
+ * 管理当前照片的用途、封面、顺序和删除。
+ */
+@Composable
+private fun ManagePhotoDialog(
+    photo: ItemDetailPhoto,
+    canMovePrevious: Boolean,
+    canMoveNext: Boolean,
+    submitting: Boolean,
+    onDismiss: () -> Unit,
+    onSetCover: () -> Unit,
+    onSetRole: (PhotoRole) -> Unit,
+    onMove: (Int) -> Unit,
+    onDelete: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("管理照片") },
+        text = {
+            Column {
+                Text("当前：${photoRoleLabel(photo.role)}")
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    PhotoRole.entries.forEach { role ->
+                        val selected = role == photo.role
+                        Surface(
+                            modifier = Modifier.clickable(
+                                enabled = !submitting && !selected,
+                                role = Role.Button,
+                                onClick = {
+                                    onSetRole(role)
+                                },
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (selected) {
+                                WhereSelectedContainerColor
+                            } else {
+                                WhereSurfaceColor
+                            },
+                            border = BorderStroke(
+                                1.dp,
+                                if (selected) WherePrimaryColor else WhereOutlineColor,
+                            ),
+                        ) {
+                            Text(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                text = photoRoleLabel(role),
+                                color = if (selected) {
+                                    WherePrimaryColor
+                                } else {
+                                    WherePrimaryTextColor
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(
+                        enabled = !submitting && !photo.isCover,
+                        onClick = onSetCover,
+                    ) {
+                        Text(if (photo.isCover) "已是封面" else "设为封面")
+                    }
+                    TextButton(
+                        enabled = !submitting && canMovePrevious,
+                        onClick = {
+                            onMove(-1)
+                        },
+                    ) {
+                        Text("前移")
+                    }
+                    TextButton(
+                        enabled = !submitting && canMoveNext,
+                        onClick = {
+                            onMove(1)
+                        },
+                    ) {
+                        Text("后移")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !submitting,
+                onClick = onDelete,
+            ) {
+                Text("删除")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !submitting,
+                onClick = onDismiss,
+            ) {
+                Text("关闭")
+            }
+        },
+    )
+}
+
+/**
+ * 全屏查看当前照片，并允许左右切换画廊。
+ */
+@Composable
+private fun PhotoFullscreenDialog(
+    photos: List<ItemDetailPhoto>,
+    selectedIndex: Int,
+    resolveMediaPath: (String) -> String?,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val photo = photos[selectedIndex]
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(role = Role.Button, onClick = onDismiss),
+            color = WherePrimaryTextColor.copy(alpha = 0.92f),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "${photoRoleLabel(photo.role)} · ${selectedIndex + 1} / ${photos.size}",
+                    color = WhereSurfaceColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                LocalStorageImage(
+                    absolutePath = resolveMediaPath(photo.storageKey)
+                        ?: resolveMediaPath(photo.thumbnailStorageKey),
+                    contentDescription = photoRoleLabel(photo.role),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(52.dp),
+                            imageVector = WhereIcons.Image,
+                            contentDescription = null,
+                            tint = WhereSurfaceColor,
+                        )
+                        Text(
+                            modifier = Modifier.padding(top = 8.dp),
+                            text = "照片文件暂不可用",
+                            color = WhereSurfaceColor,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(
+                        enabled = selectedIndex > 0,
+                        onClick = {
+                            onSelect(selectedIndex - 1)
+                        },
+                    ) {
+                        Text("上一张", color = WhereSurfaceColor)
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("关闭", color = WhereSurfaceColor)
+                    }
+                    TextButton(
+                        enabled = selectedIndex < photos.lastIndex,
+                        onClick = {
+                            onSelect(selectedIndex + 1)
+                        },
+                    ) {
+                        Text("下一张", color = WhereSurfaceColor)
+                    }
+                }
             }
         }
     }

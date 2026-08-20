@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.PhotoAssetId
+import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.platform.PhotoPickerGateway
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.ItemCreationContext
@@ -34,8 +36,13 @@ import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.ItemDraftContent
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
+import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
+import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportedItemPhoto
+import com.vichua.where.feature.item.photo.MoveItemPhotoUseCase
+import com.vichua.where.feature.item.photo.SetItemPhotoCoverUseCase
+import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
@@ -71,6 +78,11 @@ import kotlinx.coroutines.launch
  * @param searchItemsUseCase 执行本地文字搜索的用例。
  * @param loadItemDetailUseCase 加载物品详情的用例。
  * @param updateItemProfileUseCase 保存物品名称、位置说明和备注的用例。
+ * @param addItemPhotoUseCase 向已有物品追加照片的用例。
+ * @param setItemPhotoCoverUseCase 设置物品封面照片的用例。
+ * @param updateItemPhotoRoleUseCase 修改照片用途的用例。
+ * @param moveItemPhotoUseCase 调整照片画廊顺序的用例。
+ * @param deleteItemPhotoUseCase 软删除物品照片的用例。
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
  * @param loadLocationTreeUseCase 加载位置管理树的用例。
@@ -97,6 +109,11 @@ fun WhereApp(
     searchItemsUseCase: SearchItemsUseCase,
     loadItemDetailUseCase: LoadItemDetailUseCase,
     updateItemProfileUseCase: UpdateItemProfileUseCase,
+    addItemPhotoUseCase: AddItemPhotoUseCase,
+    setItemPhotoCoverUseCase: SetItemPhotoCoverUseCase,
+    updateItemPhotoRoleUseCase: UpdateItemPhotoRoleUseCase,
+    moveItemPhotoUseCase: MoveItemPhotoUseCase,
+    deleteItemPhotoUseCase: DeleteItemPhotoUseCase,
     loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
     moveItemUseCase: MoveItemUseCase,
     loadLocationTreeUseCase: LoadLocationTreeUseCase,
@@ -132,6 +149,8 @@ fun WhereApp(
     var itemProfileEditorVisible by remember { mutableStateOf(false) }
     var itemProfileSubmitting by remember { mutableStateOf(false) }
     var itemProfileError by remember { mutableStateOf<String?>(null) }
+    var itemPhotoSubmitting by remember { mutableStateOf(false) }
+    var itemPhotoError by remember { mutableStateOf<String?>(null) }
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
@@ -156,6 +175,26 @@ fun WhereApp(
                     searchError = "查找失败，请稍后重试。"
                 } finally {
                     searchInProgress = false
+                }
+            }
+        }
+    }
+    val runItemPhotoAction: (String, suspend (ItemId) -> Unit) -> Unit = { failureMessage, action ->
+        val itemId = selectedItemId
+        if (itemId != null && !itemPhotoSubmitting) {
+            coroutineScope.launch {
+                itemPhotoSubmitting = true
+                itemPhotoError = null
+                try {
+                    action(itemId)
+                    itemDetail = loadItemDetailUseCase(itemId)
+                    homeLoadAttempt += 1
+                } catch (_: IllegalArgumentException) {
+                    itemPhotoError = "请检查当前照片后再试。"
+                } catch (_: Exception) {
+                    itemPhotoError = failureMessage
+                } finally {
+                    itemPhotoSubmitting = false
                 }
             }
         }
@@ -196,6 +235,7 @@ fun WhereApp(
             itemDetailError = null
             itemProfileEditorVisible = false
             itemProfileError = null
+            itemPhotoError = null
             try {
                 itemDetail = loadItemDetailUseCase(itemId)
             } catch (_: Exception) {
@@ -567,6 +607,67 @@ fun WhereApp(
                                     itemProfileSubmitting = false
                                 }
                             }
+                        }
+                    },
+                    photoSubmitting = itemPhotoSubmitting,
+                    photoErrorMessage = itemPhotoError,
+                    onAddPhoto = { role ->
+                        val itemId = selectedItemId
+                        if (itemId != null && !itemPhotoSubmitting) {
+                            coroutineScope.launch {
+                                itemPhotoSubmitting = true
+                                itemPhotoError = null
+                                var importedPhoto: ImportedItemPhoto? = null
+                                try {
+                                    val pickedImage = photoPickerGateway.pickImage() ?: return@launch
+                                    importedPhoto = importItemPhotoUseCase(
+                                        bytes = pickedImage.bytes,
+                                        sourceMimeType = pickedImage.mimeType,
+                                        role = role,
+                                    )
+                                    addItemPhotoUseCase(itemId, importedPhoto)
+                                    itemDetail = loadItemDetailUseCase(itemId)
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    importedPhoto?.let { photo ->
+                                        discardPendingPhotos(
+                                            photos = listOf(photo),
+                                            discardImportedPhotos = discardImportedPhotos,
+                                        )
+                                    }
+                                    itemPhotoError = "无法使用所选照片，请换一张后重试。"
+                                } catch (_: Exception) {
+                                    importedPhoto?.let { photo ->
+                                        discardPendingPhotos(
+                                            photos = listOf(photo),
+                                            discardImportedPhotos = discardImportedPhotos,
+                                        )
+                                    }
+                                    itemPhotoError = "照片保存失败，请稍后重试。"
+                                } finally {
+                                    itemPhotoSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onSetPhotoCover = { photoId ->
+                        runItemPhotoAction("设置封面失败，请稍后重试。") {
+                            setItemPhotoCoverUseCase(it, photoId)
+                        }
+                    },
+                    onSetPhotoRole = { photoId, role ->
+                        runItemPhotoAction("修改用途失败，请稍后重试。") {
+                            updateItemPhotoRoleUseCase(it, photoId, role)
+                        }
+                    },
+                    onMovePhoto = { photoId, offset ->
+                        runItemPhotoAction("调整顺序失败，请稍后重试。") {
+                            moveItemPhotoUseCase(it, photoId, offset)
+                        }
+                    },
+                    onDeletePhoto = { photoId ->
+                        runItemPhotoAction("删除照片失败，请稍后重试。") {
+                            deleteItemPhotoUseCase(it, photoId)
                         }
                     },
                 )

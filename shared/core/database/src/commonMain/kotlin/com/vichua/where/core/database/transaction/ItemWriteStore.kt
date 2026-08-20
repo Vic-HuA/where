@@ -10,6 +10,7 @@ import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.DomainValidators
 import com.vichua.where.core.model.Item
 import com.vichua.where.core.model.ItemAlias
+import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.PhotoAsset
@@ -180,6 +181,132 @@ class ItemWriteStore(
     }
 
     /**
+     * 原子追加一张未删除照片及其变更记录，不改物品当前位置。
+     *
+     * 已有封面时新照片不得抢封面；没有照片时新照片必须是封面。
+     */
+    suspend fun addPhoto(
+        newPhoto: PhotoAsset,
+        changeRecord: ChangeRecord,
+    ) {
+        require(newPhoto.deletedAt == null) { "Added photo must not be soft-deleted." }
+        validatePhotoChangeRecord(newPhoto, changeRecord, ChangeOperation.CREATE)
+
+        transactionRunner.write {
+            val currentItem = itemDao().findActiveById(newPhoto.itemId.value)?.toDomain()
+            require(currentItem != null) { "Photo item does not exist." }
+            require(newPhoto.householdId == currentItem.householdId) {
+                "Added photo must belong to the item household."
+            }
+            val storedPhotos = photoAssetDao()
+                .findAllByItem(currentItem.id.value)
+                .map { entity -> entity.toDomain() }
+            require(storedPhotos.none { photo -> photo.id == newPhoto.id }) {
+                "Added photo ID must be unique for the item."
+            }
+            val activePhotos = storedPhotos.filter { photo -> photo.deletedAt == null }
+            if (activePhotos.isEmpty()) {
+                require(newPhoto.isCover) { "First active photo must be the cover." }
+            } else {
+                require(!newPhoto.isCover) {
+                    "Added photo must not replace the existing cover."
+                }
+            }
+            DomainValidators.validatePhotoCollection(currentItem, storedPhotos + newPhoto)
+            photoAssetDao().insertAll(listOf(newPhoto.toEntity()))
+            changeRecordDao().insert(changeRecord.toEntity())
+        }
+    }
+
+    /**
+     * 原子更新已有照片的用途、顺序、封面或软删除状态。
+     *
+     * 调用方必须提交该物品的完整照片集合，避免封面和顺序在事务外漂移。
+     */
+    suspend fun updatePhotoCollection(
+        itemId: ItemId,
+        updatedPhotos: List<PhotoAsset>,
+        changeRecords: List<ChangeRecord>,
+    ) {
+        require(changeRecords.isNotEmpty()) {
+            "Photo collection update must include change records."
+        }
+
+        transactionRunner.write {
+            val currentItem = itemDao().findActiveById(itemId.value)?.toDomain()
+            require(currentItem != null) { "Photo item does not exist." }
+            val storedPhotos = photoAssetDao()
+                .findAllByItem(itemId.value)
+                .map { entity -> entity.toDomain() }
+            require(
+                storedPhotos.map { photo -> photo.id }.toSet() ==
+                    updatedPhotos.map { photo -> photo.id }.toSet(),
+            ) {
+                "Photo collection update must include every stored photo."
+            }
+            DomainValidators.validatePhotoCollection(currentItem, updatedPhotos)
+
+            val storedPhotosById = storedPhotos.associateBy { photo -> photo.id }
+            val changedPhotos = updatedPhotos.filter { updatedPhoto ->
+                val storedPhoto = storedPhotosById.getValue(updatedPhoto.id)
+                updatedPhoto.role != storedPhoto.role ||
+                    updatedPhoto.sortOrder != storedPhoto.sortOrder ||
+                    updatedPhoto.isCover != storedPhoto.isCover ||
+                    updatedPhoto.deletedAt != storedPhoto.deletedAt
+            }
+            require(changedPhotos.isNotEmpty()) {
+                "Photo collection update must change at least one photo."
+            }
+            require(changeRecords.size == changedPhotos.size) {
+                "Photo change records must match changed photos."
+            }
+
+            updatedPhotos.forEach { updatedPhoto ->
+                val storedPhoto = storedPhotosById.getValue(updatedPhoto.id)
+                require(updatedPhoto.itemId == storedPhoto.itemId) {
+                    "Photo update must not move a photo to another item."
+                }
+                require(updatedPhoto.storageKey == storedPhoto.storageKey) {
+                    "Photo update must not change the original storage key."
+                }
+                require(updatedPhoto.thumbnailStorageKey == storedPhoto.thumbnailStorageKey) {
+                    "Photo update must not change the thumbnail storage key."
+                }
+                if (changedPhotos.any { photo -> photo.id == updatedPhoto.id }) {
+                    require(updatedPhoto.version == storedPhoto.version.next()) {
+                        "Updated photo version must increment the stored version by one."
+                    }
+                    require(photoAssetDao().update(updatedPhoto.toEntity()) == 1) {
+                        "Photo update must affect exactly one row."
+                    }
+                } else {
+                    require(updatedPhoto.version == storedPhoto.version) {
+                        "Unchanged photo version must stay the same."
+                    }
+                }
+            }
+
+            changedPhotos.forEach { updatedPhoto ->
+                val storedPhoto = storedPhotosById.getValue(updatedPhoto.id)
+                val operation = if (storedPhoto.deletedAt == null && updatedPhoto.deletedAt != null) {
+                    ChangeOperation.DELETE
+                } else {
+                    ChangeOperation.UPDATE
+                }
+                val changeRecord = requireNotNull(
+                    changeRecords.singleOrNull { record ->
+                        record.entityId == updatedPhoto.id.value
+                    },
+                ) {
+                    "Each changed photo must have exactly one change record."
+                }
+                validatePhotoChangeRecord(updatedPhoto, changeRecord, operation)
+            }
+            changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
+        }
+    }
+
+    /**
      * 校验首次位置事件与新物品的一致性。
      */
     private fun validateInitialLocationEvent(
@@ -246,6 +373,31 @@ class ItemWriteStore(
         }
         require(changeRecord.entityVersion == item.version) {
             "Item change record version must match the item version."
+        }
+    }
+
+    /**
+     * 校验照片变更记录与照片版本的一致性。
+     */
+    private fun validatePhotoChangeRecord(
+        photo: PhotoAsset,
+        changeRecord: ChangeRecord,
+        expectedOperation: ChangeOperation,
+    ) {
+        require(changeRecord.householdId == photo.householdId) {
+            "Photo change record must belong to the photo household."
+        }
+        require(changeRecord.entityType == ChangeEntityType.PHOTO_ASSET) {
+            "Photo change record entity type must be PHOTO_ASSET."
+        }
+        require(changeRecord.entityId == photo.id.value) {
+            "Photo change record entity ID must match the photo."
+        }
+        require(changeRecord.operation == expectedOperation) {
+            "Photo change record operation is invalid."
+        }
+        require(changeRecord.entityVersion == photo.version) {
+            "Photo change record version must match the photo version."
         }
     }
 }

@@ -14,11 +14,17 @@ import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
+import com.vichua.where.core.database.transaction.ItemPhotoStore
 import com.vichua.where.core.database.transaction.ItemProfileStore
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
+import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
+import com.vichua.where.feature.item.photo.MoveItemPhotoUseCase
+import com.vichua.where.feature.item.photo.SetItemPhotoCoverUseCase
+import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
 import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
@@ -64,6 +70,8 @@ class AndroidAppContainer(
         RoomItemMovementRepository(ItemMovementStore(database))
     private val itemProfileRepository =
         RoomItemProfileRepository(ItemProfileStore(database))
+    private val itemPhotoRepository =
+        RoomItemPhotoRepository(ItemPhotoStore(database))
     private val locationManagementRepository =
         RoomLocationManagementRepository(LocationManagementStore(database))
     private val itemDraftRepository = RoomItemDraftRepository(
@@ -146,6 +154,42 @@ class AndroidAppContainer(
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,
+    )
+
+    /** 向已有物品追加一张相册照片的用例。 */
+    val addItemPhotoUseCase = AddItemPhotoUseCase(
+        repository = itemPhotoRepository,
+        mediaFileStore = mediaFileStore,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 把指定照片设为封面的用例。 */
+    val setItemPhotoCoverUseCase = SetItemPhotoCoverUseCase(
+        repository = itemPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 修改单张照片用途的用例。 */
+    val updateItemPhotoRoleUseCase = UpdateItemPhotoRoleUseCase(
+        repository = itemPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 调整照片画廊顺序的用例。 */
+    val moveItemPhotoUseCase = MoveItemPhotoUseCase(
+        repository = itemPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 软删除物品照片的用例。 */
+    val deleteItemPhotoUseCase = DeleteItemPhotoUseCase(
+        repository = itemPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
     )
 
     /** 加载更新位置页面上下文的用例。 */
