@@ -28,6 +28,8 @@ import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
+import com.vichua.where.feature.item.profile.UpdateItemProfileRequest
+import com.vichua.where.feature.item.profile.UpdateItemProfileUseCase
 import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.ItemDraftContent
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
@@ -68,6 +70,7 @@ import kotlinx.coroutines.launch
  * @param createManualItemUseCase 保存基础手动物品的用例。
  * @param searchItemsUseCase 执行本地文字搜索的用例。
  * @param loadItemDetailUseCase 加载物品详情的用例。
+ * @param updateItemProfileUseCase 保存物品名称、位置说明和备注的用例。
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
  * @param loadLocationTreeUseCase 加载位置管理树的用例。
@@ -93,6 +96,7 @@ fun WhereApp(
     createManualItemUseCase: CreateManualItemUseCase,
     searchItemsUseCase: SearchItemsUseCase,
     loadItemDetailUseCase: LoadItemDetailUseCase,
+    updateItemProfileUseCase: UpdateItemProfileUseCase,
     loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
     moveItemUseCase: MoveItemUseCase,
     loadLocationTreeUseCase: LoadLocationTreeUseCase,
@@ -125,6 +129,9 @@ fun WhereApp(
     var itemDetail by remember { mutableStateOf<ItemDetail?>(null) }
     var itemDetailLoading by remember { mutableStateOf(false) }
     var itemDetailError by remember { mutableStateOf<String?>(null) }
+    var itemProfileEditorVisible by remember { mutableStateOf(false) }
+    var itemProfileSubmitting by remember { mutableStateOf(false) }
+    var itemProfileError by remember { mutableStateOf<String?>(null) }
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
@@ -187,6 +194,8 @@ fun WhereApp(
         if (destination == AppDestination.ITEM_DETAIL && itemId != null) {
             itemDetailLoading = true
             itemDetailError = null
+            itemProfileEditorVisible = false
+            itemProfileError = null
             try {
                 itemDetail = loadItemDetailUseCase(itemId)
             } catch (_: Exception) {
@@ -509,11 +518,56 @@ fun WhereApp(
                     loading = itemDetailLoading,
                     errorMessage = itemDetailError,
                     onBack = {
+                        itemProfileEditorVisible = false
+                        itemProfileError = null
                         destination = AppDestination.HOME
                     },
                     onReadLocation = {},
                     onUpdateLocation = {
+                        itemProfileEditorVisible = false
+                        itemProfileError = null
                         destination = AppDestination.MOVE_ITEM
+                    },
+                    editorVisible = itemProfileEditorVisible,
+                    editorSubmitting = itemProfileSubmitting,
+                    editorErrorMessage = itemProfileError,
+                    onEditProfile = {
+                        itemProfileError = null
+                        itemProfileEditorVisible = true
+                    },
+                    onDismissEditor = {
+                        if (!itemProfileSubmitting) {
+                            itemProfileEditorVisible = false
+                            itemProfileError = null
+                        }
+                    },
+                    onSaveProfile = { name, locationDescription, note ->
+                        val itemId = selectedItemId
+                        if (itemId != null && !itemProfileSubmitting) {
+                            coroutineScope.launch {
+                                itemProfileSubmitting = true
+                                itemProfileError = null
+                                try {
+                                    updateItemProfileUseCase(
+                                        UpdateItemProfileRequest(
+                                            itemId = itemId,
+                                            name = name,
+                                            locationDescription = locationDescription,
+                                            note = note,
+                                        ),
+                                    )
+                                    itemDetail = loadItemDetailUseCase(itemId)
+                                    homeLoadAttempt += 1
+                                    itemProfileEditorVisible = false
+                                } catch (_: IllegalArgumentException) {
+                                    itemProfileError = "请检查物品名称，或确认至少修改了一项。"
+                                } catch (_: Exception) {
+                                    itemProfileError = "保存失败，请稍后重试。"
+                                } finally {
+                                    itemProfileSubmitting = false
+                                }
+                            }
+                        }
                     },
                 )
                 AppDestination.MOVE_ITEM -> MoveItemScreen(

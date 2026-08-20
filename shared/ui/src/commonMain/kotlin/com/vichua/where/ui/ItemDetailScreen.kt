@@ -17,16 +17,20 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +52,12 @@ import com.vichua.where.core.model.PhotoRole
  * @param onBack 返回上一页。
  * @param onReadLocation 朗读当前位置。
  * @param onUpdateLocation 打开更新位置页。
+ * @param editorVisible 是否展示档案编辑对话框。
+ * @param editorSubmitting 是否正在保存档案。
+ * @param editorErrorMessage 可展示的中文保存错误。
+ * @param onEditProfile 打开档案编辑对话框。
+ * @param onDismissEditor 关闭档案编辑对话框。
+ * @param onSaveProfile 保存名称、位置说明和备注。
  */
 @Composable
 fun ItemDetailScreen(
@@ -58,6 +68,12 @@ fun ItemDetailScreen(
     onBack: () -> Unit,
     onReadLocation: () -> Unit,
     onUpdateLocation: () -> Unit,
+    editorVisible: Boolean,
+    editorSubmitting: Boolean,
+    editorErrorMessage: String?,
+    onEditProfile: () -> Unit,
+    onDismissEditor: () -> Unit,
+    onSaveProfile: (String, String?, String?) -> Unit,
 ) {
     var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
 
@@ -160,13 +176,34 @@ fun ItemDetailScreen(
             },
         )
 
-        Text(
-            modifier = Modifier.padding(top = 18.dp),
-            text = detail.name,
-            color = WherePrimaryTextColor,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.headlineMedium,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                modifier = Modifier.weight(1f),
+                text = detail.name,
+                color = WherePrimaryTextColor,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            TextButton(
+                enabled = !editorSubmitting,
+                onClick = onEditProfile,
+            ) {
+                Icon(
+                    modifier = Modifier.size(18.dp),
+                    imageVector = WhereIcons.Edit,
+                    contentDescription = null,
+                )
+                Text(
+                    modifier = Modifier.padding(start = 4.dp),
+                    text = "编辑",
+                )
+            }
+        }
 
         Surface(
             modifier = Modifier
@@ -189,12 +226,47 @@ fun ItemDetailScreen(
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyLarge,
                 )
+                val locationDescription = detail.locationDescription
+                if (!locationDescription.isNullOrBlank()) {
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = locationDescription,
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 Text(
                     modifier = Modifier.padding(top = 8.dp),
                     text = "由 ${detail.sourceDeviceName} 更新",
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+        }
+
+        val note = detail.note
+        if (!note.isNullOrBlank()) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp),
+                color = WhereSurfaceColor,
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "备注",
+                        color = WherePrimaryColor,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = note,
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
 
@@ -265,6 +337,110 @@ fun ItemDetailScreen(
             }
         }
     }
+
+    if (editorVisible && detail != null) {
+        EditItemProfileDialog(
+            initialName = detail.name,
+            initialLocationDescription = detail.locationDescription.orEmpty(),
+            initialNote = detail.note.orEmpty(),
+            submitting = editorSubmitting,
+            errorMessage = editorErrorMessage,
+            onDismiss = onDismissEditor,
+            onConfirm = onSaveProfile,
+        )
+    }
+}
+
+/**
+ * 编辑名称、位置说明和备注；当前位置仍走独立的更新位置流程。
+ */
+@Composable
+private fun EditItemProfileDialog(
+    initialName: String,
+    initialLocationDescription: String,
+    initialNote: String,
+    submitting: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String?, String?) -> Unit,
+) {
+    var name by remember(initialName) { mutableStateOf(initialName) }
+    var locationDescription by remember(initialLocationDescription) {
+        mutableStateOf(initialLocationDescription)
+    }
+    var note by remember(initialNote) { mutableStateOf(initialNote) }
+    val trimmedName = name.trim()
+    val trimmedLocationDescription = locationDescription.trim().takeIf(String::isNotEmpty)
+    val trimmedNote = note.trim().takeIf(String::isNotEmpty)
+    // 没有任何可见字段变化时禁用保存，避免产生空变更记录。
+    val hasVisibleChange = trimmedName != initialName.trim() ||
+        trimmedLocationDescription != initialLocationDescription.trim().takeIf(String::isNotEmpty) ||
+        trimmedNote != initialNote.trim().takeIf(String::isNotEmpty)
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!submitting) {
+                onDismiss()
+            }
+        },
+        title = { Text("编辑物品") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = name,
+                    onValueChange = { value -> name = value },
+                    enabled = !submitting,
+                    label = { Text("物品名称") },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    value = locationDescription,
+                    onValueChange = { value -> locationDescription = value },
+                    enabled = !submitting,
+                    label = { Text("位置补充说明") },
+                )
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    value = note,
+                    onValueChange = { value -> note = value },
+                    enabled = !submitting,
+                    label = { Text("备注") },
+                )
+                if (errorMessage != null) {
+                    Text(
+                        modifier = Modifier.padding(top = 10.dp),
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !submitting && trimmedName.isNotEmpty() && hasVisibleChange,
+                onClick = {
+                    onConfirm(trimmedName, trimmedLocationDescription, trimmedNote)
+                },
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !submitting,
+                onClick = onDismiss,
+            ) {
+                Text("取消")
+            }
+        },
+    )
 }
 
 /**

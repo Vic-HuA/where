@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
                 createManualItemUseCase = container.createManualItemUseCase,
                 searchItemsUseCase = container.searchItemsUseCase,
                 loadItemDetailUseCase = container.loadItemDetailUseCase,
+                updateItemProfileUseCase = container.updateItemProfileUseCase,
                 loadMoveItemContextUseCase = container.loadMoveItemContextUseCase,
                 moveItemUseCase = container.moveItemUseCase,
                 loadLocationTreeUseCase = container.loadLocationTreeUseCase,

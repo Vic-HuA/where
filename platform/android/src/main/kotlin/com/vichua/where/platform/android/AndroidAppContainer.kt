@@ -14,6 +14,7 @@ import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
+import com.vichua.where.core.database.transaction.ItemProfileStore
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
@@ -22,6 +23,7 @@ import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
+import com.vichua.where.feature.item.profile.UpdateItemProfileUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.location.management.CreateLocationUseCase
@@ -60,6 +62,8 @@ class AndroidAppContainer(
         RoomItemDetailRepository(ItemDetailStore(database))
     private val itemMovementRepository =
         RoomItemMovementRepository(ItemMovementStore(database))
+    private val itemProfileRepository =
+        RoomItemProfileRepository(ItemProfileStore(database))
     private val locationManagementRepository =
         RoomLocationManagementRepository(LocationManagementStore(database))
     private val itemDraftRepository = RoomItemDraftRepository(
@@ -134,6 +138,14 @@ class AndroidAppContainer(
         repository = itemMovementRepository,
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 更新物品名称、位置说明和备注的用例。 */
+    val updateItemProfileUseCase = UpdateItemProfileUseCase(
+        repository = itemProfileRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+        textNormalizer = DefaultTextNormalizer,
     )
 
     /** 加载更新位置页面上下文的用例。 */

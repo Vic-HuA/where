@@ -130,6 +130,56 @@ class ItemWriteStore(
     }
 
     /**
+     * 原子更新物品名称、位置说明和备注，并同步变更记录与全文索引。
+     *
+     * 不改当前位置，避免把档案编辑和移动位置混在同一事务里。
+     */
+    suspend fun updateProfile(
+        updatedItem: Item,
+        changeRecord: ChangeRecord,
+        searchDocument: ItemSearchDocument,
+    ) {
+        require(updatedItem.deletedAt == null) {
+            "Soft-deleted item cannot be updated."
+        }
+        validateItemChangeRecord(updatedItem, changeRecord, ChangeOperation.UPDATE)
+        require(searchDocument.itemId == updatedItem.id) {
+            "Search document must belong to the updated item."
+        }
+        require(searchDocument.name == updatedItem.name) {
+            "Search document name must match the updated item."
+        }
+        require(searchDocument.noteText == updatedItem.note.orEmpty()) {
+            "Search document note must match the updated item."
+        }
+
+        transactionRunner.write {
+            val currentEntity = itemDao().findActiveById(updatedItem.id.value)
+            require(currentEntity != null) { "Updated item does not exist." }
+            val currentItem = currentEntity.toDomain()
+            require(updatedItem.version == currentItem.version.next()) {
+                "Updated item version must increment the stored version by one."
+            }
+            require(updatedItem.currentLocationId == currentItem.currentLocationId) {
+                "Profile update must not change the current location."
+            }
+
+            val currentLocation = locationNodeDao()
+                .findById(updatedItem.currentLocationId.value)
+                ?.toDomain()
+            require(currentLocation != null) { "Updated item current location does not exist." }
+            DomainValidators.validateItemLocation(updatedItem, listOf(currentLocation))
+
+            require(itemDao().update(updatedItem.toEntity()) == 1) {
+                "Item profile update must affect exactly one row."
+            }
+            changeRecordDao().insert(changeRecord.toEntity())
+            itemSearchDao().deleteByItemId(updatedItem.id.value)
+            itemSearchDao().insert(searchDocument.toEntity())
+        }
+    }
+
+    /**
      * 校验首次位置事件与新物品的一致性。
      */
     private fun validateInitialLocationEvent(
