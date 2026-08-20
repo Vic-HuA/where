@@ -72,6 +72,7 @@ import com.vichua.where.core.model.RestoreSession
  * @param appPreferences 当前设备应用开关；加载失败时为空。
  * @param onElderFriendlyChange 切换适老展示。
  * @param onHighContrastChange 单独切换高对比度。
+ * @param onAutoReadConfirmationChange 切换确认保存后是否自动朗读。
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onCreateBackup 使用密码创建加密备份。
@@ -104,6 +105,7 @@ fun SettingsScreen(
     onRetry: () -> Unit,
     onElderFriendlyChange: (Boolean) -> Unit,
     onHighContrastChange: (Boolean) -> Unit,
+    onAutoReadConfirmationChange: (Boolean) -> Unit,
     onAiAssistanceChange: (Boolean) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
@@ -234,7 +236,13 @@ fun SettingsScreen(
             enabled = preferences != null,
             onCheckedChange = onHighContrastChange,
         )
-        PendingSettingsRow("自动朗读确认结果", "字段已预留，行为尚未接入")
+        SettingsSwitchRow(
+            title = "自动朗读确认结果",
+            description = "确认保存物品后朗读名称、位置和更新时间；关闭后仍可在详情页主动朗读",
+            checked = preferences?.autoReadConfirmationEnabled == true,
+            enabled = preferences != null,
+            onCheckedChange = onAutoReadConfirmationChange,
+        )
         PendingSettingsRow("触觉反馈", "字段已预留，行为尚未接入")
 
         SettingsSectionTitle("家庭与位置")

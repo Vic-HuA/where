@@ -75,4 +75,19 @@ class UpdateAccessibilityPreferencesUseCase(
         repository.save(updated)
         return updated
     }
+
+    /**
+     * 单独调整确认后是否自动朗读，不改变适老或高对比度。
+     *
+     * 关闭后详情页和搜索结果里用户主动触发的朗读仍然可用。
+     */
+    suspend fun setAutoReadConfirmation(enabled: Boolean): LocalAccessibilityPreferences {
+        val current = repository.load()
+        val updated = current.copy(
+            autoReadConfirmationEnabled = enabled,
+            updatedAt = UtcTimestamp(clock.now()),
+        )
+        repository.save(updated)
+        return updated
+    }
 }

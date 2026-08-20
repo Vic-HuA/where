@@ -67,6 +67,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param deletionUndo 当前会话内尚未过期的删除撤销条；没有待撤销删除时为空。
  * @param deletionUndoSubmitting 是否正在执行撤销。
  * @param deletionUndoErrorMessage 可展示的中文撤销错误。
+ * @param confirmationSpeechErrorMessage 确认保存后自动朗读失败时的中文降级提示。
  * @param onUndoDeletion 撤销最近一次物品删除。
  * @param onRetry 重试加载首页数据。
  * @param onTextSearch 提交首页键盘查询。
@@ -87,6 +88,7 @@ fun HomeScreen(
     deletionUndo: HomeDeletionUndo? = null,
     deletionUndoSubmitting: Boolean = false,
     deletionUndoErrorMessage: String? = null,
+    confirmationSpeechErrorMessage: String? = null,
     onUndoDeletion: () -> Unit = {},
     onRetry: () -> Unit,
     onTextSearch: (String) -> Unit,
@@ -158,6 +160,14 @@ fun HomeScreen(
                 Text(
                     modifier = Modifier.padding(top = 8.dp),
                     text = deletionUndoErrorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (confirmationSpeechErrorMessage != null) {
+                Text(
+                    modifier = Modifier.padding(top = 8.dp),
+                    text = confirmationSpeechErrorMessage,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )

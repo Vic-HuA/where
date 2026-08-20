@@ -268,6 +268,7 @@ fun WhereApp(
     var restoreSession by remember { mutableStateOf<RestoreSession?>(null) }
     var conflictResolutions by remember { mutableStateOf<Map<String, ConflictResolution>>(emptyMap()) }
     var searchSpeechError by remember { mutableStateOf<String?>(null) }
+    var confirmationSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
     val performSearch: (String) -> Unit = { query ->
@@ -519,6 +520,7 @@ fun WhereApp(
                     },
                     deletionUndoSubmitting = itemDeletionSubmitting,
                     deletionUndoErrorMessage = itemDeletionUndoError,
+                    confirmationSpeechErrorMessage = confirmationSpeechError,
                     onUndoDeletion = {
                         val undo = pendingItemDeletionUndo
                         if (undo != null && !itemDeletionSubmitting) {
@@ -591,6 +593,7 @@ fun WhereApp(
                         destination = AppDestination.ITEM_DETAIL
                     },
                     onRecordItemClick = {
+                        confirmationSpeechError = null
                         destination = AppDestination.ADD_ITEM
                     },
                     onLocationClick = {
@@ -773,13 +776,30 @@ fun WhereApp(
                             coroutineScope.launch {
                                 itemCreationSubmitting = true
                                 itemCreationError = null
+                                confirmationSpeechError = null
                                 try {
-                                    createManualItemUseCase(
+                                    val createdItemId = createManualItemUseCase(
                                         request.copy(photos = pendingItemPhotos),
                                     )
                                     pendingItemPhotos = emptyList()
                                     itemDraft = null
                                     homeLoadAttempt += 1
+                                    val preferences = accessibilityPreferences
+                                        ?: loadAccessibilityPreferencesUseCase()
+                                    accessibilityPreferences = preferences
+                                    if (preferences.autoReadConfirmationEnabled) {
+                                        try {
+                                            if (!textToSpeechGateway.isAvailable()) {
+                                                error("Text to speech is unavailable.")
+                                            }
+                                            val createdDetail = loadItemDetailUseCase(createdItemId)
+                                            textToSpeechGateway.speak(
+                                                buildItemLocationSpeechUseCase(createdDetail),
+                                            )
+                                        } catch (_: Exception) {
+                                            confirmationSpeechError = "当前设备无法朗读。"
+                                        }
+                                    }
                                     destination = AppDestination.HOME
                                 } catch (_: IllegalArgumentException) {
                                     itemCreationError = "请检查物品名称和所在位置。"
@@ -947,6 +967,26 @@ fun WhereApp(
                                         updateAccessibilityPreferencesUseCase.setHighContrast(enabled)
                                 } catch (_: Exception) {
                                     settingsError = "保存高对比度失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onAutoReadConfirmationChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    accessibilityPreferences =
+                                        updateAccessibilityPreferencesUseCase
+                                            .setAutoReadConfirmation(enabled)
+                                    if (!enabled) {
+                                        confirmationSpeechError = null
+                                    }
+                                } catch (_: Exception) {
+                                    settingsError = "保存自动朗读失败，请稍后重试。"
                                 } finally {
                                     settingsSubmitting = false
                                 }
