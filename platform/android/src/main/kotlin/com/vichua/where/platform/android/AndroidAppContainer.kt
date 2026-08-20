@@ -33,6 +33,7 @@ import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
 import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
 import com.vichua.where.feature.item.photo.MoveItemPhotoUseCase
+import com.vichua.where.feature.item.photo.PrepareAiPhotoRequestUseCase
 import com.vichua.where.feature.item.photo.SetItemPhotoCoverUseCase
 import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
 import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
@@ -309,6 +310,9 @@ class AndroidAppContainer(
 
     /** 把语音查找转写收成本地关键词。 */
     val prepareVoiceSearchQueryUseCase = PrepareVoiceSearchQueryUseCase()
+
+    /** 把用户为当前任务选出的照片收成一次 AI 请求。 */
+    val prepareAiPhotoRequestUseCase = PrepareAiPhotoRequestUseCase()
 
     /** 读取最近一次已验证备份状态的用例。 */
     val loadLatestBackupStatusUseCase =

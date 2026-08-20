@@ -1,6 +1,7 @@
 package com.vichua.where.feature.settings.preferences
 
 import com.vichua.where.core.common.EpochMillisecondsClock
+import com.vichua.where.core.model.AiAssistanceDisclosure
 import com.vichua.where.core.model.CloudSpeechDisclosure
 import com.vichua.where.core.model.LocalAppPreferences
 import com.vichua.where.core.model.UtcTimestamp
@@ -35,12 +36,39 @@ class LoadAppPreferencesUseCase(
 /**
  * 更新当前设备应用开关。
  *
- * 开启云端语音前必须先确认当前披露版本。
+ * 开启 AI 或云端语音前必须先确认当前披露版本。
  */
 class UpdateAppPreferencesUseCase(
     private val repository: AppPreferencesRepository,
     private val clock: EpochMillisecondsClock,
 ) {
+    /**
+     * 关闭 AI 辅助，不删除已保存的物品数据。
+     */
+    suspend fun disableAiAssistance(): LocalAppPreferences {
+        val current = repository.load()
+        val updated = current.copy(
+            aiAssistanceEnabled = false,
+            updatedAt = UtcTimestamp(clock.now()),
+        )
+        repository.save(updated)
+        return updated
+    }
+
+    /**
+     * 在用户确认当前披露后开启 AI 辅助。
+     */
+    suspend fun enableAiAssistanceAfterDisclosure(): LocalAppPreferences {
+        val current = repository.load()
+        val updated = current.copy(
+            aiAssistanceEnabled = true,
+            aiDisclosureVersionAccepted = AiAssistanceDisclosure.VERSION,
+            updatedAt = UtcTimestamp(clock.now()),
+        )
+        repository.save(updated)
+        return updated
+    }
+
     /**
      * 关闭云端语音识别，不删除已保存的物品数据。
      */

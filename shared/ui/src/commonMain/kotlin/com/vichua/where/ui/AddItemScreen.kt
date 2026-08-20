@@ -51,6 +51,7 @@ import com.vichua.where.feature.item.creation.CreateManualItemRequest
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.ItemCreationLocation
 import com.vichua.where.feature.item.draft.ItemDraftContent
+import com.vichua.where.core.platform.AiFieldSuggestions
 import com.vichua.where.feature.item.photo.ImportedItemPhoto
 
 /**
@@ -71,6 +72,7 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * @param onSubmit 确认后提交基础手动物品请求。
  * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
  * @param onSpeakRequested 用户主动说话后返回转写文字；取消或失败时为空。
+ * @param onAiRecognizeRequested 用户主动选择识别后返回建议；取消或失败时为空，不得自动保存。
  */
 @Composable
 fun AddItemScreen(
@@ -89,9 +91,12 @@ fun AddItemScreen(
     onSubmit: (CreateManualItemRequest) -> Unit,
     elderFriendlyMode: Boolean = false,
     onSpeakRequested: suspend () -> String? = { null },
+    onAiRecognizeRequested: suspend () -> AiFieldSuggestions? = { null },
 ) {
     val speakScope = rememberCoroutineScope()
     var speechSubmitting by remember { mutableStateOf(false) }
+    var aiSubmitting by remember { mutableStateOf(false) }
+    var pendingAiSuggestions by remember { mutableStateOf<AiFieldSuggestions?>(null) }
     var itemName by remember(draft) { mutableStateOf(draft?.name.orEmpty()) }
     var selectedLocationId by remember(draft) { mutableStateOf(draft?.locationId) }
     var locationDescription by remember(draft) {
@@ -119,6 +124,18 @@ fun AddItemScreen(
         locationDescription = locationDescription,
         note = note,
     )
+    val requestAiRecognize: () -> Unit = {
+        if (!aiSubmitting && !submitting && !speechSubmitting) {
+            speakScope.launch {
+                aiSubmitting = true
+                try {
+                    pendingAiSuggestions = onAiRecognizeRequested()
+                } finally {
+                    aiSubmitting = false
+                }
+            }
+        }
+    }
     val requestSpeech: () -> Unit = {
         if (!speechSubmitting && !submitting) {
             speakScope.launch {
@@ -226,6 +243,43 @@ fun AddItemScreen(
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .heightIn(min = 52.dp)
+                .clickable(
+                    enabled = !submitting && !speechSubmitting && !aiSubmitting,
+                    role = Role.Button,
+                    onClick = requestAiRecognize,
+                ),
+            color = WhereSurfaceColor,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, WhereOutlineColor),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    modifier = Modifier.size(20.dp),
+                    imageVector = WhereIcons.Image,
+                    contentDescription = "AI 识别这次选中的照片",
+                    tint = WherePrimaryColor,
+                )
+                Text(
+                    text = if (aiSubmitting) {
+                        "正在识别…"
+                    } else {
+                        "AI 识别这次选中的照片"
+                    },
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
 
         AddItemFieldLabel(
@@ -340,7 +394,7 @@ fun AddItemScreen(
                 .padding(top = 16.dp)
                 .heightIn(min = 64.dp)
                 .clickable(
-                    enabled = !submitting && !speechSubmitting,
+                    enabled = !submitting && !speechSubmitting && !aiSubmitting,
                     role = Role.Button,
                     onClick = requestSpeech,
                 ),
@@ -437,6 +491,62 @@ fun AddItemScreen(
                 locationDialogVisible = false
             },
         )
+    }
+
+    if (pendingAiSuggestions != null) {
+        val suggestions = pendingAiSuggestions
+        if (suggestions != null) {
+            AlertDialog(
+                onDismissRequest = {
+                    pendingAiSuggestions = null
+                },
+                title = { Text("确认 AI 建议") },
+                text = {
+                    Column {
+                        Text("这些内容还不会保存。采用后写入当前表单，仍可再改。")
+                        if (!suggestions.itemName.isNullOrBlank()) {
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp),
+                                text = "物品名称：${suggestions.itemName}",
+                            )
+                        }
+                        if (!suggestions.locationDescription.isNullOrBlank()) {
+                            Text(
+                                modifier = Modifier.padding(top = 6.dp),
+                                text = "位置说明：${suggestions.locationDescription}",
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val suggestedName = suggestions.itemName
+                            val suggestedLocationDescription = suggestions.locationDescription
+                            if (!suggestedName.isNullOrBlank()) {
+                                itemName = suggestedName
+                            }
+                            if (!suggestedLocationDescription.isNullOrBlank()) {
+                                locationDescription = suggestedLocationDescription
+                                moreInformationExpanded = true
+                            }
+                            pendingAiSuggestions = null
+                        },
+                    ) {
+                        Text("采用")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            pendingAiSuggestions = null
+                        },
+                    ) {
+                        Text("不用")
+                    }
+                },
+            )
+        }
     }
 
     if (leaveDialogVisible) {

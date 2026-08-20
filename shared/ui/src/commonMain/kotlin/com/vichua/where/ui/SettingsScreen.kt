@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.vichua.where.core.model.AiAssistanceDisclosure
 import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.CloudSpeechDisclosure
@@ -71,6 +72,7 @@ import com.vichua.where.core.model.RestoreSession
  * @param appPreferences 当前设备应用开关；加载失败时为空。
  * @param onElderFriendlyChange 切换适老展示。
  * @param onHighContrastChange 单独切换高对比度。
+ * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onCreateBackup 使用密码创建加密备份。
  * @param onExportHousehold 使用密码导出完整家庭数据。
@@ -102,6 +104,7 @@ fun SettingsScreen(
     onRetry: () -> Unit,
     onElderFriendlyChange: (Boolean) -> Unit,
     onHighContrastChange: (Boolean) -> Unit,
+    onAiAssistanceChange: (Boolean) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
     onExportHousehold: (String, String, ExportDestination) -> Unit,
@@ -113,6 +116,7 @@ fun SettingsScreen(
     onApplyRestore: (RestoreMode) -> Unit,
     onClearHousehold: () -> Unit,
 ) {
+    var aiAssistanceDisclosureVisible by remember { mutableStateOf(false) }
     var cloudSpeechDisclosureVisible by remember { mutableStateOf(false) }
     var createPasswordDialogVisible by remember { mutableStateOf(false) }
     var exportPasswordDialogVisible by remember { mutableStateOf(false) }
@@ -188,7 +192,19 @@ fun SettingsScreen(
         }
 
         SettingsSectionTitle("常用设置")
-        PendingSettingsRow("AI 辅助", "首次安装默认关闭，尚未接入")
+        SettingsSwitchRow(
+            title = "AI 辅助",
+            description = "仅在你主动选择识别后才会处理这次选中的照片或文字，不会后台自动上传",
+            checked = appPreferences?.canUseAiAssistance == true,
+            enabled = appPreferences != null,
+            onCheckedChange = { enabled ->
+                if (enabled) {
+                    aiAssistanceDisclosureVisible = true
+                } else {
+                    onAiAssistanceChange(false)
+                }
+            },
+        )
         SettingsSwitchRow(
             title = "云端语音识别",
             description = "仅在你主动说话后才会把这次录音交给系统识别，不会后台持续听",
@@ -277,6 +293,55 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(20.dp))
     }
 
+    if (aiAssistanceDisclosureVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!submitting) {
+                    aiAssistanceDisclosureVisible = false
+                }
+            },
+            title = { Text("开启 AI 辅助") },
+            text = {
+                Column {
+                    Text("数据类型：${AiAssistanceDisclosure.DATA_TYPE}")
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = "服务供应商：${AiAssistanceDisclosure.VENDOR}",
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = "处理用途：${AiAssistanceDisclosure.PURPOSE}",
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 10.dp),
+                        text = "不会后台自动上传。没有建议或你不采用时，本地手填、查找和备份不受影响。",
+                        color = WhereSecondaryTextColor,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !submitting,
+                    onClick = {
+                        aiAssistanceDisclosureVisible = false
+                        onAiAssistanceChange(true)
+                    },
+                ) {
+                    Text("确认开启")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !submitting,
+                    onClick = {
+                        aiAssistanceDisclosureVisible = false
+                    },
+                ) {
+                    Text("取消")
+                }
+            },
+        )
+    }
     if (cloudSpeechDisclosureVisible) {
         AlertDialog(
             onDismissRequest = {

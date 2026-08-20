@@ -50,6 +50,7 @@ import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportedItemPhoto
 import com.vichua.where.feature.item.photo.MoveItemPhotoUseCase
+import com.vichua.where.feature.item.photo.PrepareAiPhotoRequestUseCase
 import com.vichua.where.feature.item.photo.SetItemPhotoCoverUseCase
 import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
@@ -68,6 +69,8 @@ import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.LocalAppPreferences
+import com.vichua.where.core.platform.AiAssistanceGateway
+import com.vichua.where.core.platform.AiAssistanceOutcome
 import com.vichua.where.core.platform.SpeechRecognitionGateway
 import com.vichua.where.core.platform.SpeechRecognitionOutcome
 import com.vichua.where.core.model.ConflictResolution
@@ -135,6 +138,8 @@ import kotlinx.coroutines.launch
  * @param updateAppPreferencesUseCase 更新当前设备应用开关的用例。
  * @param prepareVoiceSearchQueryUseCase 把语音查找转写收成本地关键词。
  * @param speechRecognitionGateway 可选语音识别入口。
+ * @param prepareAiPhotoRequestUseCase 把用户选出的照片收成一次 AI 请求。
+ * @param aiAssistanceGateway 可选 AI 辅助入口。
  * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
  * @param createEncryptedBackupUseCase 创建加密备份的用例。
  * @param exportHouseholdDataUseCase 导出完整家庭数据的用例。
@@ -186,6 +191,8 @@ fun WhereApp(
     updateAppPreferencesUseCase: UpdateAppPreferencesUseCase,
     prepareVoiceSearchQueryUseCase: PrepareVoiceSearchQueryUseCase,
     speechRecognitionGateway: SpeechRecognitionGateway,
+    prepareAiPhotoRequestUseCase: PrepareAiPhotoRequestUseCase,
+    aiAssistanceGateway: AiAssistanceGateway,
     loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
     createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
     exportHouseholdDataUseCase: ExportHouseholdDataUseCase,
@@ -715,6 +722,33 @@ fun WhereApp(
                         }
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    onAiRecognizeRequested = suspend {
+                        val preferences = appPreferences ?: loadAppPreferencesUseCase()
+                        appPreferences = preferences
+                        if (!preferences.canUseAiAssistance) {
+                            itemCreationError = "未开启 AI 辅助。可在设置中开启，或改用手填。"
+                            null
+                        } else {
+                            val selectedPhotos = prepareAiPhotoRequestUseCase(pendingItemPhotos)
+                            if (selectedPhotos.isEmpty()) {
+                                itemCreationError = "请先选择要识别的照片。"
+                                null
+                            } else if (!aiAssistanceGateway.isAvailable()) {
+                                itemCreationError = "当前无法使用 AI 辅助，请先手动填写。"
+                                null
+                            } else {
+                                val outcome = aiAssistanceGateway.analyzePhotos(selectedPhotos)
+                                when (outcome) {
+                                    is AiAssistanceOutcome.Success -> outcome.suggestions
+                                    AiAssistanceOutcome.Cancelled -> null
+                                    else -> {
+                                        itemCreationError = aiAssistanceMessage(outcome)
+                                        null
+                                    }
+                                }
+                            }
+                        }
+                    },
                     onSpeakRequested = suspend {
                         val preferences = appPreferences ?: loadAppPreferencesUseCase()
                         appPreferences = preferences
@@ -848,6 +882,25 @@ fun WhereApp(
                         accessibilityPreferences = null
                         appPreferences = null
                         settingsLoadAttempt += 1
+                    },
+                    onAiAssistanceChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    appPreferences = if (enabled) {
+                                        updateAppPreferencesUseCase.enableAiAssistanceAfterDisclosure()
+                                    } else {
+                                        updateAppPreferencesUseCase.disableAiAssistance()
+                                    }
+                                } catch (_: Exception) {
+                                    settingsError = "保存 AI 设置失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
                     },
                     onElderFriendlyChange = { enabled ->
                         if (!settingsSubmitting) {
@@ -1445,6 +1498,21 @@ private fun voiceRecognitionMessage(
     }
     SpeechRecognitionOutcome.NoMatch ->
         "没有听清，请再说一次或改用键盘。"
+}
+
+/**
+ * 把 AI 识别失败收成可展示的中文原因，不包含照片路径或建议原文。
+ */
+private fun aiAssistanceMessage(outcome: AiAssistanceOutcome): String = when (outcome) {
+    is AiAssistanceOutcome.Success,
+    AiAssistanceOutcome.Cancelled,
+    -> "请先手动填写。"
+    AiAssistanceOutcome.Unavailable ->
+        "当前无法使用 AI 辅助，请先手动填写。"
+    AiAssistanceOutcome.NoSelectedContent ->
+        "请先选择要识别的照片。"
+    AiAssistanceOutcome.Failed ->
+        "识别失败，请先手动填写。"
 }
 
 /**

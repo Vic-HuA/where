@@ -1,5 +1,7 @@
 package com.vichua.where.core.platform
 
+import com.vichua.where.core.model.PhotoRole
+
 /**
  * 本地文字朗读入口。
  *
@@ -186,4 +188,77 @@ interface SpeechRecognitionGateway {
      * 立即停止当前识别，不保存录音。
      */
     fun cancel()
+}
+
+/**
+ * 用户为当前任务主动选出、准备交给 AI 的一张照片。
+ *
+ * @property role 用户选择的照片用途。
+ * @property sizeBytes 原图大小，只用于数量和上限判断，不写入日志。
+ */
+data class AiPhotoInput(
+    val role: PhotoRole,
+    val sizeBytes: Long,
+) {
+    init {
+        require(sizeBytes > 0L) { "AI photo size must be greater than zero." }
+    }
+}
+
+/**
+ * AI 给出的可编辑建议，确认前不得写入物品。
+ *
+ * @property itemName 建议的物品名称。
+ * @property locationDescription 建议的位置说明。
+ */
+data class AiFieldSuggestions(
+    val itemName: String?,
+    val locationDescription: String?,
+) {
+    init {
+        require(!itemName.isNullOrBlank() || !locationDescription.isNullOrBlank()) {
+            "AI suggestions must include at least one editable field."
+        }
+    }
+}
+
+/**
+ * 一次 AI 辅助请求的结果。
+ *
+ * 不得把照片路径、物品名称或供应商完整响应写入诊断日志。
+ */
+sealed class AiAssistanceOutcome {
+    /** 返回可编辑建议，仍须用户确认。 */
+    data class Success(val suggestions: AiFieldSuggestions) : AiAssistanceOutcome()
+
+    /** 用户取消本次识别。 */
+    data object Cancelled : AiAssistanceOutcome()
+
+    /** 当前没有可用的 AI 供应商。 */
+    data object Unavailable : AiAssistanceOutcome()
+
+    /** 这次请求没有用户主动选出的照片或文字。 */
+    data object NoSelectedContent : AiAssistanceOutcome()
+
+    /** 识别失败，可继续手填。 */
+    data object Failed : AiAssistanceOutcome()
+}
+
+/**
+ * 可选 AI 辅助入口。
+ *
+ * 只有用户主动选择识别后才处理这次选中的照片或文字；开关关闭或未配置供应商时必须降级。
+ */
+interface AiAssistanceGateway {
+    /**
+     * 当前是否具备可发起请求的供应商。
+     */
+    fun isAvailable(): Boolean
+
+    /**
+     * 分析用户为当前任务主动选出的照片。
+     *
+     * 调用方必须先截到最多 6 张。未配置供应商时不得读取或上传原图。
+     */
+    suspend fun analyzePhotos(photos: List<AiPhotoInput>): AiAssistanceOutcome
 }
