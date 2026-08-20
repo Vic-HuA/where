@@ -8,12 +8,14 @@ import com.vichua.where.core.model.ChangeEntityType
 import com.vichua.where.core.model.ChangeOperation
 import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.DomainValidators
+import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.Item
 import com.vichua.where.core.model.ItemAlias
 import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.PhotoAsset
+import com.vichua.where.core.model.UtcTimestamp
 
 /**
  * 编排物品正式写入及其关联索引、历史和变更记录。
@@ -302,6 +304,202 @@ class ItemWriteStore(
                 }
                 validatePhotoChangeRecord(updatedPhoto, changeRecord, operation)
             }
+            changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
+        }
+    }
+
+    /**
+     * 原子软删除物品、本次级联的别名和照片，并移除全文索引。
+     *
+     * 位置历史不改写，因为物品离开正常界面后历史不会再被查询；文件在撤销窗口结束前不得物理删除。
+     */
+    suspend fun deleteItem(
+        deletedItem: Item,
+        deletedAliases: List<ItemAlias>,
+        deletedPhotos: List<PhotoAsset>,
+        changeRecords: List<ChangeRecord>,
+    ) {
+        require(deletedItem.deletedAt != null) { "Deleted item must be soft-deleted." }
+        require(changeRecords.isNotEmpty()) { "Item deletion must include change records." }
+        validateItemChangeRecord(deletedItem, changeRecords.first(), ChangeOperation.DELETE)
+        require(
+            changeRecords.first().entityType == ChangeEntityType.ITEM &&
+                changeRecords.first().entityId == deletedItem.id.value,
+        ) {
+            "First deletion change record must belong to the item."
+        }
+        DomainValidators.validateItemAliases(deletedItem.id, deletedAliases)
+        DomainValidators.validatePhotoCollection(deletedItem, deletedPhotos)
+
+        transactionRunner.write {
+            val currentEntity = itemDao().findActiveById(deletedItem.id.value)
+            require(currentEntity != null) { "Deleted item does not exist." }
+            val currentItem = currentEntity.toDomain()
+            require(deletedItem.version == currentItem.version.next()) {
+                "Deleted item version must increment the stored version by one."
+            }
+            require(deletedItem.currentLocationId == currentItem.currentLocationId) {
+                "Item deletion must not change the current location."
+            }
+            require(deletedItem.deletedAt != null) { "Deleted item must have a deletion timestamp." }
+
+            val storedAliases = itemAliasDao()
+                .findAllByItem(deletedItem.id.value)
+                .map { entity -> entity.toDomain() }
+            val storedPhotos = photoAssetDao()
+                .findAllByItem(deletedItem.id.value)
+                .map { entity -> entity.toDomain() }
+            require(storedAliases.map { alias -> alias.id }.toSet() == deletedAliases.map { alias -> alias.id }.toSet()) {
+                "Item deletion must include every stored alias."
+            }
+            require(storedPhotos.map { photo -> photo.id }.toSet() == deletedPhotos.map { photo -> photo.id }.toSet()) {
+                "Item deletion must include every stored photo."
+            }
+
+            val batchDeletedAt = deletedItem.deletedAt
+            storedAliases.forEach { storedAlias ->
+                val updatedAlias = deletedAliases.single { alias -> alias.id == storedAlias.id }
+                if (storedAlias.deletedAt == null) {
+                    require(updatedAlias.deletedAt == batchDeletedAt) {
+                        "Newly deleted alias must share the item deletion timestamp."
+                    }
+                    require(itemAliasDao().update(updatedAlias.toEntity()) == 1) {
+                        "Alias deletion must affect exactly one row."
+                    }
+                } else {
+                    require(updatedAlias.deletedAt == storedAlias.deletedAt) {
+                        "Previously deleted alias must stay unchanged."
+                    }
+                }
+            }
+            storedPhotos.forEach { storedPhoto ->
+                val updatedPhoto = deletedPhotos.single { photo -> photo.id == storedPhoto.id }
+                if (storedPhoto.deletedAt == null) {
+                    require(updatedPhoto.deletedAt == batchDeletedAt) {
+                        "Newly deleted photo must share the item deletion timestamp."
+                    }
+                    require(updatedPhoto.version == storedPhoto.version.next()) {
+                        "Deleted photo version must increment the stored version by one."
+                    }
+                    require(photoAssetDao().update(updatedPhoto.toEntity()) == 1) {
+                        "Photo deletion must affect exactly one row."
+                    }
+                } else {
+                    require(updatedPhoto.deletedAt == storedPhoto.deletedAt) {
+                        "Previously deleted photo must stay unchanged."
+                    }
+                    require(updatedPhoto.version == storedPhoto.version) {
+                        "Previously deleted photo version must stay the same."
+                    }
+                }
+            }
+
+            require(itemDao().update(deletedItem.toEntity()) == 1) {
+                "Item deletion must affect exactly one row."
+            }
+            itemSearchDao().deleteByItemId(deletedItem.id.value)
+            changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
+        }
+    }
+
+    /**
+     * 原子撤销本次级联软删除，并重建全文索引。
+     *
+     * 只恢复与删除批次 `deletedAt` 相同的别名和照片，避免把更早删除的记录带回来。
+     */
+    suspend fun restoreItem(
+        restoredItem: Item,
+        restoredAliases: List<ItemAlias>,
+        restoredPhotos: List<PhotoAsset>,
+        changeRecords: List<ChangeRecord>,
+        searchDocument: ItemSearchDocument,
+        expectedDeletedAt: UtcTimestamp,
+        expectedDeletedVersion: EntityVersion,
+    ) {
+        require(restoredItem.deletedAt == null) { "Restored item must be active." }
+        require(searchDocument.itemId == restoredItem.id) {
+            "Search document must belong to the restored item."
+        }
+        require(searchDocument.name == restoredItem.name) {
+            "Search document name must match the restored item."
+        }
+        require(changeRecords.isNotEmpty()) { "Item restore must include change records." }
+        validateItemChangeRecord(restoredItem, changeRecords.first(), ChangeOperation.RESTORE)
+
+        transactionRunner.write {
+            val currentEntity = itemDao().findById(restoredItem.id.value)
+            require(currentEntity != null) { "Restored item does not exist." }
+            val currentItem = currentEntity.toDomain()
+            require(currentItem.deletedAt == expectedDeletedAt) {
+                "Item restore must target the current deletion batch."
+            }
+            require(currentItem.version == expectedDeletedVersion) {
+                "Item restore must target the unmodified deleted version."
+            }
+            require(restoredItem.version == currentItem.version.next()) {
+                "Restored item version must increment the stored version by one."
+            }
+            require(restoredItem.currentLocationId == currentItem.currentLocationId) {
+                "Item restore must not change the current location."
+            }
+
+            val storedAliases = itemAliasDao()
+                .findAllByItem(restoredItem.id.value)
+                .map { entity -> entity.toDomain() }
+            val storedPhotos = photoAssetDao()
+                .findAllByItem(restoredItem.id.value)
+                .map { entity -> entity.toDomain() }
+            require(storedAliases.map { alias -> alias.id }.toSet() == restoredAliases.map { alias -> alias.id }.toSet()) {
+                "Item restore must include every stored alias."
+            }
+            require(storedPhotos.map { photo -> photo.id }.toSet() == restoredPhotos.map { photo -> photo.id }.toSet()) {
+                "Item restore must include every stored photo."
+            }
+            DomainValidators.validateItemAliases(restoredItem.id, restoredAliases)
+            DomainValidators.validatePhotoCollection(restoredItem, restoredPhotos)
+
+            storedAliases.forEach { storedAlias ->
+                val updatedAlias = restoredAliases.single { alias -> alias.id == storedAlias.id }
+                if (storedAlias.deletedAt == expectedDeletedAt) {
+                    require(updatedAlias.deletedAt == null) {
+                        "Batch-deleted alias must be restored."
+                    }
+                    require(itemAliasDao().update(updatedAlias.toEntity()) == 1) {
+                        "Alias restore must affect exactly one row."
+                    }
+                } else {
+                    require(updatedAlias.deletedAt == storedAlias.deletedAt) {
+                        "Older alias deletion must stay unchanged."
+                    }
+                }
+            }
+            storedPhotos.forEach { storedPhoto ->
+                val updatedPhoto = restoredPhotos.single { photo -> photo.id == storedPhoto.id }
+                if (storedPhoto.deletedAt == expectedDeletedAt) {
+                    require(updatedPhoto.deletedAt == null) {
+                        "Batch-deleted photo must be restored."
+                    }
+                    require(updatedPhoto.version == storedPhoto.version.next()) {
+                        "Restored photo version must increment the stored version by one."
+                    }
+                    require(photoAssetDao().update(updatedPhoto.toEntity()) == 1) {
+                        "Photo restore must affect exactly one row."
+                    }
+                } else {
+                    require(updatedPhoto.deletedAt == storedPhoto.deletedAt) {
+                        "Older photo deletion must stay unchanged."
+                    }
+                    require(updatedPhoto.version == storedPhoto.version) {
+                        "Unchanged photo version must stay the same."
+                    }
+                }
+            }
+
+            require(itemDao().update(restoredItem.toEntity()) == 1) {
+                "Item restore must affect exactly one row."
+            }
+            itemSearchDao().deleteByItemId(restoredItem.id.value)
+            itemSearchDao().insert(searchDocument.toEntity())
             changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
         }
     }

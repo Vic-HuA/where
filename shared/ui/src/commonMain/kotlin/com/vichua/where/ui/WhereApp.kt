@@ -22,12 +22,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.platform.PhotoPickerGateway
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.deletion.DeleteItemUseCase
+import com.vichua.where.feature.item.deletion.ItemDeletionResult
+import com.vichua.where.feature.item.deletion.RestoreDeletedItemUseCase
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
 import com.vichua.where.feature.item.profile.UpdateItemProfileRequest
@@ -58,6 +62,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
 import com.vichua.where.feature.search.text.SearchItemsUseCase
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -83,6 +88,8 @@ import kotlinx.coroutines.launch
  * @param updateItemPhotoRoleUseCase 修改照片用途的用例。
  * @param moveItemPhotoUseCase 调整照片画廊顺序的用例。
  * @param deleteItemPhotoUseCase 软删除物品照片的用例。
+ * @param deleteItemUseCase 软删除物品及其本次级联记录的用例。
+ * @param restoreDeletedItemUseCase 撤销当前会话内物品删除批次的用例。
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
  * @param loadLocationTreeUseCase 加载位置管理树的用例。
@@ -114,6 +121,8 @@ fun WhereApp(
     updateItemPhotoRoleUseCase: UpdateItemPhotoRoleUseCase,
     moveItemPhotoUseCase: MoveItemPhotoUseCase,
     deleteItemPhotoUseCase: DeleteItemPhotoUseCase,
+    deleteItemUseCase: DeleteItemUseCase,
+    restoreDeletedItemUseCase: RestoreDeletedItemUseCase,
     loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
     moveItemUseCase: MoveItemUseCase,
     loadLocationTreeUseCase: LoadLocationTreeUseCase,
@@ -151,6 +160,12 @@ fun WhereApp(
     var itemProfileError by remember { mutableStateOf<String?>(null) }
     var itemPhotoSubmitting by remember { mutableStateOf(false) }
     var itemPhotoError by remember { mutableStateOf<String?>(null) }
+    var itemDeletionSubmitting by remember { mutableStateOf(false) }
+    var itemDeletionError by remember { mutableStateOf<String?>(null) }
+    var pendingItemDeletionUndo by remember { mutableStateOf<ItemDeletionResult?>(null) }
+    var itemDeletionUndoRemainingSeconds by remember { mutableIntStateOf(0) }
+    var itemDeletionUndoGeneration by remember { mutableIntStateOf(0) }
+    var itemDeletionUndoError by remember { mutableStateOf<String?>(null) }
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
@@ -275,6 +290,27 @@ fun WhereApp(
         }
     }
 
+    LaunchedEffect(itemDeletionUndoGeneration) {
+        if (itemDeletionUndoGeneration == 0 || pendingItemDeletionUndo == null) {
+            return@LaunchedEffect
+        }
+        val startedGeneration = itemDeletionUndoGeneration
+        var remainingSeconds = MvpLimits.DELETE_UNDO_WINDOW_SECONDS
+        itemDeletionUndoRemainingSeconds = remainingSeconds
+        while (remainingSeconds > 0) {
+            delay(UNDO_COUNTDOWN_STEP_MILLISECONDS)
+            if (itemDeletionUndoGeneration != startedGeneration || pendingItemDeletionUndo == null) {
+                return@LaunchedEffect
+            }
+            remainingSeconds -= 1
+            if (remainingSeconds == 0) {
+                pendingItemDeletionUndo = null
+                itemDeletionUndoError = null
+            }
+            itemDeletionUndoRemainingSeconds = remainingSeconds
+        }
+    }
+
     LaunchedEffect(destination, homeLoadAttempt) {
         if (destination == AppDestination.HOME) {
             homeLoading = true
@@ -330,6 +366,36 @@ fun WhereApp(
                     resolveMediaPath = resolveMediaPath,
                     loading = homeLoading,
                     errorMessage = homeError,
+                    deletionUndo = pendingItemDeletionUndo?.let { undo ->
+                        HomeDeletionUndo(
+                            itemName = undo.itemName,
+                            remainingSeconds = itemDeletionUndoRemainingSeconds,
+                        )
+                    },
+                    deletionUndoSubmitting = itemDeletionSubmitting,
+                    deletionUndoErrorMessage = itemDeletionUndoError,
+                    onUndoDeletion = {
+                        val undo = pendingItemDeletionUndo
+                        if (undo != null && !itemDeletionSubmitting) {
+                            coroutineScope.launch {
+                                itemDeletionSubmitting = true
+                                itemDeletionUndoError = null
+                                try {
+                                    restoreDeletedItemUseCase(undo)
+                                    pendingItemDeletionUndo = null
+                                    itemDeletionUndoRemainingSeconds = 0
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    pendingItemDeletionUndo = null
+                                    itemDeletionUndoError = "该物品已无法撤销。"
+                                } catch (_: Exception) {
+                                    itemDeletionUndoError = "撤销失败，请稍后重试。"
+                                } finally {
+                                    itemDeletionSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onRetry = {
                         homeLoadAttempt += 1
                     },
@@ -670,6 +736,35 @@ fun WhereApp(
                             deleteItemPhotoUseCase(it, photoId)
                         }
                     },
+                    deletionSubmitting = itemDeletionSubmitting,
+                    deletionErrorMessage = itemDeletionError,
+                    onDeleteItem = {
+                        val itemId = selectedItemId
+                        if (itemId != null && !itemDeletionSubmitting) {
+                            coroutineScope.launch {
+                                itemDeletionSubmitting = true
+                                itemDeletionError = null
+                                try {
+                                    val deletion = deleteItemUseCase(itemId)
+                                    pendingItemDeletionUndo = deletion
+                                    itemDeletionUndoRemainingSeconds =
+                                        MvpLimits.DELETE_UNDO_WINDOW_SECONDS
+                                    itemDeletionUndoGeneration += 1
+                                    itemDeletionUndoError = null
+                                    itemDetail = null
+                                    selectedItemId = null
+                                    homeLoadAttempt += 1
+                                    destination = AppDestination.HOME
+                                } catch (_: IllegalArgumentException) {
+                                    itemDeletionError = "该物品当前无法删除。"
+                                } catch (_: Exception) {
+                                    itemDeletionError = "删除失败，请稍后重试。"
+                                } finally {
+                                    itemDeletionSubmitting = false
+                                }
+                            }
+                        }
+                    },
                 )
                 AppDestination.MOVE_ITEM -> MoveItemScreen(
                     context = moveItemContext,
@@ -806,6 +901,8 @@ private suspend fun discardPendingPhotos(
     }
     discardImportedPhotos(storageKeys)
 }
+
+private const val UNDO_COUNTDOWN_STEP_MILLISECONDS = 1_000L
 
 /**
  * 应用当前顶层页面状态。

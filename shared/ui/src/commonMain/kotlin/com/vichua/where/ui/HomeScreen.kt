@@ -32,6 +32,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +59,10 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param resolveMediaPath 把封面缩略图标识解析为本地绝对路径。
  * @param loading 是否正在读取本地数据。
  * @param errorMessage 可展示的中文读取错误。
+ * @param deletionUndo 当前会话内尚未过期的删除撤销条；没有待撤销删除时为空。
+ * @param deletionUndoSubmitting 是否正在执行撤销。
+ * @param deletionUndoErrorMessage 可展示的中文撤销错误。
+ * @param onUndoDeletion 撤销最近一次物品删除。
  * @param onRetry 重试加载首页数据。
  * @param onTextSearch 提交首页键盘查询。
  * @param onVoiceSearchRequested 长按语音区域后请求语音查找。
@@ -72,6 +77,10 @@ fun HomeScreen(
     resolveMediaPath: (String) -> String?,
     loading: Boolean,
     errorMessage: String?,
+    deletionUndo: HomeDeletionUndo? = null,
+    deletionUndoSubmitting: Boolean = false,
+    deletionUndoErrorMessage: String? = null,
+    onUndoDeletion: () -> Unit = {},
     onRetry: () -> Unit,
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
@@ -107,6 +116,43 @@ fun HomeScreen(
                 color = WherePrimaryTextColor,
                 style = MaterialTheme.typography.headlineMedium,
             )
+
+            if (deletionUndo != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp),
+                    color = WhereSelectedContainerColor,
+                    shape = RoundedCornerShape(13.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            modifier = Modifier.weight(1f),
+                            text = "已删除「${deletionUndo.itemName}」 ${deletionUndo.remainingSeconds}s",
+                            color = WherePrimaryTextColor,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        TextButton(
+                            enabled = !deletionUndoSubmitting,
+                            onClick = onUndoDeletion,
+                        ) {
+                            Text("撤销")
+                        }
+                    }
+                }
+            }
+            if (deletionUndoErrorMessage != null) {
+                Text(
+                    modifier = Modifier.padding(top = 8.dp),
+                    text = deletionUndoErrorMessage,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
 
             HomeSearchSurface(
                 modifier = Modifier.padding(top = 18.dp),
@@ -636,5 +682,16 @@ private fun BottomNavigationItem(
         }
     }
 }
+
+/**
+ * 首页当前会话内的删除撤销条内容。
+ *
+ * @property itemName 刚删除的物品名称。
+ * @property remainingSeconds 撤销窗口剩余秒数。
+ */
+data class HomeDeletionUndo(
+    val itemName: String,
+    val remainingSeconds: Int,
+)
 
 private const val MAX_VISIBLE_CHIPS = 3

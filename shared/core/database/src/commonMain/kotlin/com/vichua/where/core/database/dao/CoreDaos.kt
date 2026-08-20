@@ -282,6 +282,16 @@ interface ItemAliasDao {
     )
     suspend fun findActiveByItem(itemId: String): List<ItemAliasEntity>
 
+    /** 查询物品全部别名，包括软删除记录，用于级联删除后的短时撤销。 */
+    @Query(
+        """
+        SELECT * FROM item_aliases
+        WHERE item_id = :itemId
+        ORDER BY normalized_alias ASC, id ASC
+        """,
+    )
+    suspend fun findAllByItem(itemId: String): List<ItemAliasEntity>
+
     /** 更新别名软删除状态。 */
     @Update
     suspend fun update(entity: ItemAliasEntity): Int

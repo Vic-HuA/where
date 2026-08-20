@@ -10,6 +10,7 @@ import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.query.ItemDetailStore
 import com.vichua.where.core.database.transaction.HouseholdInitializationStore
+import com.vichua.where.core.database.transaction.ItemDeletionStore
 import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
@@ -19,6 +20,8 @@ import com.vichua.where.core.database.transaction.ItemProfileStore
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
+import com.vichua.where.feature.item.deletion.DeleteItemUseCase
+import com.vichua.where.feature.item.deletion.RestoreDeletedItemUseCase
 import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
 import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
@@ -72,6 +75,8 @@ class AndroidAppContainer(
         RoomItemProfileRepository(ItemProfileStore(database))
     private val itemPhotoRepository =
         RoomItemPhotoRepository(ItemPhotoStore(database))
+    private val itemDeletionRepository =
+        RoomItemDeletionRepository(ItemDeletionStore(database))
     private val locationManagementRepository =
         RoomLocationManagementRepository(LocationManagementStore(database))
     private val itemDraftRepository = RoomItemDraftRepository(
@@ -188,6 +193,20 @@ class AndroidAppContainer(
     /** 软删除物品照片的用例。 */
     val deleteItemPhotoUseCase = DeleteItemPhotoUseCase(
         repository = itemPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 软删除物品及其本次级联记录的用例。 */
+    val deleteItemUseCase = DeleteItemUseCase(
+        repository = itemDeletionRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 撤销当前会话内物品删除批次的用例。 */
+    val restoreDeletedItemUseCase = RestoreDeletedItemUseCase(
+        repository = itemDeletionRepository,
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
     )

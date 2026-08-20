@@ -73,6 +73,9 @@ import com.vichua.where.feature.item.detail.ItemDetailPhoto
  * @param onSetPhotoRole 修改指定照片用途。
  * @param onMovePhoto 与相邻照片交换画廊顺序。
  * @param onDeletePhoto 软删除指定照片。
+ * @param deletionSubmitting 是否正在删除物品。
+ * @param deletionErrorMessage 可展示的中文删除错误。
+ * @param onDeleteItem 二次确认后删除当前物品。
  */
 @Composable
 fun ItemDetailScreen(
@@ -96,12 +99,16 @@ fun ItemDetailScreen(
     onSetPhotoRole: (PhotoAssetId, PhotoRole) -> Unit,
     onMovePhoto: (PhotoAssetId, Int) -> Unit,
     onDeletePhoto: (PhotoAssetId) -> Unit,
+    deletionSubmitting: Boolean,
+    deletionErrorMessage: String?,
+    onDeleteItem: () -> Unit,
 ) {
     var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
     var lastPhotoCount by remember(detail?.itemId) { mutableIntStateOf(detail?.photos?.size ?: 0) }
     var addRoleDialogVisible by remember { mutableStateOf(false) }
     var managedPhotoId by remember { mutableStateOf<PhotoAssetId?>(null) }
     var deletePhotoId by remember { mutableStateOf<PhotoAssetId?>(null) }
+    var deleteItemConfirmVisible by remember { mutableStateOf(false) }
     var fullscreenVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(detail?.photos?.size) {
@@ -419,6 +426,31 @@ fun ItemDetailScreen(
                 )
             }
         }
+
+        if (deletionErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 10.dp),
+                text = deletionErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .height(52.dp),
+            enabled = !deletionSubmitting && !photoSubmitting && !editorSubmitting,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = WhereSurfaceColor,
+                contentColor = MaterialTheme.colorScheme.error,
+            ),
+            onClick = {
+                deleteItemConfirmVisible = true
+            },
+        ) {
+            Text("删除物品")
+        }
     }
 
     if (editorVisible && detail != null) {
@@ -503,6 +535,42 @@ fun ItemDetailScreen(
                     enabled = !photoSubmitting,
                     onClick = {
                         deletePhotoId = null
+                    },
+                ) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+    if (deleteItemConfirmVisible && detail != null) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!deletionSubmitting) {
+                    deleteItemConfirmVisible = false
+                }
+            },
+            title = { Text("删除物品") },
+            text = {
+                Text(
+                    "删除后「${detail.name}」将从首页和搜索中消失。当前会话内可在 ${MvpLimits.DELETE_UNDO_WINDOW_SECONDS} 秒内撤销。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletionSubmitting,
+                    onClick = {
+                        deleteItemConfirmVisible = false
+                        onDeleteItem()
+                    },
+                ) {
+                    Text("删除")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deletionSubmitting,
+                    onClick = {
+                        deleteItemConfirmVisible = false
                     },
                 ) {
                     Text("取消")

@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
                 updateItemPhotoRoleUseCase = container.updateItemPhotoRoleUseCase,
                 moveItemPhotoUseCase = container.moveItemPhotoUseCase,
                 deleteItemPhotoUseCase = container.deleteItemPhotoUseCase,
+                deleteItemUseCase = container.deleteItemUseCase,
+                restoreDeletedItemUseCase = container.restoreDeletedItemUseCase,
                 loadMoveItemContextUseCase = container.loadMoveItemContextUseCase,
                 moveItemUseCase = container.moveItemUseCase,
                 loadLocationTreeUseCase = container.loadLocationTreeUseCase,
