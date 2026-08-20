@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -58,8 +59,15 @@ import com.vichua.where.feature.item.detail.ItemDetailPhoto
  * @param loading 是否正在读取详情。
  * @param errorMessage 可展示的中文读取错误。
  * @param onBack 返回上一页。
- * @param onReadLocation 朗读当前位置。
+ * @param onReadLocation 朗读当前位置；朗读成功后再听一遍也走同一入口。
  * @param onUpdateLocation 打开更新位置页。
+ * @param speechSubmitting 是否正在朗读。
+ * @param speechErrorMessage 可展示的中文朗读错误。
+ * @param canRepeatSpeech 用户主动朗读成功后，是否展示再听一遍。
+ * @param formattedUpdatedAt 当前位置的本地更新时间文本。
+ * @param shareSubmitting 是否正在打开系统分享。
+ * @param shareErrorMessage 可展示的中文分享错误。
+ * @param onShareLocation 预览确认后分享名称、位置、可选更新时间和选定照片。
  * @param editorVisible 是否展示档案编辑对话框。
  * @param editorSubmitting 是否正在保存档案。
  * @param editorErrorMessage 可展示的中文保存错误。
@@ -86,6 +94,13 @@ fun ItemDetailScreen(
     onBack: () -> Unit,
     onReadLocation: () -> Unit,
     onUpdateLocation: () -> Unit,
+    speechSubmitting: Boolean,
+    speechErrorMessage: String?,
+    canRepeatSpeech: Boolean,
+    formattedUpdatedAt: String,
+    shareSubmitting: Boolean,
+    shareErrorMessage: String?,
+    onShareLocation: (Boolean, List<PhotoAssetId>) -> Unit,
     editorVisible: Boolean,
     editorSubmitting: Boolean,
     editorErrorMessage: String?,
@@ -109,6 +124,7 @@ fun ItemDetailScreen(
     var managedPhotoId by remember { mutableStateOf<PhotoAssetId?>(null) }
     var deletePhotoId by remember { mutableStateOf<PhotoAssetId?>(null) }
     var deleteItemConfirmVisible by remember { mutableStateOf(false) }
+    var shareDialogVisible by remember { mutableStateOf(false) }
     var fullscreenVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(detail?.photos?.size) {
@@ -395,6 +411,7 @@ fun ItemDetailScreen(
                     containerColor = WhereSurfaceColor,
                     contentColor = WherePrimaryTextColor,
                 ),
+                enabled = !speechSubmitting && !shareSubmitting && !deletionSubmitting,
                 onClick = onReadLocation,
             ) {
                 Icon(
@@ -425,6 +442,61 @@ fun ItemDetailScreen(
                     text = "更新位置",
                 )
             }
+        }
+        if (canRepeatSpeech) {
+            TextButton(
+                enabled = !speechSubmitting,
+                onClick = onReadLocation,
+            ) {
+                Icon(
+                    modifier = Modifier.size(18.dp),
+                    imageVector = WhereIcons.Repeat,
+                    contentDescription = null,
+                )
+                Text(
+                    modifier = Modifier.padding(start = 4.dp),
+                    text = "再听一遍",
+                )
+            }
+        }
+        if (speechErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = speechErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp)
+                .height(52.dp),
+            enabled = !shareSubmitting && !speechSubmitting && !deletionSubmitting,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = WhereSurfaceColor,
+                contentColor = WherePrimaryTextColor,
+            ),
+            onClick = {
+                shareDialogVisible = true
+            },
+        ) {
+            Icon(
+                imageVector = WhereIcons.Share,
+                contentDescription = null,
+            )
+            Text(
+                modifier = Modifier.padding(start = 6.dp),
+                text = "分享位置",
+            )
+        }
+        if (shareErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = shareErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         if (deletionErrorMessage != null) {
@@ -542,6 +614,22 @@ fun ItemDetailScreen(
             },
         )
     }
+    if (shareDialogVisible && detail != null) {
+        ShareLocationDialog(
+            detail = detail,
+            formattedUpdatedAt = formattedUpdatedAt,
+            submitting = shareSubmitting,
+            onDismiss = {
+                if (!shareSubmitting) {
+                    shareDialogVisible = false
+                }
+            },
+            onConfirm = { includeUpdatedAt, selectedPhotoIds ->
+                shareDialogVisible = false
+                onShareLocation(includeUpdatedAt, selectedPhotoIds)
+            },
+        )
+    }
     if (deleteItemConfirmVisible && detail != null) {
         AlertDialog(
             onDismissRequest = {
@@ -589,6 +677,169 @@ fun ItemDetailScreen(
             onDismiss = {
                 fullscreenVisible = false
             },
+        )
+    }
+}
+
+/**
+ * 分享前预览文本，并让用户选择是否带上更新时间和选定照片。
+ *
+ * 默认只分享名称和位置，避免误把照片或完整家庭数据送出应用。
+ */
+@Composable
+private fun ShareLocationDialog(
+    detail: ItemDetail,
+    formattedUpdatedAt: String,
+    submitting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Boolean, List<PhotoAssetId>) -> Unit,
+) {
+    var includeUpdatedAt by remember { mutableStateOf(true) }
+    var includePhotos by remember { mutableStateOf(false) }
+    var selectedPhotoIds by remember {
+        mutableStateOf(
+            detail.photos.firstOrNull { photo -> photo.isCover }?.photoId
+                ?.let { photoId -> setOf(photoId) }
+                ?: emptySet(),
+        )
+    }
+    val previewText = buildString {
+        append(detail.name)
+        append('\n')
+        append(detail.locationPath)
+        val locationDescription = detail.locationDescription
+        if (!locationDescription.isNullOrBlank()) {
+            append('\n')
+            append(locationDescription)
+        }
+        if (includeUpdatedAt && formattedUpdatedAt.isNotBlank()) {
+            append('\n')
+            append(formattedUpdatedAt)
+        }
+    }
+    val canSharePhotos = includePhotos && selectedPhotoIds.isNotEmpty()
+    val confirmEnabled = !submitting && (!includePhotos || canSharePhotos)
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!submitting) {
+                onDismiss()
+            }
+        },
+        title = { Text("分享位置") },
+        text = {
+            Column {
+                Text("预览")
+                Text(
+                    modifier = Modifier.padding(top = 8.dp),
+                    text = previewText,
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                ShareOptionRow(
+                    label = "包含更新时间",
+                    checked = includeUpdatedAt,
+                    enabled = !submitting,
+                    onCheckedChange = { checked ->
+                        includeUpdatedAt = checked
+                    },
+                )
+                if (detail.photos.isNotEmpty()) {
+                    ShareOptionRow(
+                        label = "同时分享选定照片",
+                        checked = includePhotos,
+                        enabled = !submitting,
+                        onCheckedChange = { checked ->
+                            includePhotos = checked
+                            if (checked && selectedPhotoIds.isEmpty()) {
+                                selectedPhotoIds = detail.photos.firstOrNull { photo ->
+                                    photo.isCover
+                                }?.photoId?.let { photoId -> setOf(photoId) }
+                                    ?: setOf(detail.photos.first().photoId)
+                            }
+                        },
+                    )
+                }
+                if (includePhotos && detail.photos.isNotEmpty()) {
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = "选择要分享的照片",
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    detail.photos.forEach { photo ->
+                        val selected = selectedPhotoIds.contains(photo.photoId)
+                        ShareOptionRow(
+                            label = photoRoleLabel(photo.role) + if (photo.isCover) " · 封面" else "",
+                            checked = selected,
+                            enabled = !submitting,
+                            onCheckedChange = { checked ->
+                                selectedPhotoIds = if (checked) {
+                                    selectedPhotoIds + photo.photoId
+                                } else {
+                                    selectedPhotoIds - photo.photoId
+                                }
+                            },
+                        )
+                    }
+                }
+                Text(
+                    modifier = Modifier.padding(top = 10.dp),
+                    text = "不会分享完整家庭数据。",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = confirmEnabled,
+                onClick = {
+                    onConfirm(
+                        includeUpdatedAt,
+                        if (includePhotos) selectedPhotoIds.toList() else emptyList(),
+                    )
+                },
+            ) {
+                Text("系统分享")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                enabled = !submitting,
+                onClick = onDismiss,
+            ) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+/**
+ * 分享预览中的勾选项，避免只用图标表达是否包含时间和照片。
+ */
+@Composable
+private fun ShareOptionRow(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+        )
+        Text(
+            text = label,
+            color = WherePrimaryTextColor,
+            style = MaterialTheme.typography.bodyMedium,
         )
     }
 }

@@ -31,6 +31,24 @@ fun interface EpochMillisecondsClock {
 /**
  * 把用户输入转换为可稳定去重和搜索的标准化文本。
  */
+/**
+ * 把 UTC Epoch 毫秒格式化为用户可见的本地日期时间。
+ *
+ * 朗读和分享需要本地时区，所以不在业务层手写日历换算。
+ */
+fun interface VisibleDateTimeFormatter {
+    /**
+     * 格式化为简短中文日期时间。
+     *
+     * @param epochMilliseconds UTC Epoch 毫秒。
+     * @return 例如 `2026年8月20日 13点45分`。
+     */
+    fun format(epochMilliseconds: Long): String
+}
+
+/**
+ * 把用户输入转换为可稳定去重和搜索的标准化文本。
+ */
 fun interface TextNormalizer {
     /**
      * 标准化输入文本。

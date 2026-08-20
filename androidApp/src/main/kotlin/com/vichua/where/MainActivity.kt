@@ -10,10 +10,14 @@ import com.vichua.where.ui.WhereApp
  * 承载共享 Compose 根界面，Android 平台逻辑通过独立模块注入。
  */
 class MainActivity : ComponentActivity() {
+    private lateinit var textToSpeechGateway: AndroidTextToSpeechGateway
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as WhereApplication).container
         val photoPickerGateway = AndroidPhotoPickerGateway(this)
+        textToSpeechGateway = AndroidTextToSpeechGateway(this)
+        val shareGateway = AndroidShareGateway(this)
         setContent {
             WhereApp(
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
@@ -38,6 +42,10 @@ class MainActivity : ComponentActivity() {
                 deleteItemPhotoUseCase = container.deleteItemPhotoUseCase,
                 deleteItemUseCase = container.deleteItemUseCase,
                 restoreDeletedItemUseCase = container.restoreDeletedItemUseCase,
+                buildItemLocationSpeechUseCase = container.buildItemLocationSpeechUseCase,
+                buildItemLocationShareUseCase = container.buildItemLocationShareUseCase,
+                textToSpeechGateway = textToSpeechGateway,
+                shareGateway = shareGateway,
                 loadMoveItemContextUseCase = container.loadMoveItemContextUseCase,
                 moveItemUseCase = container.moveItemUseCase,
                 loadLocationTreeUseCase = container.loadLocationTreeUseCase,
@@ -48,5 +56,12 @@ class MainActivity : ComponentActivity() {
                 devicePlatform = DevicePlatform.ANDROID,
             )
         }
+    }
+
+    override fun onDestroy() {
+        if (::textToSpeechGateway.isInitialized) {
+            textToSpeechGateway.shutdown()
+        }
+        super.onDestroy()
     }
 }

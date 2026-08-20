@@ -21,9 +21,11 @@ import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Weekend
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.vichua.where.core.model.LocationType
@@ -57,6 +59,12 @@ object WhereIcons {
 
     /** 朗读位置的扬声器图标。 */
     val ReadAloud: ImageVector = Icons.AutoMirrored.Outlined.VolumeUp
+
+    /** 再听一遍的循环箭头图标。 */
+    val Repeat: ImageVector = Icons.Outlined.Replay
+
+    /** 分享位置图标。 */
+    val Share: ImageVector = Icons.Outlined.Share
 
     /** 添加照片图标。 */
     val AddPhoto: ImageVector = Icons.Outlined.AddAPhoto

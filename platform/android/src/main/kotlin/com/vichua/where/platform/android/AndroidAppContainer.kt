@@ -22,6 +22,8 @@ import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
 import com.vichua.where.feature.item.deletion.DeleteItemUseCase
 import com.vichua.where.feature.item.deletion.RestoreDeletedItemUseCase
+import com.vichua.where.feature.item.share.BuildItemLocationShareUseCase
+import com.vichua.where.feature.item.share.BuildItemLocationSpeechUseCase
 import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
 import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
@@ -209,6 +211,16 @@ class AndroidAppContainer(
         repository = itemDeletionRepository,
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 组装详情页朗读文本的用例。 */
+    val buildItemLocationSpeechUseCase = BuildItemLocationSpeechUseCase(
+        dateTimeFormatter = AndroidVisibleDateTimeFormatter,
+    )
+
+    /** 组装位置分享预览和选定照片的用例。 */
+    val buildItemLocationShareUseCase = BuildItemLocationShareUseCase(
+        dateTimeFormatter = AndroidVisibleDateTimeFormatter,
     )
 
     /** 加载更新位置页面上下文的用例。 */

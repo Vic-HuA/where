@@ -26,6 +26,9 @@ import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.platform.PhotoPickerGateway
+import com.vichua.where.core.platform.ShareGateway
+import com.vichua.where.core.platform.SharePayload
+import com.vichua.where.core.platform.TextToSpeechGateway
 import com.vichua.where.feature.item.creation.CreateManualItemUseCase
 import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.LoadItemCreationContextUseCase
@@ -34,6 +37,8 @@ import com.vichua.where.feature.item.deletion.ItemDeletionResult
 import com.vichua.where.feature.item.deletion.RestoreDeletedItemUseCase
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
+import com.vichua.where.feature.item.share.BuildItemLocationShareUseCase
+import com.vichua.where.feature.item.share.BuildItemLocationSpeechUseCase
 import com.vichua.where.feature.item.profile.UpdateItemProfileRequest
 import com.vichua.where.feature.item.profile.UpdateItemProfileUseCase
 import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
@@ -90,6 +95,10 @@ import kotlinx.coroutines.launch
  * @param deleteItemPhotoUseCase 软删除物品照片的用例。
  * @param deleteItemUseCase 软删除物品及其本次级联记录的用例。
  * @param restoreDeletedItemUseCase 撤销当前会话内物品删除批次的用例。
+ * @param buildItemLocationSpeechUseCase 组装详情朗读文本的用例。
+ * @param buildItemLocationShareUseCase 组装位置分享内容的用例。
+ * @param textToSpeechGateway 本地文字朗读入口。
+ * @param shareGateway 系统分享面板入口。
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
  * @param loadLocationTreeUseCase 加载位置管理树的用例。
@@ -123,6 +132,10 @@ fun WhereApp(
     deleteItemPhotoUseCase: DeleteItemPhotoUseCase,
     deleteItemUseCase: DeleteItemUseCase,
     restoreDeletedItemUseCase: RestoreDeletedItemUseCase,
+    buildItemLocationSpeechUseCase: BuildItemLocationSpeechUseCase,
+    buildItemLocationShareUseCase: BuildItemLocationShareUseCase,
+    textToSpeechGateway: TextToSpeechGateway,
+    shareGateway: ShareGateway,
     loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
     moveItemUseCase: MoveItemUseCase,
     loadLocationTreeUseCase: LoadLocationTreeUseCase,
@@ -166,6 +179,11 @@ fun WhereApp(
     var itemDeletionUndoRemainingSeconds by remember { mutableIntStateOf(0) }
     var itemDeletionUndoGeneration by remember { mutableIntStateOf(0) }
     var itemDeletionUndoError by remember { mutableStateOf<String?>(null) }
+    var itemSpeechSubmitting by remember { mutableStateOf(false) }
+    var itemSpeechError by remember { mutableStateOf<String?>(null) }
+    var itemSpeechCanRepeat by remember { mutableStateOf(false) }
+    var itemShareSubmitting by remember { mutableStateOf(false) }
+    var itemShareError by remember { mutableStateOf<String?>(null) }
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
@@ -251,6 +269,10 @@ fun WhereApp(
             itemProfileEditorVisible = false
             itemProfileError = null
             itemPhotoError = null
+            itemSpeechError = null
+            itemSpeechCanRepeat = false
+            itemShareError = null
+            textToSpeechGateway.stop()
             try {
                 itemDetail = loadItemDetailUseCase(itemId)
             } catch (_: Exception) {
@@ -624,11 +646,74 @@ fun WhereApp(
                     loading = itemDetailLoading,
                     errorMessage = itemDetailError,
                     onBack = {
+                        textToSpeechGateway.stop()
                         itemProfileEditorVisible = false
                         itemProfileError = null
+                        itemSpeechError = null
+                        itemShareError = null
                         destination = AppDestination.HOME
                     },
-                    onReadLocation = {},
+                    onReadLocation = {
+                        val detail = itemDetail
+                        if (detail != null && !itemSpeechSubmitting) {
+                            coroutineScope.launch {
+                                itemSpeechSubmitting = true
+                                itemSpeechError = null
+                                try {
+                                    if (!textToSpeechGateway.isAvailable()) {
+                                        error("Text to speech is unavailable.")
+                                    }
+                                    textToSpeechGateway.speak(
+                                        buildItemLocationSpeechUseCase(detail),
+                                    )
+                                    itemSpeechCanRepeat = true
+                                } catch (_: Exception) {
+                                    itemSpeechError = "当前设备无法朗读。"
+                                } finally {
+                                    itemSpeechSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    speechSubmitting = itemSpeechSubmitting,
+                    speechErrorMessage = itemSpeechError,
+                    canRepeatSpeech = itemSpeechCanRepeat,
+                    formattedUpdatedAt = itemDetail?.let { detail ->
+                        buildItemLocationShareUseCase.formatUpdatedAt(detail)
+                    }.orEmpty(),
+                    shareSubmitting = itemShareSubmitting,
+                    shareErrorMessage = itemShareError,
+                    onShareLocation = { includeUpdatedAt, selectedPhotoIds ->
+                        val detail = itemDetail
+                        if (detail != null && !itemShareSubmitting) {
+                            coroutineScope.launch {
+                                itemShareSubmitting = true
+                                itemShareError = null
+                                try {
+                                    if (!shareGateway.isAvailable()) {
+                                        error("System share is unavailable.")
+                                    }
+                                    val content = buildItemLocationShareUseCase(
+                                        detail = detail,
+                                        includeUpdatedAt = includeUpdatedAt,
+                                        selectedPhotoIds = selectedPhotoIds,
+                                    )
+                                    shareGateway.share(
+                                        SharePayload(
+                                            text = content.text,
+                                            imageAbsolutePaths = content.photoStorageKeys.mapNotNull(
+                                                resolveMediaPath,
+                                            ),
+                                        ),
+                                    )
+                                } catch (_: Exception) {
+                                    itemShareError = "分享失败，请稍后重试。"
+                                } finally {
+                                    itemShareSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onUpdateLocation = {
                         itemProfileEditorVisible = false
                         itemProfileError = null
