@@ -9,6 +9,7 @@ import androidx.compose.material.icons.outlined.AddAPhoto
 import androidx.compose.material.icons.outlined.Bathtub
 import androidx.compose.material.icons.outlined.Bed
 import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandLess
@@ -62,6 +63,9 @@ object WhereIcons {
 
     /** 再听一遍的循环箭头图标。 */
     val Repeat: ImageVector = Icons.Outlined.Replay
+
+    /** 确认操作的对勾图标。 */
+    val Confirm: ImageVector = Icons.Outlined.CheckCircle
 
     /** 分享位置图标。 */
     val Share: ImageVector = Icons.Outlined.Share

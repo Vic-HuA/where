@@ -45,6 +45,7 @@ fun MoveItemScreen(
     errorMessage: String?,
     onBack: () -> Unit,
     onSave: (LocationNodeId) -> Unit,
+    elderFriendlyMode: Boolean = false,
 ) {
     var selectedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
 
@@ -100,6 +101,7 @@ fun MoveItemScreen(
                 LocationOptionCard(
                     location = location,
                     selected = selectedLocationId == location.locationId,
+                    elderFriendlyMode = elderFriendlyMode,
                     onClick = {
                         selectedLocationId = location.locationId
                     },
@@ -133,13 +135,14 @@ fun MoveItemScreen(
 private fun LocationOptionCard(
     location: MoveTargetLocation,
     selected: Boolean,
+    elderFriendlyMode: Boolean,
     onClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 10.dp)
-            .height(54.dp)
+            .height(if (elderFriendlyMode) 72.dp else 54.dp)
             .clickable(
                 role = Role.RadioButton,
                 onClick = onClick,

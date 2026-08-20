@@ -1,12 +1,15 @@
 package com.vichua.where.core.database.mapper
 
 import com.vichua.where.core.database.entity.FavoriteLocationEntity
+import com.vichua.where.core.database.entity.LocalAccessibilityPreferencesEntity
 import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
 import com.vichua.where.core.model.DeviceId
+import com.vichua.where.core.model.DisplayMode
 import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.FavoriteLocationId
 import com.vichua.where.core.model.HouseholdId
+import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.LocalSearchHistory
 import com.vichua.where.core.model.LocalSearchHistoryId
 import com.vichua.where.core.model.LocationNodeId
@@ -61,3 +64,32 @@ internal fun LocalSearchHistoryEntity.toDomain(): LocalSearchHistory = LocalSear
     filterHash = filterHash,
     executedAt = UtcTimestamp(executedAt),
 )
+
+/** 将本机辅助偏好领域模型转换为 Room 实体。 */
+internal fun LocalAccessibilityPreferences.toEntity(): LocalAccessibilityPreferencesEntity =
+    LocalAccessibilityPreferencesEntity(
+        deviceId = deviceId.value,
+        displayMode = displayMode.name,
+        followSystemFontScale = followSystemFontScale,
+        highContrastEnabled = highContrastEnabled,
+        autoReadConfirmationEnabled = autoReadConfirmationEnabled,
+        hapticFeedbackEnabled = hapticFeedbackEnabled,
+        speechRate = speechRate,
+        volumeHintEnabled = volumeHintEnabled,
+        updatedAt = updatedAt.epochMilliseconds,
+    )
+
+/** 将本机辅助偏好 Room 实体还原为领域模型。 */
+internal fun LocalAccessibilityPreferencesEntity.toDomain(): LocalAccessibilityPreferences =
+    LocalAccessibilityPreferences(
+        deviceId = DeviceId(deviceId),
+        displayMode = DisplayMode.valueOf(displayMode),
+        followSystemFontScale = followSystemFontScale,
+        highContrastEnabled = highContrastEnabled,
+        autoReadConfirmationEnabled = autoReadConfirmationEnabled,
+        hapticFeedbackEnabled = hapticFeedbackEnabled,
+        speechRate = speechRate,
+        volumeHintEnabled = volumeHintEnabled,
+        updatedAt = UtcTimestamp(updatedAt),
+    )
+

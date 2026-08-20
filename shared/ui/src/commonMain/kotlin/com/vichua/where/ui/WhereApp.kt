@@ -63,10 +63,13 @@ import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveItemUseCase
+import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
 import com.vichua.where.feature.search.text.SearchItemsUseCase
+import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
+import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -105,6 +108,8 @@ import kotlinx.coroutines.launch
  * @param createLocationUseCase 新增位置的用例。
  * @param renameLocationUseCase 重命名位置的用例。
  * @param deleteEmptyLocationUseCase 删除空位置的用例。
+ * @param loadAccessibilityPreferencesUseCase 读取当前设备适老偏好的用例。
+ * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
  * @param suggestedDeviceName 当前平台提供的设备名称建议。
  * @param devicePlatform 当前运行平台。
  */
@@ -142,6 +147,8 @@ fun WhereApp(
     createLocationUseCase: CreateLocationUseCase,
     renameLocationUseCase: RenameLocationUseCase,
     deleteEmptyLocationUseCase: DeleteEmptyLocationUseCase,
+    loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
+    updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
     suggestedDeviceName: String,
     devicePlatform: DevicePlatform,
 ) {
@@ -192,6 +199,15 @@ fun WhereApp(
     var locationTreeSubmitting by remember { mutableStateOf(false) }
     var locationTreeError by remember { mutableStateOf<String?>(null) }
     var locationTreeAttempt by remember { mutableIntStateOf(0) }
+    var accessibilityPreferences by remember {
+        mutableStateOf<LocalAccessibilityPreferences?>(null)
+    }
+    var settingsLoading by remember { mutableStateOf(false) }
+    var settingsSubmitting by remember { mutableStateOf(false) }
+    var settingsError by remember { mutableStateOf<String?>(null) }
+    var settingsLoadAttempt by remember { mutableIntStateOf(0) }
+    var searchSpeechError by remember { mutableStateOf<String?>(null) }
+    val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
     val performSearch: (String) -> Unit = { query ->
         if (!searchInProgress) {
@@ -347,7 +363,30 @@ fun WhereApp(
         }
     }
 
-    WhereTheme {
+    LaunchedEffect(destination, settingsLoadAttempt) {
+        val shouldLoadPreferences = destination == AppDestination.HOME ||
+            destination == AppDestination.SETTINGS ||
+            destination == AppDestination.SEARCH ||
+            destination == AppDestination.ADD_ITEM ||
+            destination == AppDestination.ITEM_DETAIL ||
+            destination == AppDestination.MOVE_ITEM
+        if (shouldLoadPreferences && accessibilityPreferences == null) {
+            settingsLoading = true
+            settingsError = null
+            try {
+                accessibilityPreferences = loadAccessibilityPreferencesUseCase()
+            } catch (_: Exception) {
+                settingsError = "暂时无法读取辅助设置。"
+            } finally {
+                settingsLoading = false
+            }
+        }
+    }
+
+    WhereTheme(
+        highContrast = accessibilityPreferences?.highContrastEnabled == true,
+        elderFriendly = elderFriendlyMode,
+    ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
@@ -364,7 +403,7 @@ fun WhereApp(
                     devicePlatform = devicePlatform,
                     isSubmitting = initializationInProgress,
                     errorMessage = initializationError,
-                    onSubmit = { request ->
+                    onSubmit = { request, elderFriendlyEnabled ->
                         if (!initializationInProgress) {
                             coroutineScope.launch {
                                 initializationInProgress = true
@@ -372,6 +411,15 @@ fun WhereApp(
                                 try {
                                     initializeHouseholdUseCase(request)
                                     destination = AppDestination.HOME
+                                    try {
+                                        accessibilityPreferences = if (elderFriendlyEnabled) {
+                                            updateAccessibilityPreferencesUseCase.setElderFriendly(true)
+                                        } else {
+                                            loadAccessibilityPreferencesUseCase()
+                                        }
+                                    } catch (_: Exception) {
+                                        settingsLoadAttempt += 1
+                                    }
                                 } catch (_: IllegalArgumentException) {
                                     initializationError = "请检查家庭名称和房间设置。"
                                 } catch (_: Exception) {
@@ -443,6 +491,7 @@ fun WhereApp(
                     onSettingsClick = {
                         destination = AppDestination.SETTINGS
                     },
+                    elderFriendlyMode = elderFriendlyMode,
                 )
                 AppDestination.SEARCH -> SearchScreen(
                     initialQuery = searchQuery,
@@ -456,6 +505,28 @@ fun WhereApp(
                     onResultClick = { result ->
                         selectedItemId = result.itemId
                         destination = AppDestination.ITEM_DETAIL
+                    },
+                    elderFriendlyMode = elderFriendlyMode,
+                    speechErrorMessage = searchSpeechError,
+                    onReadLocation = { result ->
+                        coroutineScope.launch {
+                            searchSpeechError = null
+                            try {
+                                if (!textToSpeechGateway.isAvailable()) {
+                                    error("Text to speech is unavailable.")
+                                }
+                                textToSpeechGateway.speak(
+                                    buildItemLocationSpeechUseCase.fromParts(
+                                        name = result.name,
+                                        locationPath = result.locationPath,
+                                        locationDescription = null,
+                                        updatedAt = result.updatedAt,
+                                    ),
+                                )
+                            } catch (_: Exception) {
+                                searchSpeechError = "当前设备无法朗读。"
+                            }
+                        }
                     },
                 )
                 AppDestination.ADD_ITEM -> AddItemScreen(
@@ -540,6 +611,10 @@ fun WhereApp(
                                 }
                             }
                         }
+                    },
+                    elderFriendlyMode = elderFriendlyMode,
+                    onSpeakRequested = {
+                        itemCreationError = "语音识别尚未接入，请先手动填写名称。"
                     },
                     onSubmit = { request ->
                         if (!itemCreationSubmitting) {
@@ -634,10 +709,49 @@ fun WhereApp(
                         }
                     },
                 )
-                AppDestination.SETTINGS -> PendingFeatureScreen(
-                    title = "设置与数据",
+                AppDestination.SETTINGS -> SettingsScreen(
+                    preferences = accessibilityPreferences,
+                    loading = settingsLoading,
+                    submitting = settingsSubmitting,
+                    errorMessage = settingsError,
                     onBack = {
                         destination = AppDestination.HOME
+                    },
+                    onRetry = {
+                        accessibilityPreferences = null
+                        settingsLoadAttempt += 1
+                    },
+                    onElderFriendlyChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    accessibilityPreferences =
+                                        updateAccessibilityPreferencesUseCase.setElderFriendly(enabled)
+                                } catch (_: Exception) {
+                                    settingsError = "保存适老设置失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onHighContrastChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    accessibilityPreferences =
+                                        updateAccessibilityPreferencesUseCase.setHighContrast(enabled)
+                                } catch (_: Exception) {
+                                    settingsError = "保存高对比度失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
                     },
                 )
                 AppDestination.ITEM_DETAIL -> ItemDetailScreen(
@@ -823,6 +937,7 @@ fun WhereApp(
                     },
                     deletionSubmitting = itemDeletionSubmitting,
                     deletionErrorMessage = itemDeletionError,
+                    elderFriendlyMode = elderFriendlyMode,
                     onDeleteItem = {
                         val itemId = selectedItemId
                         if (itemId != null && !itemDeletionSubmitting) {
@@ -858,6 +973,7 @@ fun WhereApp(
                     onBack = {
                         destination = AppDestination.ITEM_DETAIL
                     },
+                    elderFriendlyMode = elderFriendlyMode,
                     onSave = { locationId ->
                         val itemId = selectedItemId
                         if (itemId != null && !moveItemLoading) {

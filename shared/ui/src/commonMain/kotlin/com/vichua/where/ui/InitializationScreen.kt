@@ -56,7 +56,7 @@ import com.vichua.where.feature.location.initialization.InitializeHouseholdReque
  * @param devicePlatform 当前运行平台。
  * @param isSubmitting 是否正在保存，保存期间禁用重复提交。
  * @param errorMessage 可向用户展示的中文错误信息。
- * @param onSubmit 用户确认后提交完整初始化请求。
+ * @param onSubmit 用户确认后提交完整初始化请求，并带回初始化页的适老开关。
  */
 @Composable
 fun InitializationScreen(
@@ -64,7 +64,7 @@ fun InitializationScreen(
     devicePlatform: DevicePlatform,
     isSubmitting: Boolean,
     errorMessage: String?,
-    onSubmit: (InitializeHouseholdRequest) -> Unit,
+    onSubmit: (InitializeHouseholdRequest, Boolean) -> Unit,
 ) {
     var householdName by remember { mutableStateOf(DEFAULT_HOUSEHOLD_NAME) }
     var selectedRoomKeys by remember { mutableStateOf(DEFAULT_SELECTED_ROOM_KEYS) }
@@ -237,6 +237,7 @@ fun InitializationScreen(
                             },
                         rootIconKey = ROOT_LOCATION_ICON_KEY,
                     ),
+                    elderFriendlyEnabled,
                 )
             },
         ) {

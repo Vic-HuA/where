@@ -84,6 +84,7 @@ import com.vichua.where.feature.item.detail.ItemDetailPhoto
  * @param deletionSubmitting 是否正在删除物品。
  * @param deletionErrorMessage 可展示的中文删除错误。
  * @param onDeleteItem 二次确认后删除当前物品。
+ * @param elderFriendlyMode 是否优先展示主图、位置和朗读/更新，并把次要操作折进更多信息。
  */
 @Composable
 fun ItemDetailScreen(
@@ -117,6 +118,7 @@ fun ItemDetailScreen(
     deletionSubmitting: Boolean,
     deletionErrorMessage: String?,
     onDeleteItem: () -> Unit,
+    elderFriendlyMode: Boolean = false,
 ) {
     var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
     var lastPhotoCount by remember(detail?.itemId) { mutableIntStateOf(detail?.photos?.size ?: 0) }
@@ -126,6 +128,7 @@ fun ItemDetailScreen(
     var deleteItemConfirmVisible by remember { mutableStateOf(false) }
     var shareDialogVisible by remember { mutableStateOf(false) }
     var fullscreenVisible by remember { mutableStateOf(false) }
+    var moreInformationExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(detail?.photos?.size) {
         val photoCount = detail?.photos?.size ?: 0
@@ -228,57 +231,22 @@ fun ItemDetailScreen(
                 }
             }
         }
-        if (detail.photos.isNotEmpty()) {
-            val selectedPhoto = detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)]
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    modifier = Modifier.weight(1f).padding(top = 8.dp),
-                    text = "${photoRoleLabel(selectedPhoto.role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}",
-                    color = WhereSecondaryTextColor,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                TextButton(
-                    enabled = !photoSubmitting,
-                    onClick = {
-                        managedPhotoId = selectedPhoto.photoId
-                    },
-                ) {
-                    Text("管理")
-                }
-            }
-        }
-        PhotoThumbnailSelector(
-            photos = detail.photos,
-            selectedIndex = selectedPhotoIndex,
-            resolveMediaPath = resolveMediaPath,
-            enabled = !photoSubmitting,
-            onSelect = { index ->
-                selectedPhotoIndex = index
-            },
-            onManage = { photoId ->
-                managedPhotoId = photoId
-            },
-            onAdd = {
-                addRoleDialogVisible = true
-            },
-        )
-        if (detail.photos.size >= MvpLimits.ITEM_PHOTO_WARNING_THRESHOLD) {
-            Text(
-                modifier = Modifier.padding(top = 8.dp),
-                text = "当前已有 ${detail.photos.size} 张照片，存储占用会继续增加。",
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (photoErrorMessage != null) {
-            Text(
-                modifier = Modifier.padding(top = 8.dp),
-                text = photoErrorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
+        if (!elderFriendlyMode) {
+            ItemDetailPhotoManagement(
+                detail = detail,
+                selectedPhotoIndex = selectedPhotoIndex,
+                resolveMediaPath = resolveMediaPath,
+                photoSubmitting = photoSubmitting,
+                photoErrorMessage = photoErrorMessage,
+                onSelectPhoto = { index ->
+                    selectedPhotoIndex = index
+                },
+                onManagePhoto = { photoId ->
+                    managedPhotoId = photoId
+                },
+                onAddPhoto = {
+                    addRoleDialogVisible = true
+                },
             )
         }
 
@@ -295,19 +263,21 @@ fun ItemDetailScreen(
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.headlineMedium,
             )
-            TextButton(
-                enabled = !editorSubmitting,
-                onClick = onEditProfile,
-            ) {
-                Icon(
-                    modifier = Modifier.size(18.dp),
-                    imageVector = WhereIcons.Edit,
-                    contentDescription = null,
-                )
-                Text(
-                    modifier = Modifier.padding(start = 4.dp),
-                    text = "编辑",
-                )
+            if (!elderFriendlyMode) {
+                TextButton(
+                    enabled = !editorSubmitting,
+                    onClick = onEditProfile,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(18.dp),
+                        imageVector = WhereIcons.Edit,
+                        contentDescription = null,
+                    )
+                    Text(
+                        modifier = Modifier.padding(start = 4.dp),
+                        text = "编辑",
+                    )
+                }
             }
         }
 
@@ -350,51 +320,8 @@ fun ItemDetailScreen(
             }
         }
 
-        val note = detail.note
-        if (!note.isNullOrBlank()) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp),
-                color = WhereSurfaceColor,
-                shape = RoundedCornerShape(18.dp),
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "备注",
-                        color = WherePrimaryColor,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = note,
-                        color = WherePrimaryTextColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 14.dp)
-                .height(52.dp),
-            color = WhereSurfaceColor,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, WhereOutlineColor),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "位置历史 · ${detail.locationHistory.size} 条记录",
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+        if (!elderFriendlyMode) {
+            ItemDetailNoteAndHistory(detail = detail)
         }
 
         Row(
@@ -443,7 +370,7 @@ fun ItemDetailScreen(
                 )
             }
         }
-        if (canRepeatSpeech) {
+        if (elderFriendlyMode || canRepeatSpeech) {
             TextButton(
                 enabled = !speechSubmitting,
                 onClick = onReadLocation,
@@ -467,61 +394,107 @@ fun ItemDetailScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        Button(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp)
-                .height(52.dp),
-            enabled = !shareSubmitting && !speechSubmitting && !deletionSubmitting,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WhereSurfaceColor,
-                contentColor = WherePrimaryTextColor,
-            ),
-            onClick = {
-                shareDialogVisible = true
-            },
-        ) {
-            Icon(
-                imageVector = WhereIcons.Share,
-                contentDescription = null,
+        if (elderFriendlyMode) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 14.dp)
+                    .clickable(
+                        role = Role.Button,
+                        onClick = {
+                            moreInformationExpanded = !moreInformationExpanded
+                        },
+                    ),
+                color = WhereSurfaceColor,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, WhereOutlineColor),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = "更多信息",
+                        color = WherePrimaryTextColor,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Icon(
+                        imageVector = if (moreInformationExpanded) {
+                            WhereIcons.ExpandLess
+                        } else {
+                            WhereIcons.ExpandMore
+                        },
+                        contentDescription = if (moreInformationExpanded) "收起" else "展开",
+                        tint = WherePrimaryTextColor,
+                    )
+                }
+            }
+            if (moreInformationExpanded) {
+                ItemDetailPhotoManagement(
+                    detail = detail,
+                    selectedPhotoIndex = selectedPhotoIndex,
+                    resolveMediaPath = resolveMediaPath,
+                    photoSubmitting = photoSubmitting,
+                    photoErrorMessage = photoErrorMessage,
+                    onSelectPhoto = { index ->
+                        selectedPhotoIndex = index
+                    },
+                    onManagePhoto = { photoId ->
+                        managedPhotoId = photoId
+                    },
+                    onAddPhoto = {
+                        addRoleDialogVisible = true
+                    },
+                )
+                TextButton(
+                    enabled = !editorSubmitting,
+                    onClick = onEditProfile,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(18.dp),
+                        imageVector = WhereIcons.Edit,
+                        contentDescription = null,
+                    )
+                    Text(
+                        modifier = Modifier.padding(start = 4.dp),
+                        text = "编辑",
+                    )
+                }
+                ItemDetailNoteAndHistory(detail = detail)
+                ItemDetailShareAndDelete(
+                    shareSubmitting = shareSubmitting,
+                    speechSubmitting = speechSubmitting,
+                    deletionSubmitting = deletionSubmitting,
+                    photoSubmitting = photoSubmitting,
+                    editorSubmitting = editorSubmitting,
+                    shareErrorMessage = shareErrorMessage,
+                    deletionErrorMessage = deletionErrorMessage,
+                    onShare = {
+                        shareDialogVisible = true
+                    },
+                    onDelete = {
+                        deleteItemConfirmVisible = true
+                    },
+                )
+            }
+        } else {
+            ItemDetailShareAndDelete(
+                shareSubmitting = shareSubmitting,
+                speechSubmitting = speechSubmitting,
+                deletionSubmitting = deletionSubmitting,
+                photoSubmitting = photoSubmitting,
+                editorSubmitting = editorSubmitting,
+                shareErrorMessage = shareErrorMessage,
+                deletionErrorMessage = deletionErrorMessage,
+                onShare = {
+                    shareDialogVisible = true
+                },
+                onDelete = {
+                    deleteItemConfirmVisible = true
+                },
             )
-            Text(
-                modifier = Modifier.padding(start = 6.dp),
-                text = "分享位置",
-            )
-        }
-        if (shareErrorMessage != null) {
-            Text(
-                modifier = Modifier.padding(top = 8.dp),
-                text = shareErrorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-
-        if (deletionErrorMessage != null) {
-            Text(
-                modifier = Modifier.padding(top = 10.dp),
-                text = deletionErrorMessage,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        Button(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp)
-                .height(52.dp),
-            enabled = !deletionSubmitting && !photoSubmitting && !editorSubmitting,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WhereSurfaceColor,
-                contentColor = MaterialTheme.colorScheme.error,
-            ),
-            onClick = {
-                deleteItemConfirmVisible = true
-            },
-        ) {
-            Text("删除物品")
         }
     }
 
@@ -841,6 +814,191 @@ private fun ShareOptionRow(
             color = WherePrimaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )
+    }
+}
+
+/**
+ * 照片管理、缩略图和添加入口；适老详情把这块折进更多信息。
+ */
+@Composable
+private fun ItemDetailPhotoManagement(
+    detail: ItemDetail,
+    selectedPhotoIndex: Int,
+    resolveMediaPath: (String) -> String?,
+    photoSubmitting: Boolean,
+    photoErrorMessage: String?,
+    onSelectPhoto: (Int) -> Unit,
+    onManagePhoto: (PhotoAssetId) -> Unit,
+    onAddPhoto: () -> Unit,
+) {
+    if (detail.photos.isNotEmpty()) {
+        val selectedPhoto = detail.photos[selectedPhotoIndex.coerceAtMost(detail.photos.lastIndex)]
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                modifier = Modifier.weight(1f).padding(top = 8.dp),
+                text = "${photoRoleLabel(selectedPhoto.role)} · ${selectedPhotoIndex + 1} / ${detail.photos.size}",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            TextButton(
+                enabled = !photoSubmitting,
+                onClick = {
+                    onManagePhoto(selectedPhoto.photoId)
+                },
+            ) {
+                Text("管理")
+            }
+        }
+    }
+    PhotoThumbnailSelector(
+        photos = detail.photos,
+        selectedIndex = selectedPhotoIndex,
+        resolveMediaPath = resolveMediaPath,
+        enabled = !photoSubmitting,
+        onSelect = onSelectPhoto,
+        onManage = onManagePhoto,
+        onAdd = onAddPhoto,
+    )
+    if (detail.photos.size >= MvpLimits.ITEM_PHOTO_WARNING_THRESHOLD) {
+        Text(
+            modifier = Modifier.padding(top = 8.dp),
+            text = "当前已有 ${detail.photos.size} 张照片，存储占用会继续增加。",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    if (photoErrorMessage != null) {
+        Text(
+            modifier = Modifier.padding(top = 8.dp),
+            text = photoErrorMessage,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+/**
+ * 备注和位置历史摘要；适老详情默认折叠。
+ */
+@Composable
+private fun ItemDetailNoteAndHistory(
+    detail: ItemDetail,
+) {
+    val note = detail.note
+    if (!note.isNullOrBlank()) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 14.dp),
+            color = WhereSurfaceColor,
+            shape = RoundedCornerShape(18.dp),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "备注",
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 8.dp),
+                    text = note,
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp)
+            .height(52.dp),
+        color = WhereSurfaceColor,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, WhereOutlineColor),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "位置历史 · ${detail.locationHistory.size} 条记录",
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+/**
+ * 分享和删除入口；适老详情默认折叠，避免误触危险操作。
+ */
+@Composable
+private fun ItemDetailShareAndDelete(
+    shareSubmitting: Boolean,
+    speechSubmitting: Boolean,
+    deletionSubmitting: Boolean,
+    photoSubmitting: Boolean,
+    editorSubmitting: Boolean,
+    shareErrorMessage: String?,
+    deletionErrorMessage: String?,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Button(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .height(52.dp),
+        enabled = !shareSubmitting && !speechSubmitting && !deletionSubmitting,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = WhereSurfaceColor,
+            contentColor = WherePrimaryTextColor,
+        ),
+        onClick = onShare,
+    ) {
+        Icon(
+            imageVector = WhereIcons.Share,
+            contentDescription = null,
+        )
+        Text(
+            modifier = Modifier.padding(start = 6.dp),
+            text = "分享位置",
+        )
+    }
+    if (shareErrorMessage != null) {
+        Text(
+            modifier = Modifier.padding(top = 8.dp),
+            text = shareErrorMessage,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    if (deletionErrorMessage != null) {
+        Text(
+            modifier = Modifier.padding(top = 10.dp),
+            text = deletionErrorMessage,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    Button(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp)
+            .height(52.dp),
+        enabled = !deletionSubmitting && !photoSubmitting && !editorSubmitting,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = WhereSurfaceColor,
+            contentColor = MaterialTheme.colorScheme.error,
+        ),
+        onClick = onDelete,
+    ) {
+        Text("删除物品")
     }
 }
 

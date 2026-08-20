@@ -94,15 +94,89 @@ private val WhereTypography = Typography(
 /**
  * 应用 Pencil 原型的共享颜色和字体规范。
  *
+ * 高对比度和适老字号只改变展示，不改家庭数据。
+ *
+ * @param highContrast 是否使用更高对比度的配色。
+ * @param elderFriendly 是否放大主要字号。
  * @param content 使用统一主题渲染的页面内容。
  */
 @Composable
 fun WhereTheme(
+    highContrast: Boolean = false,
+    elderFriendly: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = WhereColorScheme,
-        typography = WhereTypography,
+        colorScheme = if (highContrast) {
+            WhereHighContrastColorScheme
+        } else {
+            WhereColorScheme
+        },
+        typography = if (elderFriendly) {
+            WhereElderTypography
+        } else {
+            WhereTypography
+        },
         content = content,
     )
 }
+
+private val WhereHighContrastColorScheme = lightColorScheme(
+    primary = Color(0xFF145046),
+    onPrimary = WhereSurfaceColor,
+    primaryContainer = Color(0xFFD7EBE6),
+    onPrimaryContainer = Color(0xFF0B2A25),
+    background = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF000000),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF000000),
+    surfaceVariant = Color(0xFFFFFFFF),
+    onSurfaceVariant = Color(0xFF222222),
+    outline = Color(0xFF111111),
+    error = Color(0xFF8C1D18),
+)
+
+private val WhereElderTypography = Typography(
+    headlineMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 32.sp,
+        fontWeight = FontWeight.Bold,
+        lineHeight = 40.sp,
+    ),
+    titleMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        lineHeight = 22.sp,
+    ),
+    titleLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        lineHeight = 28.sp,
+    ),
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.Normal,
+        lineHeight = 26.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Normal,
+        lineHeight = 22.sp,
+    ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Normal,
+        lineHeight = 20.sp,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontSize = 18.sp,
+        fontWeight = FontWeight.SemiBold,
+        lineHeight = 24.sp,
+    ),
+)

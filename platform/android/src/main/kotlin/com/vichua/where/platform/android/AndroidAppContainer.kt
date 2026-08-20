@@ -6,6 +6,7 @@ import com.vichua.where.core.common.DefaultTextNormalizer
 import com.vichua.where.core.database.WhereDatabase
 import com.vichua.where.core.database.buildWhereDatabase
 import com.vichua.where.core.database.createAndroidDatabaseBuilder
+import com.vichua.where.core.database.query.AccessibilityPreferencesStore
 import com.vichua.where.core.database.query.HomeSnapshotStore
 import com.vichua.where.core.database.query.ItemTextSearchStore
 import com.vichua.where.core.database.query.ItemDetailStore
@@ -45,6 +46,8 @@ import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.SearchItemsUseCase
+import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
+import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
 
 /**
  * Android 进程级依赖容器。
@@ -81,6 +84,11 @@ class AndroidAppContainer(
         RoomItemDeletionRepository(ItemDeletionStore(database))
     private val locationManagementRepository =
         RoomLocationManagementRepository(LocationManagementStore(database))
+    private val accessibilityPreferencesRepository =
+        RoomAccessibilityPreferencesRepository(
+            store = AccessibilityPreferencesStore(database),
+            clock = AndroidEpochMillisecondsClock,
+        )
     private val itemDraftRepository = RoomItemDraftRepository(
         store = ItemDraftStore(database),
         nowMillis = AndroidEpochMillisecondsClock::now,
@@ -250,6 +258,16 @@ class AndroidAppContainer(
     val deleteEmptyLocationUseCase = DeleteEmptyLocationUseCase(
         repository = locationManagementRepository,
         idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 读取当前设备适老与辅助偏好的用例。 */
+    val loadAccessibilityPreferencesUseCase =
+        LoadAccessibilityPreferencesUseCase(accessibilityPreferencesRepository)
+
+    /** 更新当前设备适老与辅助偏好的用例。 */
+    val updateAccessibilityPreferencesUseCase = UpdateAccessibilityPreferencesUseCase(
+        repository = accessibilityPreferencesRepository,
         clock = AndroidEpochMillisecondsClock,
     )
 

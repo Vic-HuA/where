@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,9 @@ import com.vichua.where.feature.search.text.ItemTextSearchResult
  * @param onBack 返回首页。
  * @param onSearch 提交查询。
  * @param onResultClick 打开物品详情。
+ * @param elderFriendlyMode 是否使用更大卡片，并为每条结果提供朗读位置。
+ * @param speechErrorMessage 可展示的中文朗读错误。
+ * @param onReadLocation 朗读单条搜索结果的名称、位置和更新时间。
  */
 @Composable
 fun SearchScreen(
@@ -56,6 +60,9 @@ fun SearchScreen(
     onBack: () -> Unit,
     onSearch: (String) -> Unit,
     onResultClick: (ItemTextSearchResult) -> Unit,
+    elderFriendlyMode: Boolean = false,
+    speechErrorMessage: String? = null,
+    onReadLocation: (ItemTextSearchResult) -> Unit = {},
 ) {
     var query by remember(initialQuery) { mutableStateOf(initialQuery) }
 
@@ -143,6 +150,14 @@ fun SearchScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
+        if (speechErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = speechErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
 
         if (!searching && results != null) {
             Text(
@@ -176,8 +191,12 @@ fun SearchScreen(
                     SearchResultCard(
                         modifier = Modifier.padding(top = 12.dp),
                         result = result,
+                        elderFriendlyMode = elderFriendlyMode,
                         onClick = {
                             onResultClick(result)
+                        },
+                        onReadLocation = {
+                            onReadLocation(result)
                         },
                     )
                 }
@@ -205,8 +224,11 @@ fun SearchScreen(
 private fun SearchResultCard(
     modifier: Modifier,
     result: ItemTextSearchResult,
+    elderFriendlyMode: Boolean,
     onClick: () -> Unit,
+    onReadLocation: () -> Unit,
 ) {
+    val thumbnailSize = if (elderFriendlyMode) 96.dp else 76.dp
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -218,47 +240,64 @@ private fun SearchResultCard(
         shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, WhereOutlineColor),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Surface(
-                modifier = Modifier.size(76.dp),
-                color = WhereSelectedContainerColor,
-                shape = RoundedCornerShape(12.dp),
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                Surface(
+                    modifier = Modifier.size(thumbnailSize),
+                    color = WhereSelectedContainerColor,
+                    shape = RoundedCornerShape(12.dp),
                 ) {
-                    Icon(
-                        modifier = Modifier.size(30.dp),
-                        imageVector = WhereIcons.Image,
-                        contentDescription = null,
-                        tint = WherePrimaryColor,
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(if (elderFriendlyMode) 36.dp else 30.dp),
+                            imageVector = WhereIcons.Image,
+                            contentDescription = null,
+                            tint = WherePrimaryColor,
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = result.name,
+                        color = WherePrimaryTextColor,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = result.locationPath,
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = "最近更新",
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = result.name,
-                    color = WherePrimaryTextColor,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Text(
-                    modifier = Modifier.padding(top = 6.dp),
-                    text = result.locationPath,
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    modifier = Modifier.padding(top = 6.dp),
-                    text = "最近更新",
-                    color = WhereSecondaryTextColor,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            if (elderFriendlyMode) {
+                TextButton(
+                    modifier = Modifier.padding(top = 4.dp),
+                    onClick = onReadLocation,
+                ) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        imageVector = WhereIcons.ReadAloud,
+                        contentDescription = null,
+                    )
+                    Text(
+                        modifier = Modifier.padding(start = 6.dp),
+                        text = "朗读位置",
+                    )
+                }
             }
         }
     }

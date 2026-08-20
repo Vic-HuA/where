@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
                 createLocationUseCase = container.createLocationUseCase,
                 renameLocationUseCase = container.renameLocationUseCase,
                 deleteEmptyLocationUseCase = container.deleteEmptyLocationUseCase,
+                loadAccessibilityPreferencesUseCase = container.loadAccessibilityPreferencesUseCase,
+                updateAccessibilityPreferencesUseCase = container.updateAccessibilityPreferencesUseCase,
                 suggestedDeviceName = container.suggestedDeviceName,
                 devicePlatform = DevicePlatform.ANDROID,
             )

@@ -29,4 +29,5 @@ dependencies {
     api(project(":shared:feature:item"))
     api(project(":shared:feature:location"))
     api(project(":shared:feature:search"))
+    api(project(":shared:feature:settings"))
 }

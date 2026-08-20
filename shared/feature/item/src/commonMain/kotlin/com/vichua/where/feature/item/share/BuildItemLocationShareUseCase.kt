@@ -2,6 +2,7 @@ package com.vichua.where.feature.item.share
 
 import com.vichua.where.core.common.VisibleDateTimeFormatter
 import com.vichua.where.core.model.PhotoAssetId
+import com.vichua.where.core.model.UtcTimestamp
 import com.vichua.where.feature.item.detail.ItemDetail
 
 /**
@@ -74,14 +75,28 @@ class BuildItemLocationSpeechUseCase(
     /**
      * 生成一段适合本地 TTS 的短句。
      */
-    operator fun invoke(detail: ItemDetail): String {
-        val spokenTime = dateTimeFormatter.format(detail.updatedAt.epochMilliseconds)
+    operator fun invoke(detail: ItemDetail): String = fromParts(
+        name = detail.name,
+        locationPath = detail.locationPath,
+        locationDescription = detail.locationDescription,
+        updatedAt = detail.updatedAt,
+    )
+
+    /**
+     * 用名称、逐级位置和更新时间组装朗读文本，供详情和搜索结果共用。
+     */
+    fun fromParts(
+        name: String,
+        locationPath: String,
+        locationDescription: String?,
+        updatedAt: UtcTimestamp,
+    ): String {
+        val spokenTime = dateTimeFormatter.format(updatedAt.epochMilliseconds)
         return buildString {
-            append(detail.name)
+            append(name)
             append('。')
-            append(detail.locationPath)
+            append(locationPath)
             append('。')
-            val locationDescription = detail.locationDescription
             if (!locationDescription.isNullOrBlank()) {
                 append(locationDescription)
                 append('。')

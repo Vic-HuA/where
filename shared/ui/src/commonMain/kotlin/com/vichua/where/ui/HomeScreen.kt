@@ -70,6 +70,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onRecordItemClick 打开新增物品流程。
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
+ * @param elderFriendlyMode 是否使用适老首页：两大入口替代搜索框和拍照记录按钮。
  */
 @Composable
 fun HomeScreen(
@@ -88,6 +89,7 @@ fun HomeScreen(
     onRecordItemClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    elderFriendlyMode: Boolean = false,
 ) {
     Scaffold(
         containerColor = WhereBackgroundColor,
@@ -154,27 +156,46 @@ fun HomeScreen(
                 )
             }
 
-            HomeSearchSurface(
-                modifier = Modifier.padding(top = 18.dp),
-                onTextSearch = onTextSearch,
-                onVoiceSearchRequested = onVoiceSearchRequested,
-            )
-            Button(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp)
-                    .height(54.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = WherePrimaryColor,
-                    contentColor = WhereSurfaceColor,
-                ),
-                onClick = onRecordItemClick,
-            ) {
-                Text(
-                    text = "拍照记录物品",
-                    style = MaterialTheme.typography.labelLarge,
+            if (elderFriendlyMode) {
+                ElderHomeActionButton(
+                    modifier = Modifier.padding(top = 18.dp),
+                    icon = WhereIcons.Search,
+                    title = "我要找东西",
+                    description = "先说要找什么，也可以改用键盘",
+                    primary = true,
+                    onClick = onVoiceSearchRequested,
                 )
+                ElderHomeActionButton(
+                    modifier = Modifier.padding(top = 12.dp),
+                    icon = WhereIcons.Camera,
+                    title = "我要放东西",
+                    description = "拍照或说一句记录存放位置",
+                    primary = false,
+                    onClick = onRecordItemClick,
+                )
+            } else {
+                HomeSearchSurface(
+                    modifier = Modifier.padding(top = 18.dp),
+                    onTextSearch = onTextSearch,
+                    onVoiceSearchRequested = onVoiceSearchRequested,
+                )
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp)
+                        .height(54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WherePrimaryColor,
+                        contentColor = WhereSurfaceColor,
+                    ),
+                    onClick = onRecordItemClick,
+                ) {
+                    Text(
+                        text = "拍照记录物品",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
 
             if (loading) {
@@ -679,6 +700,55 @@ private fun BottomNavigationItem(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+    }
+}
+
+/**
+ * 适老首页主入口：图形、文字和可朗读语义同时给出。
+ */
+@Composable
+private fun ElderHomeActionButton(
+    modifier: Modifier,
+    icon: ImageVector,
+    title: String,
+    description: String,
+    primary: Boolean,
+    onClick: () -> Unit,
+) {
+    Button(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(88.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (primary) WherePrimaryColor else WhereSurfaceColor,
+            contentColor = if (primary) WhereSurfaceColor else WherePrimaryTextColor,
+        ),
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(
+                modifier = Modifier.size(32.dp),
+                imageVector = icon,
+                contentDescription = title,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 4.dp),
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }

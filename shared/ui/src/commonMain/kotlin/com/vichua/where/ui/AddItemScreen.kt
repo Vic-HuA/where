@@ -64,6 +64,8 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * @param onSaveDraft 保存当前未完成输入为设备本地草稿。
  * @param onDiscardDraft 放弃当前草稿并离开页面。
  * @param onSubmit 确认后提交基础手动物品请求。
+ * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
+ * @param onSpeakRequested 适老“说一句”入口；语音尚未接入时由上层提示。
  */
 @Composable
 fun AddItemScreen(
@@ -80,6 +82,8 @@ fun AddItemScreen(
     onSaveDraft: (ItemDraftContent) -> Unit,
     onDiscardDraft: () -> Unit,
     onSubmit: (CreateManualItemRequest) -> Unit,
+    elderFriendlyMode: Boolean = false,
+    onSpeakRequested: () -> Unit = {},
 ) {
     var itemName by remember(draft) { mutableStateOf(draft?.name.orEmpty()) }
     var selectedLocationId by remember(draft) { mutableStateOf(draft?.locationId) }
@@ -138,34 +142,53 @@ fun AddItemScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        AddItemSteps(modifier = Modifier.padding(top = 18.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 18.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            PhotoActionCard(
-                modifier = Modifier.weight(1f),
-                icon = WhereIcons.Location,
-                title = "拍存放位置 ＋",
-                description = "拍房间、柜子或盒子",
+        if (!elderFriendlyMode) {
+            AddItemSteps(modifier = Modifier.padding(top = 18.dp))
+        }
+        if (elderFriendlyMode) {
+            ElderAddItemActions(
+                modifier = Modifier.padding(top = 18.dp),
                 enabled = !submitting,
-                onClick = {
-                    onPickPhoto(PhotoRole.ENVIRONMENT)
-                },
-            )
-            PhotoActionCard(
-                modifier = Modifier.weight(1f),
-                icon = WhereIcons.AddPhoto,
-                title = "拍物品 ＋",
-                description = "拍清楚物品外观",
-                enabled = !submitting,
-                onClick = {
+                canContinue = canContinue,
+                onPickItemPhoto = {
                     onPickPhoto(PhotoRole.ITEM)
                 },
+                onPickLocationPhoto = {
+                    onPickPhoto(PhotoRole.ENVIRONMENT)
+                },
+                onSpeak = onSpeakRequested,
+                onContinue = {
+                    confirmationDialogVisible = true
+                },
             )
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PhotoActionCard(
+                    modifier = Modifier.weight(1f),
+                    icon = WhereIcons.Location,
+                    title = "拍存放位置 ＋",
+                    description = "拍房间、柜子或盒子",
+                    enabled = !submitting,
+                    onClick = {
+                        onPickPhoto(PhotoRole.ENVIRONMENT)
+                    },
+                )
+                PhotoActionCard(
+                    modifier = Modifier.weight(1f),
+                    icon = WhereIcons.AddPhoto,
+                    title = "拍物品 ＋",
+                    description = "拍清楚物品外观",
+                    enabled = !submitting,
+                    onClick = {
+                        onPickPhoto(PhotoRole.ITEM)
+                    },
+                )
+            }
         }
         PhotoThumbnailRow(
             modifier = Modifier.padding(top = 12.dp),
@@ -336,32 +359,34 @@ fun AddItemScreen(
             }
         }
 
-        Button(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
-                .height(52.dp),
-            enabled = canContinue,
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = WherePrimaryColor,
-                contentColor = WhereSurfaceColor,
-            ),
-            onClick = {
-                confirmationDialogVisible = true
-            },
-        ) {
-            if (submitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = WhereSurfaceColor,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Text(
-                    text = "继续确认",
-                    style = MaterialTheme.typography.labelLarge,
-                )
+        if (!elderFriendlyMode) {
+            Button(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+                    .height(52.dp),
+                enabled = canContinue,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = WherePrimaryColor,
+                    contentColor = WhereSurfaceColor,
+                ),
+                onClick = {
+                    confirmationDialogVisible = true
+                },
+            ) {
+                if (submitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = WhereSurfaceColor,
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text(
+                        text = "继续确认",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -537,6 +562,88 @@ private fun StepBadge(
             text = label,
             color = if (active) WherePrimaryTextColor else WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+/**
+ * 适老录入四个主操作，映射到已有相册分槽和确认保存。
+ */
+@Composable
+private fun ElderAddItemActions(
+    modifier: Modifier,
+    enabled: Boolean,
+    canContinue: Boolean,
+    onPickItemPhoto: () -> Unit,
+    onPickLocationPhoto: () -> Unit,
+    onSpeak: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        ElderAddItemActionButton(
+            icon = WhereIcons.AddPhoto,
+            title = "拍物品",
+            enabled = enabled,
+            primary = false,
+            onClick = onPickItemPhoto,
+        )
+        ElderAddItemActionButton(
+            icon = WhereIcons.Location,
+            title = "拍存放位置",
+            enabled = enabled,
+            primary = false,
+            onClick = onPickLocationPhoto,
+        )
+        ElderAddItemActionButton(
+            icon = WhereIcons.Microphone,
+            title = "说一句",
+            enabled = enabled,
+            primary = false,
+            onClick = onSpeak,
+        )
+        ElderAddItemActionButton(
+            icon = WhereIcons.Confirm,
+            title = "继续确认",
+            enabled = canContinue,
+            primary = true,
+            onClick = onContinue,
+        )
+    }
+}
+
+@Composable
+private fun ElderAddItemActionButton(
+    icon: ImageVector,
+    title: String,
+    enabled: Boolean,
+    primary: Boolean,
+    onClick: () -> Unit,
+) {
+    Button(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp),
+        enabled = enabled,
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (primary) WherePrimaryColor else WhereSurfaceColor,
+            contentColor = if (primary) WhereSurfaceColor else WherePrimaryTextColor,
+        ),
+        onClick = onClick,
+    ) {
+        Icon(
+            modifier = Modifier.size(24.dp),
+            imageVector = icon,
+            contentDescription = title,
+        )
+        Text(
+            modifier = Modifier.padding(start = 10.dp),
+            text = title,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge,
         )
     }
 }
