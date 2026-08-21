@@ -3,29 +3,35 @@ package com.vichua.where.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -83,156 +90,206 @@ fun LocationManagementScreen(
             )
         },
     ) { innerPadding ->
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-    ) {
-        Text("位置管理", style = MaterialTheme.typography.titleLarge)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+        ) {
+            Text(
+                text = "位置管理",
+                style = MaterialTheme.typography.headlineMedium,
+            )
 
-        when {
-            loading && snapshot == null -> {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(top = 48.dp),
-                )
+            when {
+                loading && snapshot == null -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 48.dp),
+                    )
+                }
+                snapshot == null -> {
+                    Text(
+                        modifier = Modifier.padding(top = 24.dp),
+                        text = errorMessage ?: "暂时无法读取位置。",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Button(
+                        modifier = Modifier.padding(top = 16.dp),
+                        onClick = onRetry,
+                    ) {
+                        Text("重试")
+                    }
+                }
+                else -> {
+                    LocationSearchField(
+                        query = locationQuery,
+                        onQueryChange = { value ->
+                            locationQuery = value
+                        },
+                    )
+                    LocationSummaryCard(snapshot = snapshot)
+                    Text(
+                        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                        text = "位置结构",
+                        color = WhereSecondaryTextColor,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+
+                    val trimmedQuery = locationQuery.trim()
+                    snapshot.nodes
+                        .filter { node -> node.locationId != snapshot.rootLocationId }
+                        .filter { node ->
+                            if (trimmedQuery.isEmpty()) {
+                                isVisible(node, snapshot.nodes, expandedLocationIds)
+                            } else {
+                                node.name.contains(trimmedQuery, ignoreCase = true) ||
+                                    node.displayPath.contains(trimmedQuery, ignoreCase = true)
+                            }
+                        }
+                        .forEach { node ->
+                            val expanded = node.locationId.value in expandedLocationIds
+                            LocationTreeRow(
+                                node = node,
+                                expanded = expanded,
+                                highlighted = expanded && node.depth == 1 && trimmedQuery.isEmpty(),
+                                submitting = submitting,
+                                onToggle = {
+                                    expandedLocationIds = expandedLocationIds.toggle(node.locationId.value)
+                                },
+                                onAdd = {
+                                    editorState = LocationEditorState.Create(node)
+                                },
+                                onRename = {
+                                    editorState = LocationEditorState.Rename(node)
+                                },
+                                onDelete = {
+                                    editorState = LocationEditorState.Delete(node)
+                                },
+                            )
+                        }
+
+                    val root = snapshot.nodes.first { node ->
+                        node.locationId == snapshot.rootLocationId
+                    }
+                    Button(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp)
+                            .height(48.dp),
+                        enabled = !submitting && root.allowedChildTypes.isNotEmpty(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = WherePrimaryColor),
+                        onClick = {
+                            editorState = LocationEditorState.Create(root)
+                        },
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(18.dp),
+                            imageVector = WhereIcons.Add,
+                            contentDescription = null,
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("新增位置")
+                    }
+                }
             }
-            snapshot == null -> {
+
+            if (errorMessage != null && snapshot != null) {
                 Text(
-                    modifier = Modifier.padding(top = 24.dp),
-                    text = errorMessage ?: "暂时无法读取位置。",
+                    modifier = Modifier.padding(top = 12.dp),
+                    text = errorMessage,
                     color = MaterialTheme.colorScheme.error,
                 )
-                Button(
-                    modifier = Modifier.padding(top = 16.dp),
-                    onClick = onRetry,
-                ) {
-                    Text("重试")
-                }
-            }
-            else -> {
-                LocationSummaryCard(snapshot = snapshot)
-                Button(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                        .height(52.dp),
-                    enabled = !submitting,
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = WherePrimaryColor),
-                    onClick = {
-                        val root = snapshot.nodes.first { node ->
-                            node.locationId == snapshot.rootLocationId
-                        }
-                        editorState = LocationEditorState.Create(root)
-                    },
-                ) {
-                    Text("添加房间")
-                }
-                OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    value = locationQuery,
-                    onValueChange = { value ->
-                        locationQuery = value
-                    },
-                    singleLine = true,
-                    label = { Text("搜索房间、家具或容器") },
-                )
-
-                val trimmedQuery = locationQuery.trim()
-                snapshot.nodes
-                    .filter { node -> node.locationId != snapshot.rootLocationId }
-                    .filter { node ->
-                        if (trimmedQuery.isEmpty()) {
-                            isVisible(node, snapshot.nodes, expandedLocationIds)
-                        } else {
-                            node.name.contains(trimmedQuery, ignoreCase = true) ||
-                                node.displayPath.contains(trimmedQuery, ignoreCase = true)
-                        }
-                    }
-                    .forEach { node ->
-                        LocationTreeRow(
-                            node = node,
-                            expanded = node.locationId.value in expandedLocationIds,
-                            submitting = submitting,
-                            onToggle = {
-                                expandedLocationIds = expandedLocationIds.toggle(node.locationId.value)
-                            },
-                            onAdd = {
-                                editorState = LocationEditorState.Create(node)
-                            },
-                            onRename = {
-                                editorState = LocationEditorState.Rename(node)
-                            },
-                            onDelete = {
-                                editorState = LocationEditorState.Delete(node)
-                            },
-                        )
-                    }
             }
         }
 
-        if (errorMessage != null && snapshot != null) {
-            Text(
-                modifier = Modifier.padding(top = 12.dp),
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error,
+        when (val editor = editorState) {
+            is LocationEditorState.Create -> LocationNameDialog(
+                title = "新增位置",
+                confirmText = "添加",
+                initialName = "",
+                allowedTypes = editor.parent.allowedChildTypes,
+                onDismiss = { editorState = null },
+                onConfirm = { type, name ->
+                    onCreate(
+                        CreateLocationRequest(
+                            parentId = editor.parent.locationId,
+                            type = type,
+                            name = name,
+                        ),
+                    )
+                    editorState = null
+                },
             )
-        }
-    }
-
-    when (val editor = editorState) {
-        is LocationEditorState.Create -> LocationNameDialog(
-            title = "新增位置",
-            confirmText = "添加",
-            initialName = "",
-            allowedTypes = editor.parent.allowedChildTypes,
-            onDismiss = { editorState = null },
-            onConfirm = { type, name ->
-                onCreate(
-                    CreateLocationRequest(
-                        parentId = editor.parent.locationId,
-                        type = type,
-                        name = name,
-                    ),
-                )
-                editorState = null
-            },
-        )
-        is LocationEditorState.Rename -> LocationNameDialog(
-            title = "重命名${locationTypeLabel(editor.node.type)}",
-            confirmText = "保存",
-            initialName = editor.node.name,
-            allowedTypes = listOf(editor.node.type),
-            typeLocked = true,
-            onDismiss = { editorState = null },
-            onConfirm = { _, name ->
-                onRename(editor.node, name)
-                editorState = null
-            },
-        )
-        is LocationEditorState.Delete -> WhereDialog(
-            onDismissRequest = { editorState = null },
-            title = "删除位置",
-            confirmText = "删除",
-            onConfirm = {
-                onDelete(editor.node)
-                editorState = null
-            },
-            confirmDestructive = true,
-            dismissText = "取消",
-            onDismiss = { editorState = null },
-        ) {
+            is LocationEditorState.Rename -> LocationNameDialog(
+                title = "重命名${locationTypeLabel(editor.node.type)}",
+                confirmText = "保存",
+                initialName = editor.node.name,
+                allowedTypes = listOf(editor.node.type),
+                typeLocked = true,
+                onDismiss = { editorState = null },
+                onConfirm = { _, name ->
+                    onRename(editor.node, name)
+                    editorState = null
+                },
+            )
+            is LocationEditorState.Delete -> WhereDialog(
+                onDismissRequest = { editorState = null },
+                title = "删除位置",
+                confirmText = "删除",
+                onConfirm = {
+                    onDelete(editor.node)
+                    editorState = null
+                },
+                confirmDestructive = true,
+                dismissText = "取消",
+                onDismiss = { editorState = null },
+            ) {
                 Text("删除“${editor.node.name}”后，该空位置不再出现在位置树中。")
+            }
+            null -> Unit
         }
-        null -> Unit
     }
-    }
+}
+
+/**
+ * 按原型做成带搜索图标的单行检索框，避免再占一块表单标签。
+ */
+@Composable
+private fun LocationSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+            .heightIn(min = 48.dp),
+        value = query,
+        onValueChange = onQueryChange,
+        singleLine = true,
+        placeholder = { Text("搜索房间、家具或容器") },
+        leadingIcon = {
+            Icon(
+                modifier = Modifier.size(18.dp),
+                imageVector = WhereIcons.Search,
+                contentDescription = null,
+                tint = WhereSecondaryTextColor,
+            )
+        },
+        shape = RoundedCornerShape(14.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = WhereSurfaceColor,
+            unfocusedContainerColor = WhereSurfaceColor,
+            disabledContainerColor = WhereSurfaceColor,
+            focusedBorderColor = WherePrimaryColor,
+            unfocusedBorderColor = WhereOutlineColor,
+        ),
+    )
 }
 
 /**
@@ -243,28 +300,33 @@ private fun LocationSummaryCard(snapshot: LocationTreeSnapshot) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp),
-        shape = RoundedCornerShape(18.dp),
-        color = WhereSurfaceColor,
-        border = BorderStroke(1.dp, WhereOutlineColor),
+            .padding(top = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = WhereSelectedContainerColor,
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = snapshot.householdName,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                modifier = Modifier.padding(top = 6.dp),
-                text = "${snapshot.roomCount} 个房间 · ${snapshot.itemCount} 件物品",
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = snapshot.householdName,
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 4.dp),
+                    text = "${snapshot.roomCount} 个房间 · ${snapshot.itemCount} 件物品",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             if (snapshot.locationUnconfirmedCount > 0L) {
                 Text(
-                    modifier = Modifier.padding(top = 8.dp),
-                    text = "${snapshot.locationUnconfirmedCount} 件物品位置待确认",
-                    color = MaterialTheme.colorScheme.error,
+                    text = "${snapshot.locationUnconfirmedCount} 件待确认",
+                    color = ColorUnconfirmed,
+                    fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -273,102 +335,122 @@ private fun LocationSummaryCard(snapshot: LocationTreeSnapshot) {
 }
 
 /**
- * 展示单个位置节点及其新增、重命名和删除入口。
+ * 展示单个位置节点，操作收入右侧菜单以免撑高树行。
  */
 @Composable
 private fun LocationTreeRow(
     node: LocationTreeNode,
     expanded: Boolean,
+    highlighted: Boolean,
     submitting: Boolean,
     onToggle: () -> Unit,
     onAdd: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    var menuExpanded by remember(node.locationId) { mutableStateOf(false) }
+    val canAdd = node.allowedChildTypes.isNotEmpty()
+    val hasMenuActions = canAdd || node.canRename || node.canDelete
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp, start = 16.dp * (node.depth.coerceAtLeast(1) - 1)),
-        shape = RoundedCornerShape(16.dp),
-        color = WhereSurfaceColor,
-        border = BorderStroke(1.dp, WhereOutlineColor),
+            .padding(top = 8.dp, start = 20.dp * (node.depth.coerceAtLeast(1) - 1)),
+        shape = RoundedCornerShape(13.dp),
+        color = if (highlighted) WhereSelectedContainerColor else WhereSurfaceColor,
+        border = BorderStroke(
+            1.dp,
+            if (highlighted) WherePrimaryColor else WhereOutlineColor,
+        ),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (node.childCount > 0) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 50.dp)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (node.childCount > 0) {
+                Icon(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clickable(role = Role.Button, onClick = onToggle)
+                        .padding(12.dp),
+                    imageVector = if (expanded) {
+                        WhereIcons.ExpandMore
+                    } else {
+                        Icons.AutoMirrored.Outlined.KeyboardArrowRight
+                    },
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = WhereSecondaryTextColor,
+                )
+            } else {
+                Spacer(modifier = Modifier.size(16.dp))
+            }
+            Icon(
+                modifier = Modifier.size(16.dp),
+                imageVector = WhereIcons.location(node.iconKey, node.type),
+                contentDescription = locationTypeLabel(node.type),
+                tint = WherePrimaryColor,
+            )
+            Text(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 6.dp, end = 8.dp),
+                text = node.name,
+                fontWeight = if (node.depth == 1) FontWeight.Bold else FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "${node.itemCount} 件",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (hasMenuActions) {
+                Box {
                     Icon(
                         modifier = Modifier
-                            .size(48.dp)
-                            .clickable(role = Role.Button, onClick = onToggle)
+                            .size(40.dp)
+                            .clickable(
+                                enabled = !submitting,
+                                role = Role.Button,
+                                onClick = { menuExpanded = true },
+                            )
                             .padding(12.dp),
-                        imageVector = if (expanded) WhereIcons.ExpandLess else WhereIcons.ExpandMore,
-                        contentDescription = if (expanded) "收起" else "展开",
+                        imageVector = Icons.Outlined.MoreVert,
+                        contentDescription = "位置操作",
+                        tint = WhereSecondaryTextColor,
                     )
-                } else {
-                    Spacer(modifier = Modifier.size(28.dp))
-                }
-                Icon(
-                    modifier = Modifier.size(22.dp),
-                    imageVector = WhereIcons.location(node.iconKey, node.type),
-                    contentDescription = locationTypeLabel(node.type),
-                    tint = WherePrimaryColor,
-                )
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 10.dp),
-                ) {
-                    Text(
-                        text = node.name,
-                        fontWeight = FontWeight.SemiBold,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = "${locationTypeLabel(node.type)} · ${node.itemCount} 件物品",
-                        color = WhereSecondaryTextColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.padding(top = 8.dp, start = 32.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                TextButton(
-                    enabled = !submitting && node.allowedChildTypes.isNotEmpty(),
-                    onClick = onAdd,
-                ) {
-                    Icon(
-                        modifier = Modifier.size(18.dp),
-                        imageVector = WhereIcons.Add,
-                        contentDescription = null,
-                    )
-                    Text("添加")
-                }
-                if (node.canRename) {
-                    TextButton(
-                        enabled = !submitting,
-                        onClick = onRename,
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
                     ) {
-                        Icon(
-                            modifier = Modifier.size(18.dp),
-                            imageVector = WhereIcons.Edit,
-                            contentDescription = null,
-                        )
-                        Text("重命名")
-                    }
-                }
-                if (node.canDelete) {
-                    TextButton(
-                        enabled = !submitting,
-                        onClick = onDelete,
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(18.dp),
-                            imageVector = WhereIcons.Delete,
-                            contentDescription = null,
-                        )
-                        Text("删除")
+                        if (canAdd) {
+                            DropdownMenuItem(
+                                text = { Text("添加子位置") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onAdd()
+                                },
+                            )
+                        }
+                        if (node.canRename) {
+                            DropdownMenuItem(
+                                text = { Text("重命名") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRename()
+                                },
+                            )
+                        }
+                        if (node.canDelete) {
+                            DropdownMenuItem(
+                                text = { Text("删除") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -402,55 +484,55 @@ private fun LocationNameDialog(
         dismissText = "取消",
         onDismiss = onDismiss,
     ) {
-                if (!typeLocked && allowedTypes.size > 1) {
-                    Text(
-                        text = "位置类型",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Row(
-                        modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        if (!typeLocked && allowedTypes.size > 1) {
+            Text(
+                text = "位置类型",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Row(
+                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                allowedTypes.forEach { type ->
+                    val selected = type == selectedType
+                    Surface(
+                        modifier = Modifier.selectable(
+                            selected = selected,
+                            role = Role.RadioButton,
+                            onClick = { selectedType = type },
+                        ),
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (selected) {
+                            WhereSelectedContainerColor
+                        } else {
+                            WhereSurfaceColor
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (selected) WherePrimaryColor else WhereOutlineColor,
+                        ),
                     ) {
-                        allowedTypes.forEach { type ->
-                            val selected = type == selectedType
-                            Surface(
-                                modifier = Modifier.selectable(
-                                    selected = selected,
-                                    role = Role.RadioButton,
-                                    onClick = { selectedType = type },
-                                ),
-                                shape = RoundedCornerShape(20.dp),
-                                color = if (selected) {
-                                    WhereSelectedContainerColor
-                                } else {
-                                    WhereSurfaceColor
-                                },
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (selected) WherePrimaryColor else WhereOutlineColor,
-                                ),
-                            ) {
-                                Text(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    text = locationTypeLabel(type),
-                                    color = if (selected) {
-                                        WherePrimaryColor
-                                    } else {
-                                        WherePrimaryTextColor
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                        }
+                        Text(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            text = locationTypeLabel(type),
+                            color = if (selected) {
+                                WherePrimaryColor
+                            } else {
+                                WherePrimaryTextColor
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
-                OutlinedTextField(
-                    modifier = Modifier.fillMaxWidth(),
-                    value = name,
-                    onValueChange = { value -> name = value },
-                    label = { Text("名称") },
-                    singleLine = true,
-                )
+            }
+        }
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = name,
+            onValueChange = { value -> name = value },
+            label = { Text("名称") },
+            singleLine = true,
+        )
     }
 }
 
@@ -501,3 +583,6 @@ private sealed interface LocationEditorState {
     data class Rename(val node: LocationTreeNode) : LocationEditorState
     data class Delete(val node: LocationTreeNode) : LocationEditorState
 }
+
+/** 原型待确认数量使用的红棕色，避免和错误提示抢同一套 error 色。 */
+private val ColorUnconfirmed = Color(0xFFA64239)
