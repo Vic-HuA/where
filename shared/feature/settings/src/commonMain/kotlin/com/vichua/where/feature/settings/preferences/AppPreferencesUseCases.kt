@@ -95,4 +95,19 @@ class UpdateAppPreferencesUseCase(
         repository.save(updated)
         return updated
     }
+
+    /**
+     * 单独调整备份提醒，不改变 AI 或云端语音开关。
+     *
+     * 关闭后首页不再提示尚未备份；已有成功备份时即使打开也不展示提醒。
+     */
+    suspend fun setBackupReminder(enabled: Boolean): LocalAppPreferences {
+        val current = repository.load()
+        val updated = current.copy(
+            backupReminderEnabled = enabled,
+            updatedAt = UtcTimestamp(clock.now()),
+        )
+        repository.save(updated)
+        return updated
+    }
 }

@@ -76,6 +76,7 @@ import com.vichua.where.core.model.RestoreSession
  * @param onHapticFeedbackChange 切换主要操作和危险确认是否震动。
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
+ * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
  * @param onCreateBackup 使用密码创建加密备份。
  * @param onExportHousehold 使用密码导出完整家庭数据。
  * @param onVerifyBackup 使用密码只读验证备份。
@@ -110,6 +111,7 @@ fun SettingsScreen(
     onHapticFeedbackChange: (Boolean) -> Unit,
     onAiAssistanceChange: (Boolean) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
+    onBackupReminderChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
     onExportHousehold: (String, String, ExportDestination) -> Unit,
     onVerifyBackup: (String) -> Unit,
@@ -257,10 +259,23 @@ fun SettingsScreen(
         PendingSettingsRow("位置管理", "请从首页底部进入，设置页不重复提供入口")
 
         SettingsSectionTitle("数据与备份")
+        SettingsSwitchRow(
+            title = "备份提醒",
+            description = "还没有成功备份时，在首页提醒你到设置里创建加密备份",
+            checked = appPreferences?.backupReminderEnabled == true,
+            enabled = appPreferences != null,
+            onCheckedChange = onBackupReminderChange,
+        )
         Text(
             modifier = Modifier.padding(bottom = 10.dp),
             text = lastVerifiedBackupText ?: "尚未成功备份。密码丢失后无法恢复。",
-            color = WhereSecondaryTextColor,
+            color = if (appPreferences?.backupReminderEnabled == true &&
+                lastVerifiedBackupText == null
+            ) {
+                WherePrimaryColor
+            } else {
+                WhereSecondaryTextColor
+            },
             style = MaterialTheme.typography.bodySmall,
         )
         SettingsActionRow(

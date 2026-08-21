@@ -463,10 +463,12 @@ fun WhereApp(
                 settingsLoading = false
             }
         }
-        if (destination == AppDestination.SETTINGS) {
+        if (destination == AppDestination.HOME || destination == AppDestination.SETTINGS) {
             try {
                 latestBackupStatus = loadLatestBackupStatusUseCase()
-                householdSummary = clearHouseholdDataUseCase.loadSummary()
+                if (destination == AppDestination.SETTINGS) {
+                    householdSummary = clearHouseholdDataUseCase.loadSummary()
+                }
             } catch (_: Exception) {
                 if (latestBackupStatus == null) {
                     latestBackupStatus = LatestBackupStatus(
@@ -540,6 +542,18 @@ fun WhereApp(
                     deletionUndoSubmitting = itemDeletionSubmitting,
                     deletionUndoErrorMessage = itemDeletionUndoError,
                     confirmationSpeechErrorMessage = confirmationSpeechError,
+                    backupReminderMessage = if (
+                        appPreferences?.backupReminderEnabled == true &&
+                        latestBackupStatus != null &&
+                        latestBackupStatus?.lastVerifiedAt == null
+                    ) {
+                        "还没有成功备份，可到设置里创建加密备份。"
+                    } else {
+                        null
+                    },
+                    onBackupReminderClick = {
+                        destination = AppDestination.SETTINGS
+                    },
                     onUndoDeletion = {
                         val undo = pendingItemDeletionUndo
                         if (undo != null && !itemDeletionSubmitting) {
@@ -1031,6 +1045,22 @@ fun WhereApp(
                                     }
                                 } catch (_: Exception) {
                                     settingsError = "保存触觉反馈失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onBackupReminderChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    appPreferences =
+                                        updateAppPreferencesUseCase.setBackupReminder(enabled)
+                                } catch (_: Exception) {
+                                    settingsError = "保存备份提醒失败，请稍后重试。"
                                 } finally {
                                     settingsSubmitting = false
                                 }

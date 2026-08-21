@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
  * @property cloudSpeechEnabled 云端语音识别是否开启。
  * @property aiDisclosureVersionAccepted 最近确认的 AI 披露版本；未确认时为空。
  * @property cloudSpeechDisclosureVersionAccepted 最近确认的云端语音披露版本；未确认时为空。
- * @property backupReminderEnabled 是否启用备份提醒；本步只持久化。
+ * @property backupReminderEnabled 是否在尚未成功备份时于首页提醒。
  * @property diagnosticLoggingEnabled 是否启用不含敏感内容的诊断日志；本步只持久化。
  * @property updatedAt 最近更新时间。
  */

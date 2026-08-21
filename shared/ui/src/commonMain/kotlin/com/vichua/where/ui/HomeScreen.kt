@@ -68,6 +68,8 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param deletionUndoSubmitting 是否正在执行撤销。
  * @param deletionUndoErrorMessage 可展示的中文撤销错误。
  * @param confirmationSpeechErrorMessage 确认保存后自动朗读失败时的中文降级提示。
+ * @param backupReminderMessage 开启备份提醒且尚未成功备份时的中文提示；已有备份或未开启时为空。
+ * @param onBackupReminderClick 从提醒进入设置与数据。
  * @param onUndoDeletion 撤销最近一次物品删除。
  * @param onRetry 重试加载首页数据。
  * @param onTextSearch 提交首页键盘查询。
@@ -89,6 +91,8 @@ fun HomeScreen(
     deletionUndoSubmitting: Boolean = false,
     deletionUndoErrorMessage: String? = null,
     confirmationSpeechErrorMessage: String? = null,
+    backupReminderMessage: String? = null,
+    onBackupReminderClick: () -> Unit = {},
     onUndoDeletion: () -> Unit = {},
     onRetry: () -> Unit,
     onTextSearch: (String) -> Unit,
@@ -171,6 +175,27 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
+            }
+            if (backupReminderMessage != null) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp)
+                        .clickable(
+                            role = Role.Button,
+                            onClick = onBackupReminderClick,
+                        ),
+                    color = WhereSelectedContainerColor,
+                    shape = RoundedCornerShape(13.dp),
+                ) {
+                    Text(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        text = backupReminderMessage,
+                        color = WherePrimaryTextColor,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
 
             if (elderFriendlyMode) {
