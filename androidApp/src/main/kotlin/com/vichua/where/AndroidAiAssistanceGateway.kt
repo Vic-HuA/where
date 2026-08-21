@@ -3,6 +3,7 @@ package com.vichua.where
 import android.util.Base64
 import android.util.Log
 import com.vichua.where.core.model.AiProviderCredentials
+import com.vichua.where.core.model.AiProviderVendor
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.platform.AiAssistanceGateway
 import com.vichua.where.core.platform.AiAssistanceOutcome
@@ -51,8 +52,31 @@ class AndroidAiAssistanceGateway(
                     Log.w(TAG, "AI assistance could not read any selected photo bytes.")
                     return@withContext AiAssistanceOutcome.Failed
                 }
-                val body = buildChatRequestBody(encodedPhotos)
-                val content = postChatCompletions(credentials, body)
+                val content = when (credentials.vendor) {
+                    AiProviderVendor.ANTHROPIC -> {
+                        postJson(
+                            url = anthropicMessagesUrl(credentials.baseUrl),
+                            body = buildAnthropicRequestBody(credentials.model, encodedPhotos),
+                            headers = mapOf(
+                                "x-api-key" to credentials.apiKey,
+                                "anthropic-version" to ANTHROPIC_VERSION,
+                                "Content-Type" to "application/json",
+                            ),
+                        ).let(::extractAnthropicContent)
+                    }
+                    AiProviderVendor.OPENAI,
+                    AiProviderVendor.CUSTOM,
+                    -> {
+                        postJson(
+                            url = "${credentials.baseUrl}/chat/completions",
+                            body = buildOpenAiRequestBody(credentials.model, encodedPhotos),
+                            headers = mapOf(
+                                "Authorization" to "Bearer ${credentials.apiKey}",
+                                "Content-Type" to "application/json",
+                            ),
+                        ).let(::extractOpenAiContent)
+                    }
+                }
                 parseSuggestions(content) ?: AiAssistanceOutcome.Failed
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -85,9 +109,12 @@ class AndroidAiAssistanceGateway(
     }
 
     /**
-     * 构造 chat/completions JSON。不得把 Key 或原图路径写进字符串以外的日志。
+     * 构造 OpenAI 兼容 chat/completions JSON。
      */
-    private fun buildChatRequestBody(photos: List<EncodedAiPhoto>): String {
+    private fun buildOpenAiRequestBody(
+        model: String,
+        photos: List<EncodedAiPhoto>,
+    ): String {
         val content = JSONArray()
         content.put(
             JSONObject()
@@ -118,7 +145,7 @@ class AndroidAiAssistanceGateway(
             )
         }
         return JSONObject()
-            .put("model", AiProviderCredentials.DEFAULT_MODEL)
+            .put("model", model)
             .put("response_format", JSONObject().put("type", "json_object"))
             .put(
                 "messages",
@@ -132,21 +159,83 @@ class AndroidAiAssistanceGateway(
     }
 
     /**
-     * 向兼容接口发送一次主动识别请求。
+     * 构造 Anthropic messages JSON，图片走 base64 source。
      */
-    private fun postChatCompletions(
-        credentials: AiProviderCredentials,
-        body: String,
+    private fun buildAnthropicRequestBody(
+        model: String,
+        photos: List<EncodedAiPhoto>,
     ): String {
-        val url = URL("${credentials.baseUrl}/chat/completions")
-        val connection = (url.openConnection() as HttpURLConnection).apply {
+        val content = JSONArray()
+        content.put(
+            JSONObject()
+                .put("type", "text")
+                .put(
+                    "text",
+                    "根据这些物品相关照片给出简短中文建议。只返回 JSON：" +
+                        "{\"itemName\":\"物品名称或空字符串\",\"locationDescription\":\"位置描述或空字符串\"}。" +
+                        "不要编造照片里看不到的信息。",
+                ),
+        )
+        photos.forEach { photo ->
+            content.put(
+                JSONObject()
+                    .put("type", "text")
+                    .put("text", "下一张用途：${photoRoleLabel(photo.role)}"),
+            )
+            content.put(
+                JSONObject()
+                    .put("type", "image")
+                    .put(
+                        "source",
+                        JSONObject()
+                            .put("type", "base64")
+                            .put("media_type", photo.mimeType)
+                            .put("data", photo.base64),
+                    ),
+            )
+        }
+        return JSONObject()
+            .put("model", model)
+            .put("max_tokens", 1024)
+            .put(
+                "messages",
+                JSONArray().put(
+                    JSONObject()
+                        .put("role", "user")
+                        .put("content", content),
+                ),
+            )
+            .toString()
+    }
+
+    /**
+     * Anthropic 官方根地址没有 /v1 时补上，已经带 /v1 的中转地址不再重复。
+     */
+    private fun anthropicMessagesUrl(baseUrl: String): String {
+        return if (baseUrl.endsWith("/v1")) {
+            "$baseUrl/messages"
+        } else {
+            "$baseUrl/v1/messages"
+        }
+    }
+
+    /**
+     * 发送一次主动识别请求，不把 Key 或正文写入日志。
+     */
+    private fun postJson(
+        url: String,
+        body: String,
+        headers: Map<String, String>,
+    ): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS
             doInput = true
             doOutput = true
-            setRequestProperty("Authorization", "Bearer ${credentials.apiKey}")
-            setRequestProperty("Content-Type", "application/json")
+            headers.forEach { (name, value) ->
+                setRequestProperty(name, value)
+            }
         }
         return try {
             connection.outputStream.use { stream ->
@@ -165,29 +254,45 @@ class AndroidAiAssistanceGateway(
                 Log.w(TAG, "AI assistance HTTP status $status.")
                 throw IOException("AI assistance HTTP status $status.")
             }
-            extractMessageContent(response)
+            response
         } finally {
             connection.disconnect()
         }
     }
 
     /**
-     * 从 chat 响应取出助手文本；兼容外层包一层 markdown。
+     * 从 OpenAI 兼容 chat 响应取出助手文本。
      */
-    private fun extractMessageContent(response: String): String {
-        val root = JSONObject(response)
-        val content = root
+    private fun extractOpenAiContent(response: String): String {
+        val content = JSONObject(response)
             .getJSONArray("choices")
             .getJSONObject(0)
             .getJSONObject("message")
             .getString("content")
             .trim()
-        return content
+        return unwrapMarkdownJson(content)
+    }
+
+    /**
+     * 从 Anthropic messages 响应取出第一段文本。
+     */
+    private fun extractAnthropicContent(response: String): String {
+        val blocks = JSONObject(response).getJSONArray("content")
+        for (index in 0 until blocks.length()) {
+            val block = blocks.getJSONObject(index)
+            if (block.optString("type") == "text") {
+                return unwrapMarkdownJson(block.getString("text").trim())
+            }
+        }
+        return unwrapMarkdownJson("")
+    }
+
+    private fun unwrapMarkdownJson(content: String): String =
+        content
             .removePrefix("```json")
             .removePrefix("```")
             .removeSuffix("```")
             .trim()
-    }
 
     /**
      * 只接受名称或位置至少一个非空字段，避免把空建议当成成功。
@@ -222,6 +327,7 @@ class AndroidAiAssistanceGateway(
 
     private companion object {
         const val TAG = "WhereAiAssistance"
+        const val ANTHROPIC_VERSION = "2023-06-01"
         const val MAX_ORIGINAL_BYTES = 800_000L
         const val CONNECT_TIMEOUT_MS = 20_000
         const val READ_TIMEOUT_MS = 60_000

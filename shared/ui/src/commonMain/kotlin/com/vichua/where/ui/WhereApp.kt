@@ -1141,18 +1141,20 @@ fun WhereApp(
                         aiProviderCredentials = null
                         settingsLoadAttempt += 1
                     },
-                    onSaveAiProviderCredentials = { apiKey, baseUrl ->
+                    onSaveAiProviderCredentials = { vendor, apiKey, baseUrl, model ->
                         if (!settingsSubmitting) {
                             coroutineScope.launch {
                                 settingsSubmitting = true
                                 settingsError = null
                                 try {
                                     aiProviderCredentials = updateAiProviderCredentialsUseCase(
+                                        vendor = vendor,
                                         apiKey = apiKey,
                                         baseUrl = baseUrl,
+                                        model = model,
                                     )
                                 } catch (_: IllegalArgumentException) {
-                                    settingsError = "接口地址必须是 https 开头，且不能包含空格。"
+                                    settingsError = "请填写 https 接口地址和模型名称。"
                                 } catch (_: Exception) {
                                     settingsError = "保存 AI 接口设置失败，请稍后重试。"
                                 } finally {

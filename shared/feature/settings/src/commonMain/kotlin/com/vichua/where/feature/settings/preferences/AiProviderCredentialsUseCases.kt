@@ -1,6 +1,7 @@
 package com.vichua.where.feature.settings.preferences
 
 import com.vichua.where.core.model.AiProviderCredentials
+import com.vichua.where.core.model.AiProviderVendor
 
 /**
  * 本机 AI 接口凭证仓储。
@@ -41,10 +42,17 @@ class UpdateAiProviderCredentialsUseCase(
      * 整理后写入本机。Key 可留空，表示先关掉实际上传。
      */
     operator fun invoke(
+        vendor: AiProviderVendor,
         apiKey: String,
         baseUrl: String,
+        model: String,
     ): AiProviderCredentials {
-        val credentials = AiProviderCredentials.normalized(apiKey, baseUrl)
+        val credentials = AiProviderCredentials.normalized(
+            vendor = vendor,
+            apiKey = apiKey,
+            baseUrl = baseUrl,
+            model = model,
+        )
         store.save(credentials)
         return credentials
     }

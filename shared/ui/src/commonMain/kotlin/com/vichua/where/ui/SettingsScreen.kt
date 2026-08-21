@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +45,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.AiAssistanceDisclosure
 import com.vichua.where.core.model.AiProviderCredentials
+import com.vichua.where.core.model.AiProviderVendor
 import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.CloudSpeechDisclosure
@@ -71,7 +74,7 @@ import com.vichua.where.core.model.LocalAppPreferences
  * @param onHapticFeedbackChange 切换主要操作和危险确认是否震动。
  * @param aiProviderCredentials 本机 AI 接口凭证；未加载时为空。
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
- * @param onSaveAiProviderCredentials 保存本机 Key 和可选接口地址。
+ * @param onSaveAiProviderCredentials 保存本机供应商、Key、接口地址和模型。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
  * @param onDiagnosticLoggingChange 切换是否写入不含敏感内容的本机诊断事件。
@@ -103,7 +106,7 @@ fun SettingsScreen(
     onAutoReadConfirmationChange: (Boolean) -> Unit,
     onHapticFeedbackChange: (Boolean) -> Unit,
     onAiAssistanceChange: (Boolean) -> Unit,
-    onSaveAiProviderCredentials: (String, String) -> Unit,
+    onSaveAiProviderCredentials: (AiProviderVendor, String, String, String) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
     onBackupReminderChange: (Boolean) -> Unit,
     onDiagnosticLoggingChange: (Boolean) -> Unit,
@@ -338,9 +341,9 @@ fun SettingsScreen(
                     aiProviderDialogVisible = false
                 }
             },
-            onSave = { apiKey, baseUrl ->
+            onSave = { vendor, apiKey, baseUrl, model ->
                 aiProviderDialogVisible = false
-                onSaveAiProviderCredentials(apiKey, baseUrl)
+                onSaveAiProviderCredentials(vendor, apiKey, baseUrl, model)
             },
         )
     }
@@ -718,31 +721,79 @@ private fun AiProviderCredentialsDialog(
     initialCredentials: AiProviderCredentials?,
     enabled: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit,
+    onSave: (AiProviderVendor, String, String, String) -> Unit,
 ) {
+    var vendor by remember {
+        mutableStateOf(initialCredentials?.vendor ?: AiProviderVendor.OPENAI)
+    }
     var apiKey by remember {
         mutableStateOf(initialCredentials?.apiKey.orEmpty())
     }
     var baseUrl by remember {
-        mutableStateOf(initialCredentials?.baseUrl ?: AiProviderCredentials.DEFAULT_BASE_URL)
+        mutableStateOf(initialCredentials?.baseUrl ?: AiProviderCredentials.OPENAI_BASE_URL)
     }
+    var model by remember {
+        mutableStateOf(initialCredentials?.model ?: AiProviderCredentials.OPENAI_DEFAULT_MODEL)
+    }
+    val canSave = enabled &&
+        baseUrl.trim().startsWith("https://") &&
+        ' ' !in baseUrl.trim() &&
+        model.trim().isNotEmpty() &&
+        ' ' !in model.trim()
     WhereDialog(
         onDismissRequest = onDismiss,
         title = "AI 接口",
         confirmText = "保存",
         onConfirm = {
-            onSave(apiKey, baseUrl)
+            onSave(vendor, apiKey, baseUrl, model)
         },
-        confirmEnabled = enabled,
+        confirmEnabled = canSave,
         dismissText = "取消",
         onDismiss = onDismiss,
         dismissEnabled = enabled,
     ) {
         Text(
-            text = "可填 OpenAI 或兼容接口。Key 只存在本机，不进入备份。地址必须是 https。",
+            text = "选择供应商会带入官方地址和默认模型。地址和模型都必填，Key 只存在本机。",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodySmall,
         )
+        Row(
+            modifier = Modifier.padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AiProviderVendor.entries.forEach { option ->
+                val selected = option == vendor
+                Surface(
+                    modifier = Modifier.selectable(
+                        selected = selected,
+                        role = Role.RadioButton,
+                        onClick = {
+                            vendor = option
+                            val presets = AiProviderCredentials.presetsFor(option)
+                            baseUrl = presets.first
+                            model = presets.second
+                        },
+                    ),
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
+                    border = BorderStroke(
+                        1.dp,
+                        if (selected) WherePrimaryColor else WhereOutlineColor,
+                    ),
+                ) {
+                    Text(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        text = when (option) {
+                            AiProviderVendor.OPENAI -> "OpenAI"
+                            AiProviderVendor.ANTHROPIC -> "Anthropic"
+                            AiProviderVendor.CUSTOM -> "自定义"
+                        },
+                        color = if (selected) WherePrimaryColor else WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
         OutlinedTextField(
             modifier = Modifier
                 .fillMaxWidth()
@@ -765,7 +816,19 @@ private fun AiProviderCredentialsDialog(
                 baseUrl = value
             },
             enabled = enabled,
-            label = { Text("接口地址（可选）") },
+            label = { Text("接口地址") },
+            singleLine = true,
+        )
+        OutlinedTextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            value = model,
+            onValueChange = { value ->
+                model = value
+            },
+            enabled = enabled,
+            label = { Text("模型") },
             singleLine = true,
         )
     }

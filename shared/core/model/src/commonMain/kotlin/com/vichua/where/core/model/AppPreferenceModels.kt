@@ -80,16 +80,25 @@ data class LocalAppPreferences(
  */
 object AiAssistanceDisclosure {
     /** 当前披露版本。 */
-    const val VERSION = "ai-assistance-v2"
+    const val VERSION = "ai-assistance-v3"
 
     /** 将处理的数据类型。 */
     const val DATA_TYPE = "你为当前这次记录主动选择的照片（最多 6 张）以及你主动提交的文字"
 
     /** 服务供应商说明。 */
-    const val VENDOR = "你填写的 OpenAI 兼容视觉接口"
+    const val VENDOR = "你选择的 OpenAI 或 Anthropic 视觉接口"
 
     /** 处理用途。 */
     const val PURPOSE = "根据选中内容建议物品名称、分类和位置描述，经你确认后才写入"
+}
+
+/**
+ * 本机 AI 接口协议。自定义走 OpenAI 兼容请求，方便代理和中转。
+ */
+enum class AiProviderVendor {
+    OPENAI,
+    ANTHROPIC,
+    CUSTOM,
 }
 
 /**
@@ -97,12 +106,16 @@ object AiAssistanceDisclosure {
  *
  * 只存在当前设备，不进入家庭备份、导出或诊断日志。
  *
+ * @property vendor 决定请求格式和默认地址。
  * @property apiKey 用户填写的接口密钥；为空表示尚未配置。
- * @property baseUrl HTTPS 接口根地址，默认官方 OpenAI。
+ * @property baseUrl 必填 HTTPS 接口根地址。
+ * @property model 必填模型名。
  */
 data class AiProviderCredentials(
+    val vendor: AiProviderVendor,
     val apiKey: String,
     val baseUrl: String,
+    val model: String,
 ) {
     init {
         require(apiKey.isEmpty() || apiKey.isNotBlank()) {
@@ -111,30 +124,43 @@ data class AiProviderCredentials(
         require(baseUrl.isNotBlank()) { "AI provider base URL must not be blank." }
         require(baseUrl.startsWith("https://")) { "AI provider base URL must use HTTPS." }
         require(' ' !in baseUrl) { "AI provider base URL must not contain spaces." }
+        require(model.isNotBlank()) { "AI model must not be blank." }
+        require(' ' !in model) { "AI model must not contain spaces." }
     }
 
-    /** 有 Key 时才允许真正发起识别。 */
+    /** Key、地址和模型都齐了才允许真正发起识别。 */
     val isConfigured: Boolean
-        get() = apiKey.isNotBlank()
+        get() = apiKey.isNotBlank() && baseUrl.isNotBlank() && model.isNotBlank()
 
     companion object {
-        /** 未填写时使用的官方兼容根地址。 */
-        const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
+        const val OPENAI_BASE_URL = "https://api.openai.com/v1"
+        const val ANTHROPIC_BASE_URL = "https://api.anthropic.com"
+        const val DEFAULT_BASE_URL = OPENAI_BASE_URL
+        const val OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+        const val ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-0"
+        const val DEFAULT_MODEL = OPENAI_DEFAULT_MODEL
 
-        /** 默认视觉模型；兼容接口通常接受同一名称。 */
-        const val DEFAULT_MODEL = "gpt-4o-mini"
+        /** 选择供应商后带入的官方地址和常用视觉模型。 */
+        fun presetsFor(vendor: AiProviderVendor): Pair<String, String> = when (vendor) {
+            AiProviderVendor.OPENAI -> OPENAI_BASE_URL to OPENAI_DEFAULT_MODEL
+            AiProviderVendor.ANTHROPIC -> ANTHROPIC_BASE_URL to ANTHROPIC_DEFAULT_MODEL
+            AiProviderVendor.CUSTOM -> OPENAI_BASE_URL to OPENAI_DEFAULT_MODEL
+        }
 
         /**
-         * 整理用户输入。地址留空时回落到默认官方根地址。
+         * 整理用户输入。地址和模型必须由界面填齐，不再偷偷回落到官方地址。
          */
         fun normalized(
+            vendor: AiProviderVendor,
             apiKey: String,
             baseUrl: String,
+            model: String,
         ): AiProviderCredentials {
-            val trimmedUrl = baseUrl.trim().trimEnd('/')
             return AiProviderCredentials(
+                vendor = vendor,
                 apiKey = apiKey.trim(),
-                baseUrl = trimmedUrl.ifEmpty { DEFAULT_BASE_URL },
+                baseUrl = baseUrl.trim().trimEnd('/'),
+                model = model.trim(),
             )
         }
     }
