@@ -158,6 +158,10 @@ fun AddItemScreen(
             onBack()
         }
     }
+    NavigationBackHandler(
+        enabled = !leaveDialogVisible,
+        onBack = requestLeave,
+    )
 
     Column(
         modifier = Modifier

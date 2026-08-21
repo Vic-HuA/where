@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -213,6 +214,7 @@ fun WhereApp(
     devicePlatform: DevicePlatform,
 ) {
     var destination by remember { mutableStateOf(AppDestination.LOADING) }
+    val navigationBackStack = remember { mutableStateListOf<NavigationFrame>() }
     var startupAttempt by remember { mutableIntStateOf(0) }
     var initializationInProgress by remember { mutableStateOf(false) }
     var initializationError by remember { mutableStateOf<String?>(null) }
@@ -232,6 +234,57 @@ fun WhereApp(
     var searchInProgress by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var selectedItemId by remember { mutableStateOf<ItemId?>(null) }
+
+    /**
+     * 进入可返回页面时压入当前页，系统 Back 和左上角返回共用这一层栈。
+     */
+    fun navigateTo(target: AppDestination, itemId: ItemId? = selectedItemId) {
+        if (destination == target && selectedItemId == itemId) {
+            return
+        }
+        if (destination.canEnterBackStack()) {
+            navigationBackStack.add(NavigationFrame(destination, selectedItemId))
+        }
+        selectedItemId = itemId
+        destination = target
+    }
+
+    /**
+     * 完成录入、删除等收口操作后回到首页，并丢掉中间页，避免再回到已结束流程。
+     */
+    fun navigateHome() {
+        navigationBackStack.clear()
+        selectedItemId = null
+        destination = AppDestination.HOME
+    }
+
+    /**
+     * 清除家庭等需要离开当前栈的场景，直接落到目标页。
+     */
+    fun resetTo(target: AppDestination) {
+        navigationBackStack.clear()
+        selectedItemId = null
+        destination = target
+    }
+
+    /**
+     * 弹出上一层；栈空且不在首页时回到首页，首页则交给系统退出。
+     */
+    fun popNavigation(): Boolean {
+        val previous = navigationBackStack.removeLastOrNull()
+        if (previous != null) {
+            selectedItemId = previous.selectedItemId
+            destination = previous.destination
+            return true
+        }
+        if (destination.canEnterBackStack() && destination != AppDestination.HOME) {
+            selectedItemId = null
+            destination = AppDestination.HOME
+            return true
+        }
+        return false
+    }
+
     var itemDetail by remember { mutableStateOf<ItemDetail?>(null) }
     var itemDetailLoading by remember { mutableStateOf(false) }
     var itemDetailError by remember { mutableStateOf<String?>(null) }
@@ -251,6 +304,19 @@ fun WhereApp(
     var itemSpeechCanRepeat by remember { mutableStateOf(false) }
     var itemShareSubmitting by remember { mutableStateOf(false) }
     var itemShareError by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * 离开详情前停掉朗读并收起编辑态，避免返回后残留弹层。
+     */
+    fun leaveItemDetailAndPop() {
+        textToSpeechGateway.stop()
+        itemProfileEditorVisible = false
+        itemProfileError = null
+        itemSpeechError = null
+        itemShareError = null
+        popNavigation()
+    }
+
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
@@ -504,6 +570,17 @@ fun WhereApp(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,
         ) {
+            NavigationBackHandler(
+                enabled = destination.canEnterBackStack() &&
+                    destination != AppDestination.HOME,
+                onBack = {
+                    if (destination == AppDestination.ITEM_DETAIL) {
+                        leaveItemDetailAndPop()
+                    } else {
+                        popNavigation()
+                    }
+                },
+            )
             when (destination) {
                 AppDestination.LOADING -> LoadingScreen()
                 AppDestination.STARTUP_ERROR -> StartupErrorScreen(
@@ -523,7 +600,7 @@ fun WhereApp(
                                 initializationError = null
                                 try {
                                     initializeHouseholdUseCase(request)
-                                    destination = AppDestination.HOME
+                                    navigateHome()
                                     try {
                                         accessibilityPreferences = if (elderFriendlyEnabled) {
                                             updateAccessibilityPreferencesUseCase.setElderFriendly(true)
@@ -568,7 +645,7 @@ fun WhereApp(
                         null
                     },
                     onBackupReminderClick = {
-                        destination = AppDestination.SETTINGS
+                        navigateTo(AppDestination.SETTINGS)
                     },
                     onUndoDeletion = {
                         val undo = pendingItemDeletionUndo
@@ -596,7 +673,7 @@ fun WhereApp(
                         homeLoadAttempt += 1
                     },
                     onTextSearch = { query ->
-                        destination = AppDestination.SEARCH
+                        navigateTo(AppDestination.SEARCH)
                         performSearch(query)
                     },
                     onVoiceSearchRequested = {
@@ -613,7 +690,7 @@ fun WhereApp(
                                     )
                                     when (outcome) {
                                         is SpeechRecognitionOutcome.Success -> {
-                                            destination = AppDestination.SEARCH
+                                            navigateTo(AppDestination.SEARCH)
                                             performSearch(
                                                 prepareVoiceSearchQueryUseCase(outcome.text),
                                             )
@@ -625,13 +702,13 @@ fun WhereApp(
                                                 outcome = outcome,
                                                 cloudSpeechEnabled = preferences.canUseCloudSpeech,
                                             )
-                                            destination = AppDestination.SEARCH
+                                            navigateTo(AppDestination.SEARCH)
                                         }
                                     }
                                 } catch (_: Exception) {
                                     searchResults = null
                                     searchError = "语音识别失败，请先使用键盘输入。"
-                                    destination = AppDestination.SEARCH
+                                    navigateTo(AppDestination.SEARCH)
                                 } finally {
                                     voiceListening = false
                                 }
@@ -639,19 +716,18 @@ fun WhereApp(
                         }
                     },
                     onItemClick = { item ->
-                        selectedItemId = item.itemId
-                        destination = AppDestination.ITEM_DETAIL
+                        navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
                     },
                     onRecordItemClick = {
                         performHaptic(HapticFeedbackKind.CONFIRM)
                         confirmationSpeechError = null
-                        destination = AppDestination.ADD_ITEM
+                        navigateTo(AppDestination.ADD_ITEM)
                     },
                     onLocationClick = {
-                        destination = AppDestination.LOCATION
+                        navigateTo(AppDestination.LOCATION)
                     },
                     onSettingsClick = {
-                        destination = AppDestination.SETTINGS
+                        navigateTo(AppDestination.SETTINGS)
                     },
                     elderFriendlyMode = elderFriendlyMode,
                     voiceListening = voiceListening,
@@ -662,12 +738,11 @@ fun WhereApp(
                     searching = searchInProgress,
                     errorMessage = searchError,
                     onBack = {
-                        destination = AppDestination.HOME
+                        popNavigation()
                     },
                     onSearch = performSearch,
                     onResultClick = { result ->
-                        selectedItemId = result.itemId
-                        destination = AppDestination.ITEM_DETAIL
+                        navigateTo(AppDestination.ITEM_DETAIL, result.itemId)
                     },
                     elderFriendlyMode = elderFriendlyMode,
                     speechErrorMessage = searchSpeechError,
@@ -706,7 +781,7 @@ fun WhereApp(
                         itemCreationAttempt += 1
                     },
                     onBack = {
-                        destination = AppDestination.HOME
+                        popNavigation()
                     },
                     onPickPhoto = { role ->
                         if (!itemCreationSubmitting) {
@@ -744,7 +819,7 @@ fun WhereApp(
                                         discardImportedPhotos = discardImportedPhotos,
                                     )
                                     pendingItemPhotos = emptyList()
-                                    destination = AppDestination.HOME
+                                    navigateHome()
                                 } catch (_: IllegalArgumentException) {
                                     itemCreationError = "请先填写物品名称、位置或备注。"
                                 } catch (_: Exception) {
@@ -768,7 +843,7 @@ fun WhereApp(
                                     )
                                     pendingItemPhotos = emptyList()
                                     itemDraft = null
-                                    destination = AppDestination.HOME
+                                    navigateHome()
                                 } catch (_: Exception) {
                                     itemCreationError = "放弃草稿失败，请稍后重试。"
                                 } finally {
@@ -856,7 +931,7 @@ fun WhereApp(
                                             recordDiagnostic(DiagnosticEvent.TTS_UNAVAILABLE)
                                         }
                                     }
-                                    destination = AppDestination.HOME
+                                    navigateHome()
                                 } catch (_: IllegalArgumentException) {
                                     itemCreationError = "请检查物品名称和所在位置。"
                                 } catch (_: Exception) {
@@ -878,7 +953,7 @@ fun WhereApp(
                         locationTreeAttempt += 1
                     },
                     onBack = {
-                        destination = AppDestination.HOME
+                        popNavigation()
                     },
                     onCreate = { request ->
                         if (!locationTreeSubmitting) {
@@ -954,7 +1029,7 @@ fun WhereApp(
                     restoreSession = restoreSession,
                     conflictResolutions = conflictResolutions,
                     onBack = {
-                        destination = AppDestination.HOME
+                        popNavigation()
                     },
                     onRetry = {
                         accessibilityPreferences = null
@@ -1291,7 +1366,7 @@ fun WhereApp(
                                     restoreSession = null
                                     conflictResolutions = emptyMap()
                                     homeSnapshot = null
-                                    destination = AppDestination.INITIALIZATION
+                                    resetTo(AppDestination.INITIALIZATION)
                                     backupProgressText = null
                                 } catch (_: Exception) {
                                     settingsError = "清除家庭数据失败，请稍后重试。"
@@ -1309,12 +1384,7 @@ fun WhereApp(
                     loading = itemDetailLoading,
                     errorMessage = itemDetailError,
                     onBack = {
-                        textToSpeechGateway.stop()
-                        itemProfileEditorVisible = false
-                        itemProfileError = null
-                        itemSpeechError = null
-                        itemShareError = null
-                        destination = AppDestination.HOME
+                        leaveItemDetailAndPop()
                     },
                     onReadLocation = {
                         val detail = itemDetail
@@ -1382,7 +1452,7 @@ fun WhereApp(
                     onUpdateLocation = {
                         itemProfileEditorVisible = false
                         itemProfileError = null
-                        destination = AppDestination.MOVE_ITEM
+                        navigateTo(AppDestination.MOVE_ITEM)
                     },
                     editorVisible = itemProfileEditorVisible,
                     editorSubmitting = itemProfileSubmitting,
@@ -1506,7 +1576,7 @@ fun WhereApp(
                                     itemDetail = null
                                     selectedItemId = null
                                     homeLoadAttempt += 1
-                                    destination = AppDestination.HOME
+                                    navigateHome()
                                 } catch (_: IllegalArgumentException) {
                                     itemDeletionError = "该物品当前无法删除。"
                                 } catch (_: Exception) {
@@ -1523,7 +1593,7 @@ fun WhereApp(
                     loading = moveItemLoading,
                     errorMessage = moveItemError,
                     onBack = {
-                        destination = AppDestination.ITEM_DETAIL
+                        popNavigation()
                     },
                     elderFriendlyMode = elderFriendlyMode,
                     onSave = { locationId ->
@@ -1536,7 +1606,7 @@ fun WhereApp(
                                     moveItemUseCase(itemId, locationId)
                                     itemDetail = loadItemDetailUseCase(itemId)
                                     homeLoadAttempt += 1
-                                    destination = AppDestination.ITEM_DETAIL
+                                    popNavigation()
                                 } catch (_: Exception) {
                                     moveItemError = "更新位置失败，请重试。"
                                 } finally {
@@ -1713,3 +1783,29 @@ private enum class AppDestination {
     ITEM_DETAIL,
     MOVE_ITEM,
 }
+
+/**
+ * 用户可来回进出的页面才进入返回栈；启动和初始化不压栈。
+ */
+private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
+    AppDestination.HOME,
+    AppDestination.SEARCH,
+    AppDestination.ADD_ITEM,
+    AppDestination.LOCATION,
+    AppDestination.SETTINGS,
+    AppDestination.ITEM_DETAIL,
+    AppDestination.MOVE_ITEM,
+    -> true
+    AppDestination.LOADING,
+    AppDestination.STARTUP_ERROR,
+    AppDestination.INITIALIZATION,
+    -> false
+}
+
+/**
+ * 返回栈中的一帧，用来恢复上一页和当时选中的物品。
+ */
+private data class NavigationFrame(
+    val destination: AppDestination,
+    val selectedItemId: ItemId?,
+)
