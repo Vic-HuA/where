@@ -1,5 +1,10 @@
 package com.vichua.where.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -561,7 +566,10 @@ fun WhereApp(
 
     LaunchedEffect(destination, locationTreeAttempt) {
         if (destination == AppDestination.LOCATION) {
-            locationTreeLoading = true
+            // 已有树时后台刷新，避免底栏切回来先空白再闪出内容。
+            if (locationTree == null) {
+                locationTreeLoading = true
+            }
             locationTreeError = null
             try {
                 locationTree = loadLocationTreeUseCase()
@@ -596,7 +604,10 @@ fun WhereApp(
 
     LaunchedEffect(destination, homeLoadAttempt) {
         if (destination == AppDestination.HOME) {
-            homeLoading = true
+            // 已有首页数据时不要先进入加载态，否则每次返回都会整页闪白。
+            if (homeSnapshot == null) {
+                homeLoading = true
+            }
             homeError = null
             try {
                 homeSnapshot = loadHomeSnapshotUseCase()
@@ -666,7 +677,15 @@ fun WhereApp(
                     }
                 },
             )
-            when (destination) {
+            AnimatedContent(
+                targetState = destination,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(180)) togetherWith
+                        fadeOut(animationSpec = tween(120))
+                },
+                label = "destination",
+            ) { currentDestination ->
+            when (currentDestination) {
                 AppDestination.LOADING -> LoadingScreen()
                 AppDestination.STARTUP_ERROR -> StartupErrorScreen(
                     onRetry = {
@@ -1862,6 +1881,7 @@ fun WhereApp(
                         }
                     },
                 )
+            }
             }
         }
     }
