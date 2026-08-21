@@ -71,6 +71,7 @@ fun LocationManagementScreen(
         )
     }
     var editorState by remember { mutableStateOf<LocationEditorState?>(null) }
+    var locationQuery by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -130,10 +131,29 @@ fun LocationManagementScreen(
                 ) {
                     Text("添加房间")
                 }
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    value = locationQuery,
+                    onValueChange = { value ->
+                        locationQuery = value
+                    },
+                    singleLine = true,
+                    label = { Text("搜索房间、家具或容器") },
+                )
 
+                val trimmedQuery = locationQuery.trim()
                 snapshot.nodes
                     .filter { node -> node.locationId != snapshot.rootLocationId }
-                    .filter { node -> isVisible(node, snapshot.nodes, expandedLocationIds) }
+                    .filter { node ->
+                        if (trimmedQuery.isEmpty()) {
+                            isVisible(node, snapshot.nodes, expandedLocationIds)
+                        } else {
+                            node.name.contains(trimmedQuery, ignoreCase = true) ||
+                                node.displayPath.contains(trimmedQuery, ignoreCase = true)
+                        }
+                    }
                     .forEach { node ->
                         LocationTreeRow(
                             node = node,

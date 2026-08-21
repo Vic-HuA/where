@@ -21,6 +21,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +53,7 @@ fun MoveItemScreen(
     elderFriendlyMode: Boolean = false,
 ) {
     var selectedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
+    var locationQuery by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -99,9 +101,38 @@ fun MoveItemScreen(
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.titleLarge,
         )
-        context.availableLocations
-            .filter { location -> location.locationId != context.item.currentLocationId }
-            .forEach { location ->
+        OutlinedTextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            value = locationQuery,
+            onValueChange = { value ->
+                locationQuery = value
+            },
+            singleLine = true,
+            label = { Text("搜索已有位置") },
+        )
+        val trimmedQuery = locationQuery.trim()
+        val candidateLocations = context.availableLocations.filter { location ->
+            location.locationId != context.item.currentLocationId &&
+                (
+                    trimmedQuery.isEmpty() ||
+                        location.displayPath.contains(trimmedQuery, ignoreCase = true)
+                    )
+        }
+        if (candidateLocations.isEmpty()) {
+            Text(
+                modifier = Modifier.padding(bottom = 10.dp),
+                text = if (trimmedQuery.isEmpty()) {
+                    "没有其他可选择的位置。"
+                } else {
+                    "没有匹配“$trimmedQuery”的位置。"
+                },
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        candidateLocations.forEach { location ->
                 LocationOptionCard(
                     location = location,
                     selected = selectedLocationId == location.locationId,
