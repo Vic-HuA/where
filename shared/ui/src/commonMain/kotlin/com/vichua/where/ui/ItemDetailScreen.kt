@@ -298,7 +298,7 @@ fun ItemDetailScreen(
                 )
                 Text(
                     modifier = Modifier.padding(top = 8.dp),
-                    text = detail.locationPath,
+                    text = visibleLocationPath(detail.locationPath),
                     color = WherePrimaryTextColor,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyLarge,
@@ -680,7 +680,7 @@ private fun ShareLocationDialog(
     val previewText = buildString {
         append(detail.name)
         append('\n')
-        append(detail.locationPath)
+        append(visibleLocationPath(detail.locationPath))
         val locationDescription = detail.locationDescription
         if (!locationDescription.isNullOrBlank()) {
             append('\n')

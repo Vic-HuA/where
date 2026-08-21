@@ -273,7 +273,7 @@ private fun SearchResultCard(
                     )
                     Text(
                         modifier = Modifier.padding(top = 6.dp),
-                        text = result.locationPath,
+                        text = visibleLocationPath(result.locationPath),
                         color = WherePrimaryTextColor,
                         style = MaterialTheme.typography.bodyMedium,
                     )

@@ -572,7 +572,7 @@ fun AddItemScreen(
     if (confirmationDialogVisible && selectedLocation != null) {
         ConfirmManualItemDialog(
             itemName = itemName.trim(),
-            locationPath = selectedLocation.displayPath,
+            locationPath = visibleLocationPath(selectedLocation.displayPath),
             submitting = submitting,
             onDismiss = {
                 if (!submitting) {
@@ -1041,7 +1041,8 @@ private fun LocationSelectionField(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = selectedLocation?.displayPath ?: "选择最近或常用位置",
+                text = selectedLocation?.displayPath?.let(::visibleLocationPath)
+                    ?: "选择最近或常用位置",
                 color = if (selectedLocation == null) {
                     WhereSecondaryTextColor
                 } else {
@@ -1082,7 +1083,7 @@ private fun LocationSelectionDialog(
                     ) {
                         Text(
                             modifier = Modifier.padding(vertical = 14.dp),
-                            text = location.displayPath,
+                            text = visibleLocationPath(location.displayPath),
                             color = WherePrimaryTextColor,
                             style = MaterialTheme.typography.bodyLarge,
                         )

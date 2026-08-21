@@ -564,7 +564,7 @@ private fun RecentItemCard(
                 )
                 Text(
                     modifier = Modifier.padding(top = 6.dp),
-                    text = item.locationPath,
+                    text = visibleLocationPath(item.locationPath),
                     color = WherePrimaryTextColor,
                     maxLines = 2,
                     style = MaterialTheme.typography.bodyMedium,

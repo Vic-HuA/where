@@ -88,7 +88,7 @@ fun MoveItemScreen(
         )
         Text(
             modifier = Modifier.padding(top = 6.dp),
-            text = "原位置：${context.currentLocationPath}",
+            text = "原位置：${visibleLocationPath(context.currentLocationPath)}",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -170,7 +170,7 @@ private fun LocationOptionCard(
                 tint = WherePrimaryColor,
             )
             Text(
-                text = location.displayPath,
+                text = visibleLocationPath(location.displayPath),
                 color = WherePrimaryTextColor,
                 style = MaterialTheme.typography.bodyMedium,
             )
