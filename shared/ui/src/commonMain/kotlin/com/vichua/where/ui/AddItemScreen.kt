@@ -500,56 +500,51 @@ fun AddItemScreen(
     if (pendingAiSuggestions != null) {
         val suggestions = pendingAiSuggestions
         if (suggestions != null) {
-            AlertDialog(
+            WhereDialog(
                 onDismissRequest = {
                     pendingAiSuggestions = null
                 },
-                title = { Text("确认 AI 建议") },
-                text = {
-                    Column {
-                        Text("这些内容还不会保存。采用后写入当前表单，仍可再改。")
-                        if (!suggestions.itemName.isNullOrBlank()) {
-                            Text(
-                                modifier = Modifier.padding(top = 8.dp),
-                                text = "物品名称：${suggestions.itemName}",
-                            )
-                        }
-                        if (!suggestions.locationDescription.isNullOrBlank()) {
-                            Text(
-                                modifier = Modifier.padding(top = 6.dp),
-                                text = "位置说明：${suggestions.locationDescription}",
-                            )
-                        }
+                title = "确认 AI 建议",
+                confirmText = "采用",
+                onConfirm = {
+                    val suggestedName = suggestions.itemName
+                    val suggestedLocationDescription = suggestions.locationDescription
+                    if (!suggestedName.isNullOrBlank()) {
+                        itemName = suggestedName
                     }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            val suggestedName = suggestions.itemName
-                            val suggestedLocationDescription = suggestions.locationDescription
-                            if (!suggestedName.isNullOrBlank()) {
-                                itemName = suggestedName
-                            }
-                            if (!suggestedLocationDescription.isNullOrBlank()) {
-                                locationDescription = suggestedLocationDescription
-                                moreInformationExpanded = true
-                            }
-                            pendingAiSuggestions = null
-                        },
-                    ) {
-                        Text("采用")
+                    if (!suggestedLocationDescription.isNullOrBlank()) {
+                        locationDescription = suggestedLocationDescription
+                        moreInformationExpanded = true
                     }
+                    pendingAiSuggestions = null
                 },
-                dismissButton = {
-                    TextButton(
-                        onClick = {
-                            pendingAiSuggestions = null
-                        },
-                    ) {
-                        Text("不用")
-                    }
+                dismissText = "不用",
+                onDismiss = {
+                    pendingAiSuggestions = null
                 },
-            )
+            ) {
+                Text(
+                    text = "这些内容还不会保存。采用后写入当前表单，仍可再改。",
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (!suggestions.itemName.isNullOrBlank()) {
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = "物品名称：${suggestions.itemName}",
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (!suggestions.locationDescription.isNullOrBlank()) {
+                    Text(
+                        modifier = Modifier.padding(top = 6.dp),
+                        text = "位置说明：${suggestions.locationDescription}",
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
         }
     }
 
@@ -603,23 +598,21 @@ private fun LeaveAddItemDialog(
     onSaveDraft: () -> Unit,
     onDiscard: () -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = { Text("保存未完成内容？") },
-        text = {
-            Text("草稿只保存在当前设备，7 天后自动失效，不会进入家庭备份。")
-        },
-        confirmButton = {
-            TextButton(onClick = onSaveDraft) {
-                Text("保存草稿")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDiscard) {
-                Text("放弃修改")
-            }
-        },
-    )
+        title = "保存未完成内容？",
+        confirmText = "保存草稿",
+        onConfirm = onSaveDraft,
+        dismissText = "放弃修改",
+        onDismiss = onDiscard,
+        dismissDestructive = true,
+    ) {
+        Text(
+            text = "草稿只保存在当前设备，7 天后自动失效，不会进入家庭备份。",
+            color = WherePrimaryTextColor,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
 }
 
 /**
@@ -1063,41 +1056,30 @@ private fun LocationSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (ItemCreationLocation) -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text("选择所在位置")
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+        title = "选择所在位置",
+        dismissText = "取消",
+        onDismiss = onDismiss,
+    ) {
+        locations.forEach { location ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onSelect(location)
+                    },
+                color = WhereSurfaceColor,
             ) {
-                locations.forEach { location ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onSelect(location)
-                            },
-                        color = WhereSurfaceColor,
-                    ) {
-                        Text(
-                            modifier = Modifier.padding(vertical = 14.dp),
-                            text = visibleLocationPath(location.displayPath),
-                            color = WherePrimaryTextColor,
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                    }
-                }
+                Text(
+                    modifier = Modifier.padding(vertical = 14.dp),
+                    text = visibleLocationPath(location.displayPath),
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-    )
+        }
+    }
 }
 
 /**
@@ -1111,44 +1093,29 @@ private fun ConfirmManualItemDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text("确认物品信息")
-        },
-        text = {
-            Column {
-                Text(
-                    text = itemName,
-                    color = WherePrimaryTextColor,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    modifier = Modifier.padding(top = 8.dp),
-                    text = locationPath,
-                    color = WhereSecondaryTextColor,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onConfirm,
-            ) {
-                Text("确认保存")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onDismiss,
-            ) {
-                Text("返回修改")
-            }
-        },
-    )
+        title = "确认物品信息",
+        confirmText = "确认保存",
+        onConfirm = onConfirm,
+        confirmEnabled = !submitting,
+        dismissText = "返回修改",
+        onDismiss = onDismiss,
+        dismissEnabled = !submitting,
+    ) {
+        Text(
+            text = itemName,
+            color = WherePrimaryTextColor,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            modifier = Modifier.padding(top = 8.dp),
+            text = locationPath,
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+    }
 }
 
 /**

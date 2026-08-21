@@ -195,28 +195,20 @@ fun LocationManagementScreen(
                 editorState = null
             },
         )
-        is LocationEditorState.Delete -> AlertDialog(
+        is LocationEditorState.Delete -> WhereDialog(
             onDismissRequest = { editorState = null },
-            title = { Text("删除位置") },
-            text = {
+            title = "删除位置",
+            confirmText = "删除",
+            onConfirm = {
+                onDelete(editor.node)
+                editorState = null
+            },
+            confirmDestructive = true,
+            dismissText = "取消",
+            onDismiss = { editorState = null },
+        ) {
                 Text("删除“${editor.node.name}”后，该空位置不再出现在位置树中。")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(editor.node)
-                        editorState = null
-                    },
-                ) {
-                    Text("删除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { editorState = null }) {
-                    Text("取消")
-                }
-            },
-        )
+        }
         null -> Unit
     }
 }
@@ -379,11 +371,15 @@ private fun LocationNameDialog(
     var selectedType by remember { mutableStateOf(allowedTypes.first()) }
     val trimmedName = name.trim()
 
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
+        title = title,
+        confirmText = confirmText,
+        onConfirm = { onConfirm(selectedType, trimmedName) },
+        confirmEnabled = trimmedName.isNotEmpty(),
+        dismissText = "取消",
+        onDismiss = onDismiss,
+    ) {
                 if (!typeLocked && allowedTypes.size > 1) {
                     Text(
                         text = "位置类型",
@@ -433,22 +429,7 @@ private fun LocationNameDialog(
                     label = { Text("名称") },
                     singleLine = true,
                 )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = trimmedName.isNotEmpty(),
-                onClick = { onConfirm(selectedType, trimmedName) },
-            ) {
-                Text(confirmText)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-    )
+    }
 }
 
 /**

@@ -334,15 +334,25 @@ fun SettingsScreen(
     }
 
     if (aiAssistanceDisclosureVisible) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!submitting) {
                     aiAssistanceDisclosureVisible = false
                 }
             },
-            title = { Text("开启 AI 辅助") },
-            text = {
-                Column {
+            title = "开启 AI 辅助",
+            confirmText = "确认开启",
+            onConfirm = {
+                aiAssistanceDisclosureVisible = false
+                onAiAssistanceChange(true)
+            },
+            confirmEnabled = !submitting,
+            dismissText = "取消",
+            onDismiss = {
+                aiAssistanceDisclosureVisible = false
+            },
+            dismissEnabled = !submitting,
+        ) {
                     Text("数据类型：${AiAssistanceDisclosure.DATA_TYPE}")
                     Text(
                         modifier = Modifier.padding(top = 6.dp),
@@ -357,41 +367,28 @@ fun SettingsScreen(
                         text = "不会后台自动上传。没有建议或你不采用时，本地手填、查找和备份不受影响。",
                         color = WhereSecondaryTextColor,
                     )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        aiAssistanceDisclosureVisible = false
-                        onAiAssistanceChange(true)
-                    },
-                ) {
-                    Text("确认开启")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        aiAssistanceDisclosureVisible = false
-                    },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+        }
     }
     if (cloudSpeechDisclosureVisible) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!submitting) {
                     cloudSpeechDisclosureVisible = false
                 }
             },
-            title = { Text("开启云端语音识别") },
-            text = {
-                Column {
+            title = "开启云端语音识别",
+            confirmText = "确认开启",
+            onConfirm = {
+                cloudSpeechDisclosureVisible = false
+                onCloudSpeechChange(true)
+            },
+            confirmEnabled = !submitting,
+            dismissText = "取消",
+            onDismiss = {
+                cloudSpeechDisclosureVisible = false
+            },
+            dismissEnabled = !submitting,
+        ) {
                     Text("数据类型：${CloudSpeechDisclosure.DATA_TYPE}")
                     Text(
                         modifier = Modifier.padding(top = 6.dp),
@@ -406,30 +403,7 @@ fun SettingsScreen(
                         text = "不会后台持续听，也不会保存原始录音。关闭后本地查找和手填不受影响。",
                         color = WhereSecondaryTextColor,
                     )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        cloudSpeechDisclosureVisible = false
-                        onCloudSpeechChange(true)
-                    },
-                ) {
-                    Text("确认开启")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        cloudSpeechDisclosureVisible = false
-                    },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+        }
     }
     if (createPasswordDialogVisible) {
         BackupPasswordDialog(
@@ -547,15 +521,24 @@ fun SettingsScreen(
         )
     }
     if (replaceConfirmVisible && restoreSession != null) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!submitting) {
                     replaceConfirmVisible = false
                 }
             },
-            title = { Text("确认替换当前家庭") },
-            text = {
-                Column {
+            title = "确认替换当前家庭",
+            confirmText = "确认替换",
+            onConfirm = {
+                replaceConfirmVisible = false
+                onApplyRestore(RestoreMode.REPLACE)
+            },
+            confirmEnabled = !submitting,
+            confirmDestructive = true,
+            dismissText = "取消",
+            onDismiss = { replaceConfirmVisible = false },
+            dismissEnabled = !submitting,
+        ) {
                     Text("替换会用备份覆盖当前家庭数据，本机设置和草稿文字会保留。")
                     Text(
                         modifier = Modifier.padding(top = 8.dp),
@@ -564,39 +547,27 @@ fun SettingsScreen(
                     householdSummary?.let { summary ->
                         Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        replaceConfirmVisible = false
-                        onApplyRestore(RestoreMode.REPLACE)
-                    },
-                ) {
-                    Text("确认替换")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = { replaceConfirmVisible = false },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+        }
     }
     if (clearFirstConfirmVisible) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!submitting) {
                     clearFirstConfirmVisible = false
                 }
             },
-            title = { Text("清除家庭数据") },
-            text = {
-                Column {
+            title = "清除家庭数据",
+            confirmText = "继续",
+            onConfirm = {
+                clearFirstConfirmVisible = false
+                clearSecondConfirmVisible = true
+            },
+            confirmEnabled = !submitting,
+            confirmDestructive = true,
+            dismissText = "取消",
+            onDismiss = { clearFirstConfirmVisible = false },
+            dismissEnabled = !submitting,
+        ) {
                     Text("将删除当前家庭的物品、位置、照片和变更记录。")
                     Text(
                         modifier = Modifier.padding(top = 8.dp),
@@ -606,58 +577,29 @@ fun SettingsScreen(
                         Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
                     }
                     Text("适老设置、最近查找和草稿文字会保留。")
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        clearFirstConfirmVisible = false
-                        clearSecondConfirmVisible = true
-                    },
-                ) {
-                    Text("继续")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = { clearFirstConfirmVisible = false },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+        }
     }
     if (clearSecondConfirmVisible) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!submitting) {
                     clearSecondConfirmVisible = false
                 }
             },
-            title = { Text("再次确认清除") },
-            text = { Text("此操作不能仅靠一次误触完成。确认后将返回家庭初始化页。") },
-            confirmButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = {
-                        clearSecondConfirmVisible = false
-                        onClearHousehold()
-                    },
-                ) {
-                    Text("确认清除")
-                }
+            title = "再次确认清除",
+            confirmText = "确认清除",
+            onConfirm = {
+                clearSecondConfirmVisible = false
+                onClearHousehold()
             },
-            dismissButton = {
-                TextButton(
-                    enabled = !submitting,
-                    onClick = { clearSecondConfirmVisible = false },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+            confirmEnabled = !submitting,
+            confirmDestructive = true,
+            dismissText = "取消",
+            onDismiss = { clearSecondConfirmVisible = false },
+            dismissEnabled = !submitting,
+        ) {
+            Text("此操作不能仅靠一次误触完成。确认后将返回家庭初始化页。")
+        }
     }
 }
 
@@ -862,11 +804,18 @@ private fun BackupPasswordDialog(
     val canConfirm = password.length >= BackupFormat.MIN_PASSWORD_LENGTH &&
         (!requireConfirmation || password == confirmation)
 
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
+        title = title,
+        confirmText = confirmLabel,
+        onConfirm = {
+            onConfirm(password, confirmation)
+        },
+        confirmEnabled = enabled && canConfirm,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = enabled,
+    ) {
                 Text(
                     text = "密码至少 ${BackupFormat.MIN_PASSWORD_LENGTH} 位。密码不会和备份保存在一起，丢失后无法恢复。",
                     color = WhereSecondaryTextColor,
@@ -900,27 +849,7 @@ private fun BackupPasswordDialog(
                         visualTransformation = PasswordVisualTransformation(),
                     )
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = enabled && canConfirm,
-                onClick = {
-                    onConfirm(password, confirmation)
-                },
-            ) {
-                Text(confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = enabled,
-                onClick = onDismiss,
-            ) {
-                Text("取消")
-            }
-        },
-    )
+    }
 }
 
 /**
@@ -932,49 +861,33 @@ private fun ExportDestinationDialog(
     onDismiss: () -> Unit,
     onSelect: (ExportDestination) -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = {
             if (enabled) {
                 onDismiss()
             }
         },
-        title = { Text("选择导出位置") },
-        text = {
+        title = "选择导出位置",
+        confirmText = "保存到文件",
+        onConfirm = {
+            onSelect(ExportDestination.SAVE_DOCUMENT)
+        },
+        confirmEnabled = enabled,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = enabled,
+        neutralText = "分享",
+        onNeutral = {
+            onSelect(ExportDestination.SHARE)
+        },
+        neutralEnabled = enabled,
+    ) {
             Text(
                 text = "保存到文件会打开系统文件选择器。分享只会送出已经加密的数据包，不会附带家庭数据库。",
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodySmall,
             )
-        },
-        confirmButton = {
-            TextButton(
-                enabled = enabled,
-                onClick = {
-                    onSelect(ExportDestination.SAVE_DOCUMENT)
-                },
-            ) {
-                Text("保存到文件")
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(
-                    enabled = enabled,
-                    onClick = {
-                        onSelect(ExportDestination.SHARE)
-                    },
-                ) {
-                    Text("分享")
-                }
-                TextButton(
-                    enabled = enabled,
-                    onClick = onDismiss,
-                ) {
-                    Text("取消")
-                }
-            }
-        },
-    )
+    }
 }
 
 @Composable
@@ -982,11 +895,13 @@ private fun BackupVerificationDialog(
     result: BackupVerificationResult,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = { Text("备份验证通过") },
-        text = {
-            Column {
+        title = "备份验证通过",
+        confirmText = "确定",
+        onConfirm = onDismiss,
+        dismissText = null,
+    ) {
                 Text("格式版本 ${result.manifest.formatVersion}")
                 Text("加密：${result.manifest.encryptionAlgorithm}")
                 Text("物品 ${result.itemCount} 件")
@@ -994,14 +909,7 @@ private fun BackupVerificationDialog(
                 Text("物品照片 ${result.itemPhotoCount} 张")
                 Text("已打包原图 ${result.includedMediaCount} 张")
                 Text("文件大小 ${result.packageSizeBytes} 字节")
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("确定")
-            }
-        },
-    )
+    }
 }
 
 @Composable
@@ -1021,15 +929,23 @@ private fun RestorePreviewDialog(
         resolutions[conflict.key] != null
     }
     val canMerge = enabled && !preview.differentHousehold && allConflictsResolved
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = {
             if (enabled) {
                 onDismiss()
             }
         },
-        title = { Text("恢复预览") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        title = "恢复预览",
+        confirmText = "合并",
+        onConfirm = onMerge,
+        confirmEnabled = canMerge,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = enabled,
+        neutralText = "替换",
+        onNeutral = onReplace,
+        neutralEnabled = enabled,
+    ) {
                 Text("格式版本 ${preview.manifest.formatVersion}")
                 Text("加密：${preview.manifest.encryptionAlgorithm}")
                 Text("物品 ${preview.itemCount} 件，位置 ${preview.locationCount} 个")
@@ -1099,31 +1015,5 @@ private fun RestorePreviewDialog(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = canMerge,
-                onClick = onMerge,
-            ) {
-                Text("合并")
-            }
-        },
-        dismissButton = {
-            Row {
-                TextButton(
-                    enabled = enabled,
-                    onClick = onReplace,
-                ) {
-                    Text("替换")
-                }
-                TextButton(
-                    enabled = enabled,
-                    onClick = onDismiss,
-                ) {
-                    Text("取消")
-                }
-            }
-        },
-    )
+    }
 }

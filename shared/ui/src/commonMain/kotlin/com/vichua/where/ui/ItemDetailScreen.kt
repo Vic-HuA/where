@@ -553,40 +553,34 @@ fun ItemDetailScreen(
     }
     val pendingDeletePhoto = detail?.photos?.firstOrNull { photo -> photo.photoId == deletePhotoId }
     if (pendingDeletePhoto != null) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!photoSubmitting) {
                     deletePhotoId = null
                 }
             },
-            title = { Text("删除照片") },
-            text = {
-                Text("删除后这张${photoRoleLabel(pendingDeletePhoto.role)}将不再显示。物品档案会保留。")
+            title = "删除照片",
+            confirmText = "删除",
+            onConfirm = {
+                val photoId = pendingDeletePhoto.photoId
+                deletePhotoId = null
+                managedPhotoId = null
+                onDeletePhoto(photoId)
             },
-            confirmButton = {
-                TextButton(
-                    enabled = !photoSubmitting,
-                    onClick = {
-                        val photoId = pendingDeletePhoto.photoId
-                        deletePhotoId = null
-                        managedPhotoId = null
-                        onDeletePhoto(photoId)
-                    },
-                ) {
-                    Text("删除")
-                }
+            confirmEnabled = !photoSubmitting,
+            confirmDestructive = true,
+            dismissText = "取消",
+            onDismiss = {
+                deletePhotoId = null
             },
-            dismissButton = {
-                TextButton(
-                    enabled = !photoSubmitting,
-                    onClick = {
-                        deletePhotoId = null
-                    },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+            dismissEnabled = !photoSubmitting,
+        ) {
+            Text(
+                text = "删除后这张${photoRoleLabel(pendingDeletePhoto.role)}将不再显示。物品档案会保留。",
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
     if (shareDialogVisible && detail != null) {
         ShareLocationDialog(
@@ -605,40 +599,32 @@ fun ItemDetailScreen(
         )
     }
     if (deleteItemConfirmVisible && detail != null) {
-        AlertDialog(
+        WhereDialog(
             onDismissRequest = {
                 if (!deletionSubmitting) {
                     deleteItemConfirmVisible = false
                 }
             },
-            title = { Text("删除物品") },
-            text = {
-                Text(
-                    "删除后「${detail.name}」将从首页和搜索中消失。当前会话内可在 ${MvpLimits.DELETE_UNDO_WINDOW_SECONDS} 秒内撤销。",
-                )
+            title = "删除物品",
+            confirmText = "删除",
+            onConfirm = {
+                deleteItemConfirmVisible = false
+                onDeleteItem()
             },
-            confirmButton = {
-                TextButton(
-                    enabled = !deletionSubmitting,
-                    onClick = {
-                        deleteItemConfirmVisible = false
-                        onDeleteItem()
-                    },
-                ) {
-                    Text("删除")
-                }
+            confirmEnabled = !deletionSubmitting,
+            confirmDestructive = true,
+            dismissText = "取消",
+            onDismiss = {
+                deleteItemConfirmVisible = false
             },
-            dismissButton = {
-                TextButton(
-                    enabled = !deletionSubmitting,
-                    onClick = {
-                        deleteItemConfirmVisible = false
-                    },
-                ) {
-                    Text("取消")
-                }
-            },
-        )
+            dismissEnabled = !deletionSubmitting,
+        ) {
+            Text(
+                text = "删除后「${detail.name}」将从首页和搜索中消失。当前会话内可在 ${MvpLimits.DELETE_UNDO_WINDOW_SECONDS} 秒内撤销。",
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
     if (fullscreenVisible && detail != null && detail.photos.isNotEmpty()) {
         PhotoFullscreenDialog(
@@ -694,15 +680,25 @@ private fun ShareLocationDialog(
     val canSharePhotos = includePhotos && selectedPhotoIds.isNotEmpty()
     val confirmEnabled = !submitting && (!includePhotos || canSharePhotos)
 
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = {
             if (!submitting) {
                 onDismiss()
             }
         },
-        title = { Text("分享位置") },
-        text = {
-            Column {
+        title = "分享位置",
+        confirmText = "系统分享",
+        onConfirm = {
+            onConfirm(
+                includeUpdatedAt,
+                if (includePhotos) selectedPhotoIds.toList() else emptyList(),
+            )
+        },
+        confirmEnabled = confirmEnabled,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = !submitting,
+    ) {
                 Text("预览")
                 Text(
                     modifier = Modifier.padding(top = 8.dp),
@@ -763,30 +759,7 @@ private fun ShareLocationDialog(
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = confirmEnabled,
-                onClick = {
-                    onConfirm(
-                        includeUpdatedAt,
-                        if (includePhotos) selectedPhotoIds.toList() else emptyList(),
-                    )
-                },
-            ) {
-                Text("系统分享")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onDismiss,
-            ) {
-                Text("取消")
-            }
-        },
-    )
+    }
 }
 
 /**
@@ -1029,15 +1002,22 @@ private fun EditItemProfileDialog(
         trimmedLocationDescription != initialLocationDescription.trim().takeIf(String::isNotEmpty) ||
         trimmedNote != initialNote.trim().takeIf(String::isNotEmpty)
 
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = {
             if (!submitting) {
                 onDismiss()
             }
         },
-        title = { Text("编辑物品") },
-        text = {
-            Column {
+        title = "编辑物品",
+        confirmText = "保存",
+        onConfirm = {
+            onConfirm(trimmedName, trimmedLocationDescription, trimmedNote)
+        },
+        confirmEnabled = !submitting && trimmedName.isNotEmpty() && hasVisibleChange,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = !submitting,
+    ) {
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),
                     value = name,
@@ -1072,27 +1052,7 @@ private fun EditItemProfileDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !submitting && trimmedName.isNotEmpty() && hasVisibleChange,
-                onClick = {
-                    onConfirm(trimmedName, trimmedLocationDescription, trimmedNote)
-                },
-            ) {
-                Text("保存")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onDismiss,
-            ) {
-                Text("取消")
-            }
-        },
-    )
+    }
 }
 
 /**
@@ -1223,11 +1183,13 @@ private fun AddPhotoRoleDialog(
     onDismiss: () -> Unit,
     onConfirm: (PhotoRole) -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加照片") },
-        text = {
-            Column {
+        title = "添加照片",
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = !submitting,
+    ) {
                 Text("请选择这张照片的用途。")
                 PhotoRole.entries.forEach { role ->
                     TextButton(
@@ -1239,18 +1201,7 @@ private fun AddPhotoRoleDialog(
                         Text(photoRoleLabel(role))
                     }
                 }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onDismiss,
-            ) {
-                Text("取消")
-            }
-        },
-    )
+    }
 }
 
 /**
@@ -1268,11 +1219,17 @@ private fun ManagePhotoDialog(
     onMove: (Int) -> Unit,
     onDelete: () -> Unit,
 ) {
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = { Text("管理照片") },
-        text = {
-            Column {
+        title = "管理照片",
+        confirmText = "删除",
+        onConfirm = onDelete,
+        confirmEnabled = !submitting,
+        confirmDestructive = true,
+        dismissText = "关闭",
+        onDismiss = onDismiss,
+        dismissEnabled = !submitting,
+    ) {
                 Text("当前：${photoRoleLabel(photo.role)}")
                 Row(
                     modifier = Modifier.padding(top = 8.dp),
@@ -1339,25 +1296,7 @@ private fun ManagePhotoDialog(
                         Text("后移")
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onDelete,
-            ) {
-                Text("删除")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                enabled = !submitting,
-                onClick = onDismiss,
-            ) {
-                Text("关闭")
-            }
-        },
-    )
+    }
 }
 
 /**

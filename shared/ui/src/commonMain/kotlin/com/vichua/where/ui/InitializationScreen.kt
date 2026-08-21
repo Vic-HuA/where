@@ -424,13 +424,17 @@ private fun AddCustomRoomDialog(
         room.name.equals(trimmedRoomName, ignoreCase = true)
     }
 
-    AlertDialog(
+    WhereDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text("添加自定义房间")
+        title = "添加自定义房间",
+        confirmText = "添加",
+        onConfirm = {
+            onAdd(trimmedRoomName)
         },
-        text = {
-            Column {
+        confirmEnabled = trimmedRoomName.isNotEmpty() && !duplicateName,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+    ) {
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth(),
                     value = roomName,
@@ -445,24 +449,7 @@ private fun AddCustomRoomDialog(
                 if (duplicateName) {
                     ErrorText("这个房间已经存在。")
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = trimmedRoomName.isNotEmpty() && !duplicateName,
-                onClick = {
-                    onAdd(trimmedRoomName)
-                },
-            ) {
-                Text("添加")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
-            }
-        },
-    )
+    }
 }
 
 /**
