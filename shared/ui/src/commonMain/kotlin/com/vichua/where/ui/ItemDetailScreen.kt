@@ -115,6 +115,7 @@ fun ItemDetailScreen(
     photoSubmitting: Boolean,
     photoErrorMessage: String?,
     onAddPhoto: (PhotoRole) -> Unit,
+    onOpenPhotoManagement: () -> Unit,
     onSetPhotoCover: (PhotoAssetId) -> Unit,
     onSetPhotoRole: (PhotoAssetId, PhotoRole) -> Unit,
     onMovePhoto: (PhotoAssetId, Int) -> Unit,
@@ -248,6 +249,7 @@ fun ItemDetailScreen(
                 onManagePhoto = { photoId ->
                     managedPhotoId = photoId
                 },
+                onOpenPhotoManagement = onOpenPhotoManagement,
                 onAddPhoto = {
                     addRoleDialogVisible = true
                 },
@@ -448,6 +450,7 @@ fun ItemDetailScreen(
                     onManagePhoto = { photoId ->
                         managedPhotoId = photoId
                     },
+                    onOpenPhotoManagement = onOpenPhotoManagement,
                     onAddPhoto = {
                         addRoleDialogVisible = true
                     },
@@ -806,6 +809,7 @@ private fun ItemDetailPhotoManagement(
     photoErrorMessage: String?,
     onSelectPhoto: (Int) -> Unit,
     onManagePhoto: (PhotoAssetId) -> Unit,
+    onOpenPhotoManagement: () -> Unit,
     onAddPhoto: () -> Unit,
 ) {
     if (detail.photos.isNotEmpty()) {
@@ -822,11 +826,9 @@ private fun ItemDetailPhotoManagement(
             )
             TextButton(
                 enabled = !photoSubmitting,
-                onClick = {
-                    onManagePhoto(selectedPhoto.photoId)
-                },
+                onClick = onOpenPhotoManagement,
             ) {
-                Text("管理")
+                Text("管理照片")
             }
         }
     }

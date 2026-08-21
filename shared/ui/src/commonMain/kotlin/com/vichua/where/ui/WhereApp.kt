@@ -524,7 +524,7 @@ fun WhereApp(
 
     LaunchedEffect(destination, selectedItemId) {
         val itemId = selectedItemId
-        if (destination == AppDestination.ITEM_DETAIL && itemId != null) {
+        if ((destination == AppDestination.ITEM_DETAIL || destination == AppDestination.PHOTO_MANAGEMENT) && itemId != null) {
             itemDetailLoading = true
             itemDetailError = null
             itemProfileEditorVisible = false
@@ -614,6 +614,7 @@ fun WhereApp(
             destination == AppDestination.SEARCH ||
             destination == AppDestination.ADD_ITEM ||
             destination == AppDestination.ITEM_DETAIL ||
+            destination == AppDestination.PHOTO_MANAGEMENT ||
             destination == AppDestination.MOVE_ITEM ||
             destination == AppDestination.RESTORE_BACKUP
         if (shouldLoadPreferences && accessibilityPreferences == null) {
@@ -1605,6 +1606,9 @@ fun WhereApp(
                     },
                     photoSubmitting = itemPhotoSubmitting,
                     photoErrorMessage = itemPhotoError,
+                    onOpenPhotoManagement = {
+                        navigateTo(AppDestination.PHOTO_MANAGEMENT)
+                    },
                     onAddPhoto = { role ->
                         val itemId = selectedItemId
                         if (itemId != null && !itemPhotoSubmitting) {
@@ -1693,6 +1697,74 @@ fun WhereApp(
                                     itemDeletionSubmitting = false
                                 }
                             }
+                        }
+                    },
+                )
+                AppDestination.PHOTO_MANAGEMENT -> PhotoManagementScreen(
+                    detail = itemDetail,
+                    resolveMediaPath = resolveMediaPath,
+                    submitting = itemPhotoSubmitting,
+                    errorMessage = itemPhotoError,
+                    onBack = {
+                        popNavigation()
+                    },
+                    onAddPhoto = { role ->
+                        val itemId = selectedItemId
+                        if (itemId != null && !itemPhotoSubmitting) {
+                            coroutineScope.launch {
+                                itemPhotoSubmitting = true
+                                itemPhotoError = null
+                                var importedPhoto: ImportedItemPhoto? = null
+                                try {
+                                    val pickedImage = photoPickerGateway.pickImage() ?: return@launch
+                                    importedPhoto = importItemPhotoUseCase(
+                                        bytes = pickedImage.bytes,
+                                        sourceMimeType = pickedImage.mimeType,
+                                        role = role,
+                                    )
+                                    addItemPhotoUseCase(itemId, importedPhoto)
+                                    itemDetail = loadItemDetailUseCase(itemId)
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    importedPhoto?.let { photo ->
+                                        discardPendingPhotos(
+                                            photos = listOf(photo),
+                                            discardImportedPhotos = discardImportedPhotos,
+                                        )
+                                    }
+                                    itemPhotoError = "无法使用所选照片，请换一张后重试。"
+                                } catch (_: Exception) {
+                                    importedPhoto?.let { photo ->
+                                        discardPendingPhotos(
+                                            photos = listOf(photo),
+                                            discardImportedPhotos = discardImportedPhotos,
+                                        )
+                                    }
+                                    itemPhotoError = "照片保存失败，请稍后重试。"
+                                } finally {
+                                    itemPhotoSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onSetPhotoCover = { photoId ->
+                        runItemPhotoAction("设置封面失败，请稍后重试。") {
+                            setItemPhotoCoverUseCase(it, photoId)
+                        }
+                    },
+                    onSetPhotoRole = { photoId, role ->
+                        runItemPhotoAction("修改用途失败，请稍后重试。") {
+                            updateItemPhotoRoleUseCase(it, photoId, role)
+                        }
+                    },
+                    onMovePhoto = { photoId, offset ->
+                        runItemPhotoAction("调整顺序失败，请稍后重试。") {
+                            moveItemPhotoUseCase(it, photoId, offset)
+                        }
+                    },
+                    onDeletePhoto = { photoId ->
+                        runItemPhotoAction("删除照片失败，请稍后重试。") {
+                            deleteItemPhotoUseCase(it, photoId)
                         }
                     },
                 )
@@ -1954,6 +2026,7 @@ private enum class AppDestination {
     SETTINGS,
     RESTORE_BACKUP,
     ITEM_DETAIL,
+    PHOTO_MANAGEMENT,
     MOVE_ITEM,
 }
 
@@ -1972,6 +2045,7 @@ private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
     AppDestination.SETTINGS,
     AppDestination.RESTORE_BACKUP,
     AppDestination.ITEM_DETAIL,
+    AppDestination.PHOTO_MANAGEMENT,
     AppDestination.MOVE_ITEM,
     -> true
     AppDestination.LOADING,
