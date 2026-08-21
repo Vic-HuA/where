@@ -18,10 +18,16 @@ import com.vichua.where.core.model.PhotoAsset
  *
  * @property locationId 位置节点 ID。
  * @property displayPath 当前完整位置路径。
+ * @property name 当前位置节点名称，给常用位置卡片使用。
+ * @property type 位置语义类型。
+ * @property iconKey 受控图标键。
  */
 data class StoredItemCreationLocation(
     val locationId: LocationNodeId,
     val displayPath: String,
+    val name: String,
+    val type: LocationType,
+    val iconKey: String?,
 )
 
 /**
@@ -67,6 +73,9 @@ class ManualItemCreationStore(
                 StoredItemCreationLocation(
                     locationId = location.id,
                     displayPath = buildLocationPath(location, locationsById),
+                    name = location.name,
+                    type = location.type,
+                    iconKey = location.iconKey,
                 )
             }
             .sortedBy(StoredItemCreationLocation::displayPath)

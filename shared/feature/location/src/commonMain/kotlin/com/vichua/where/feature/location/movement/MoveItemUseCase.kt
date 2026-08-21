@@ -12,16 +12,24 @@ import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.ItemLocationEventId
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.UtcTimestamp
 
 /** 更新位置页面可选择的位置。 */
 data class MoveTargetLocation(
     val locationId: LocationNodeId,
     val displayPath: String,
+    val name: String,
+    val type: LocationType,
+    val iconKey: String?,
 )
 
 /**
  * 更新位置所需的当前物品和索引上下文。
+ *
+ * @property recentLocations 该物品近期到过、且仍有效的位置，供顶部快捷选择。
+ * @property favoriteLocations 用户固定的常用位置。
+ * @property rootLocationId 家庭根节点，页内新建房间时作为父位置。
  */
 data class MoveItemContext(
     val item: Item,
@@ -29,6 +37,9 @@ data class MoveItemContext(
     val aliasesText: String,
     val categoryText: String,
     val availableLocations: List<MoveTargetLocation>,
+    val recentLocations: List<MoveTargetLocation>,
+    val favoriteLocations: List<MoveTargetLocation>,
+    val rootLocationId: LocationNodeId,
 )
 
 /**

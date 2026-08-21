@@ -61,6 +61,7 @@ import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
+import com.vichua.where.feature.location.management.CreateLocationRequest
 import com.vichua.where.feature.location.management.CreateLocationUseCase
 import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
@@ -340,6 +341,7 @@ fun WhereApp(
     var moveItemContext by remember { mutableStateOf<MoveItemContext?>(null) }
     var moveItemLoading by remember { mutableStateOf(false) }
     var moveItemError by remember { mutableStateOf<String?>(null) }
+    var moveVoiceQuery by remember { mutableStateOf<String?>(null) }
     var locationTree by remember { mutableStateOf<LocationTreeSnapshot?>(null) }
     var locationTreeLoading by remember { mutableStateOf(false) }
     var locationTreeSubmitting by remember { mutableStateOf(false) }
@@ -1698,10 +1700,74 @@ fun WhereApp(
                     context = moveItemContext,
                     loading = moveItemLoading,
                     errorMessage = moveItemError,
+                    voiceQuery = moveVoiceQuery,
+                    voiceListening = voiceListening,
+                    creatingLocation = locationTreeSubmitting,
                     onBack = {
                         popNavigation()
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    onVoiceRequested = {
+                        if (!voiceListening) {
+                            performHaptic(HapticFeedbackKind.CONFIRM)
+                            coroutineScope.launch {
+                                voiceListening = true
+                                moveItemError = null
+                                try {
+                                    val preferences = appPreferences ?: loadAppPreferencesUseCase()
+                                    appPreferences = preferences
+                                    val outcome = speechRecognitionGateway.listen(
+                                        allowNetwork = preferences.canUseCloudSpeech,
+                                    )
+                                    when (outcome) {
+                                        is SpeechRecognitionOutcome.Success -> {
+                                            moveVoiceQuery = prepareVoiceSearchQueryUseCase(outcome.text)
+                                        }
+                                        SpeechRecognitionOutcome.Cancelled -> Unit
+                                        else -> {
+                                            moveItemError = voiceRecognitionMessage(
+                                                outcome = outcome,
+                                                cloudSpeechEnabled = preferences.canUseCloudSpeech,
+                                            )
+                                        }
+                                    }
+                                } catch (_: Exception) {
+                                    moveItemError = "语音识别失败，请先使用键盘输入。"
+                                } finally {
+                                    voiceListening = false
+                                }
+                            }
+                        }
+                    },
+                    onVoiceReleased = {
+                        speechRecognitionGateway.finishListening()
+                    },
+                    onVoiceQueryConsumed = {
+                        moveVoiceQuery = null
+                    },
+                    onCreateLocation = { request ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                moveItemError = null
+                                try {
+                                    createLocationUseCase(request)
+                                    val itemId = selectedItemId
+                                    if (itemId != null) {
+                                        moveItemContext = loadMoveItemContextUseCase(itemId)
+                                    }
+                                    homeLoadAttempt += 1
+                                    locationTreeAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    moveItemError = "请检查位置名称和类型。"
+                                } catch (_: Exception) {
+                                    moveItemError = "新建位置失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onSave = { locationId ->
                         val itemId = selectedItemId
                         if (itemId != null && !moveItemLoading) {

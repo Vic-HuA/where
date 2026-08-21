@@ -1,7 +1,9 @@
 package com.vichua.where.platform.android
 
 import com.vichua.where.core.database.transaction.ItemMovementStore
+import com.vichua.where.core.database.transaction.StoredItemCreationLocation
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.feature.location.movement.ItemMovement
 import com.vichua.where.feature.location.movement.ItemMovementRepository
 import com.vichua.where.feature.location.movement.MoveItemContext
@@ -13,17 +15,19 @@ import com.vichua.where.feature.location.movement.MoveTargetLocation
 class RoomItemMovementRepository(
     private val store: ItemMovementStore,
 ) : ItemMovementRepository {
-    /** 加载物品和可选位置。 */
+    /** 加载物品、可选位置、最近位置和常用位置。 */
     override suspend fun loadContext(itemId: ItemId): MoveItemContext {
         val context = store.loadContext(itemId)
+        val locationsById = context.locations.associateBy { location -> location.locationId }
         return MoveItemContext(
             item = context.detail.item,
             currentLocationPath = context.detail.locationPath,
             aliasesText = context.detail.aliases.joinToString(" ") { alias -> alias.alias },
             categoryText = context.detail.categoryName.orEmpty(),
-            availableLocations = context.locations.map { location ->
-                MoveTargetLocation(location.locationId, location.displayPath)
-            },
+            availableLocations = context.locations.map(::toTarget),
+            recentLocations = mapTargets(context.recentLocationIds, locationsById),
+            favoriteLocations = mapTargets(context.favoriteLocationIds, locationsById),
+            rootLocationId = context.rootLocationId,
         )
     }
 
@@ -38,4 +42,20 @@ class RoomItemMovementRepository(
             locationPathText = movement.locationPathText,
         )
     }
+
+    private fun mapTargets(
+        locationIds: List<LocationNodeId>,
+        locationsById: Map<LocationNodeId, StoredItemCreationLocation>,
+    ): List<MoveTargetLocation> = locationIds.mapNotNull { locationId ->
+        locationsById[locationId]?.let(::toTarget)
+    }
+
+    private fun toTarget(location: StoredItemCreationLocation): MoveTargetLocation =
+        MoveTargetLocation(
+            locationId = location.locationId,
+            displayPath = location.displayPath,
+            name = location.name,
+            type = location.type,
+            iconKey = location.iconKey,
+        )
 }
