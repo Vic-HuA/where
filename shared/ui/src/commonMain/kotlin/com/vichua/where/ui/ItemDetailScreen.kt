@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -43,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -1190,17 +1193,55 @@ private fun AddPhotoRoleDialog(
         onDismiss = onDismiss,
         dismissEnabled = !submitting,
     ) {
-                Text("请选择这张照片的用途。")
-                PhotoRole.entries.forEach { role ->
-                    TextButton(
+        Text(
+            text = "请选择这张照片的用途。",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        PhotoRole.entries.forEach { role ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .clickable(
                         enabled = !submitting,
+                        role = Role.Button,
                         onClick = {
                             onConfirm(role)
                         },
-                    ) {
-                        Text(photoRoleLabel(role))
+                    ),
+                shape = RoundedCornerShape(16.dp),
+                color = WhereSurfaceColor,
+                border = BorderStroke(1.dp, WhereOutlineColor),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        modifier = Modifier.size(28.dp),
+                        imageVector = photoRoleIcon(role),
+                        contentDescription = photoRoleLabel(role),
+                        tint = WherePrimaryColor,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = photoRoleLabel(role),
+                            color = WherePrimaryTextColor,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            modifier = Modifier.padding(top = 2.dp),
+                            text = photoRoleHint(role),
+                            color = WhereSecondaryTextColor,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                 }
+            }
+        }
     }
 }
 
@@ -1394,4 +1435,24 @@ private fun photoRoleLabel(role: PhotoRole): String = when (role) {
     PhotoRole.ITEM -> "物品照"
     PhotoRole.LABEL -> "标签照"
     PhotoRole.SUPPLEMENTARY -> "补充照"
+}
+
+/**
+ * 用途卡片上的简短说明，避免只有四个字看不出该拍什么。
+ */
+private fun photoRoleHint(role: PhotoRole): String = when (role) {
+    PhotoRole.ENVIRONMENT -> "拍房间、柜子或盒子"
+    PhotoRole.ITEM -> "拍清楚物品外观"
+    PhotoRole.LABEL -> "拍包装文字或铭牌"
+    PhotoRole.SUPPLEMENTARY -> "补充其他角度"
+}
+
+/**
+ * 用途卡片图标；标签照没有现成共享图标，用价签图标区分。
+ */
+private fun photoRoleIcon(role: PhotoRole): ImageVector = when (role) {
+    PhotoRole.ENVIRONMENT -> WhereIcons.Location
+    PhotoRole.ITEM -> WhereIcons.Camera
+    PhotoRole.LABEL -> Icons.Outlined.LocalOffer
+    PhotoRole.SUPPLEMENTARY -> WhereIcons.Image
 }

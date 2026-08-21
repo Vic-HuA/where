@@ -1342,35 +1342,12 @@ fun WhereApp(
                     onDismissVerification = {
                         backupVerificationResult = null
                     },
-                    onRestoreBackup = { password ->
-                        if (!backupSubmitting) {
-                            coroutineScope.launch {
-                                backupSubmitting = true
-                                backupProgressText = "正在准备恢复预览…"
-                                settingsError = null
-                                restoreSession = null
-                                conflictResolutions = emptyMap()
-                                try {
-                                    val session = previewBackupRestoreUseCase(password)
-                                    if (session == null) {
-                                        backupProgressText = null
-                                        return@launch
-                                    }
-                                    restoreSession = session
-                                    householdSummary = session.preview.currentSummary
-                                    backupProgressText = null
-                                    navigateTo(AppDestination.RESTORE_BACKUP)
-                                } catch (_: IllegalArgumentException) {
-                                    settingsError = "密码错误、格式不兼容或备份已损坏。"
-                                    backupProgressText = null
-                                } catch (_: Exception) {
-                                    settingsError = "恢复预览失败，请稍后重试。"
-                                    backupProgressText = null
-                                } finally {
-                                    backupSubmitting = false
-                                }
-                            }
-                        }
+                    onRestoreBackup = {
+                        settingsError = null
+                        restoreSession = null
+                        conflictResolutions = emptyMap()
+                        backupProgressText = null
+                        navigateTo(AppDestination.RESTORE_BACKUP)
                     },
                     onClearHousehold = {
                         if (!backupSubmitting) {
@@ -1398,6 +1375,9 @@ fun WhereApp(
                 )
                 AppDestination.RESTORE_BACKUP -> RestoreBackupScreen(
                     session = restoreSession,
+                    formattedBackupCreatedAt = restoreSession?.preview?.manifest?.createdAt?.let { timestamp ->
+                        visibleDateTimeFormatter.format(timestamp.epochMilliseconds)
+                    },
                     lastVerifiedBackupText = latestBackupStatus?.lastVerifiedAt?.let { timestamp ->
                         "最近成功备份：${visibleDateTimeFormatter.format(timestamp.epochMilliseconds)}"
                     },
@@ -1408,6 +1388,35 @@ fun WhereApp(
                     errorMessage = settingsError,
                     onBack = {
                         leaveRestoreAndPop()
+                    },
+                    onPickAndPreview = { password ->
+                        if (!backupSubmitting) {
+                            coroutineScope.launch {
+                                backupSubmitting = true
+                                backupProgressText = "正在准备恢复预览…"
+                                settingsError = null
+                                restoreSession = null
+                                conflictResolutions = emptyMap()
+                                try {
+                                    val session = previewBackupRestoreUseCase(password)
+                                    if (session == null) {
+                                        backupProgressText = null
+                                        return@launch
+                                    }
+                                    restoreSession = session
+                                    householdSummary = session.preview.currentSummary
+                                    backupProgressText = null
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "密码错误、格式不兼容或备份已损坏。"
+                                    backupProgressText = null
+                                } catch (_: Exception) {
+                                    settingsError = "恢复预览失败，请稍后重试。"
+                                    backupProgressText = null
+                                } finally {
+                                    backupSubmitting = false
+                                }
+                            }
+                        }
                     },
                     onResolve = { key, resolution ->
                         conflictResolutions = conflictResolutions + (key to resolution)

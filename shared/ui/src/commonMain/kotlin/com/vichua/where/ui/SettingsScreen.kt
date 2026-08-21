@@ -79,7 +79,7 @@ import com.vichua.where.core.model.LocalAppPreferences
  * @param onVerifyBackup 使用密码只读验证备份。
  * @param onDismissVerification 关闭验证摘要。
  * @param householdSummary 当前家庭摘要，供清除二次确认使用。
- * @param onRestoreBackup 打开备份并进入恢复预览页。
+ * @param onRestoreBackup 进入独立恢复备份页，在该页选择文件并输入密码。
  * @param onClearHousehold 二次确认后清除家庭数据。
  */
 @Composable
@@ -107,7 +107,7 @@ fun SettingsScreen(
     onExportHousehold: (String, String, ExportDestination) -> Unit,
     onVerifyBackup: (String) -> Unit,
     onDismissVerification: () -> Unit,
-    onRestoreBackup: (String) -> Unit,
+    onRestoreBackup: () -> Unit,
     onClearHousehold: () -> Unit,
 ) {
     var aiAssistanceDisclosureVisible by remember { mutableStateOf(false) }
@@ -118,7 +118,6 @@ fun SettingsScreen(
     var pendingExportPassword by remember { mutableStateOf<String?>(null) }
     var pendingExportConfirmation by remember { mutableStateOf<String?>(null) }
     var verifyPasswordDialogVisible by remember { mutableStateOf(false) }
-    var restorePasswordDialogVisible by remember { mutableStateOf(false) }
     var clearFirstConfirmVisible by remember { mutableStateOf(false) }
     var clearSecondConfirmVisible by remember { mutableStateOf(false) }
 
@@ -242,9 +241,6 @@ fun SettingsScreen(
             onCheckedChange = onHapticFeedbackChange,
         )
 
-        SettingsSectionTitle("家庭与位置")
-        PendingSettingsRow("位置管理", "请从首页底部进入，设置页不重复提供入口")
-
         SettingsSectionTitle("数据与备份")
         SettingsSwitchRow(
             title = "备份提醒",
@@ -292,9 +288,7 @@ fun SettingsScreen(
             title = "恢复备份",
             description = "先预览新增、更新、删除和冲突，再选择合并或替换",
             enabled = !submitting,
-            onClick = {
-                restorePasswordDialogVisible = true
-            },
+            onClick = onRestoreBackup,
         )
         SettingsActionRow(
             title = "导出完整家庭数据",
@@ -453,6 +447,7 @@ fun SettingsScreen(
             title = "验证备份",
             confirmLabel = "验证",
             requireConfirmation = false,
+            extraHint = "密码要和备份文件一起校验，下一步会选择文件。",
             enabled = !submitting,
             onDismiss = {
                 if (!submitting) {
@@ -469,23 +464,6 @@ fun SettingsScreen(
         BackupVerificationDialog(
             result = verificationResult,
             onDismiss = onDismissVerification,
-        )
-    }
-    if (restorePasswordDialogVisible) {
-        BackupPasswordDialog(
-            title = "恢复备份",
-            confirmLabel = "继续",
-            requireConfirmation = false,
-            enabled = !submitting,
-            onDismiss = {
-                if (!submitting) {
-                    restorePasswordDialogVisible = false
-                }
-            },
-            onConfirm = { password, _ ->
-                restorePasswordDialogVisible = false
-                onRestoreBackup(password)
-            },
         )
     }
     if (clearFirstConfirmVisible) {
@@ -700,40 +678,11 @@ private fun SettingsActionRow(
 }
 
 @Composable
-private fun PendingSettingsRow(
-    title: String,
-    description: String,
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 10.dp),
-        color = WhereSurfaceColor,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, WhereOutlineColor),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Text(
-                text = title,
-                color = WherePrimaryTextColor,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Text(
-                modifier = Modifier.padding(top = 6.dp),
-                text = description,
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
-}
-
-@Composable
 private fun BackupPasswordDialog(
     title: String,
     confirmLabel: String,
     requireConfirmation: Boolean,
+    extraHint: String? = null,
     enabled: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (String, String) -> Unit,
@@ -756,7 +705,13 @@ private fun BackupPasswordDialog(
         dismissEnabled = enabled,
     ) {
                 Text(
-                    text = "密码至少 ${BackupFormat.MIN_PASSWORD_LENGTH} 位。密码不会和备份保存在一起，丢失后无法恢复。",
+                    text = buildString {
+                        append("密码至少 ${BackupFormat.MIN_PASSWORD_LENGTH} 位。密码不会和备份保存在一起，丢失后无法恢复。")
+                        if (extraHint != null) {
+                            append(" ")
+                            append(extraHint)
+                        }
+                    },
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -841,12 +796,9 @@ private fun BackupVerificationDialog(
         onConfirm = onDismiss,
         dismissText = null,
     ) {
-                Text("格式版本 ${result.manifest.formatVersion}")
-                Text("加密：${result.manifest.encryptionAlgorithm}")
-                Text("物品 ${result.itemCount} 件")
-                Text("位置 ${result.locationCount} 个")
-                Text("物品照片 ${result.itemPhotoCount} 张")
-                Text("已打包原图 ${result.includedMediaCount} 张")
+                Text("格式 v${result.manifest.formatVersion} · 加密数据包")
+                Text("物品 ${result.itemCount} 件，位置 ${result.locationCount} 个")
+                Text("物品照片 ${result.itemPhotoCount} 张，已打包原图 ${result.includedMediaCount} 张")
                 Text("文件大小 ${result.packageSizeBytes} 字节")
     }
 }

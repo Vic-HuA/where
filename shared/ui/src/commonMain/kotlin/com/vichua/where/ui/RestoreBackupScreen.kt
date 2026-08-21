@@ -2,14 +2,17 @@ package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,10 +21,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,21 +31,39 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.ConflictResolution
 import com.vichua.where.core.model.HouseholdDataSummary
+import com.vichua.where.core.model.RestoreMode
 import com.vichua.where.core.model.RestoreSession
 
+/** 原型冲突卡背景。 */
+private val RestoreWarningFill = Color(0xFFF6E8C8)
+
+/** 原型冲突卡描边。 */
+private val RestoreWarningStroke = Color(0xFFD8B56B)
+
+/** 原型冲突卡标题色。 */
+private val RestoreWarningTitle = Color(0xFF8A651F)
+
+/** 原型冲突卡正文色。 */
+private val RestoreWarningBody = Color(0xFF6C5120)
+
 /**
- * 独立恢复备份页：先看预览和冲突，再选择合并或替换。
+ * 独立恢复备份页：先选文件和密码，再按原型核对摘要、冲突和恢复方式。
  *
- * 从设置进入，返回时取消尚未执行的恢复会话，避免设置页被预览对话框挡住。
+ * 格式版本只作为摘要里的兼容标记，不单独做成用户需要理解的字段。
  */
 @Composable
 fun RestoreBackupScreen(
     session: RestoreSession?,
+    formattedBackupCreatedAt: String?,
     lastVerifiedBackupText: String?,
     currentSummary: HouseholdDataSummary?,
     resolutions: Map<String, ConflictResolution>,
@@ -51,12 +71,23 @@ fun RestoreBackupScreen(
     progressText: String?,
     errorMessage: String?,
     onBack: () -> Unit,
+    onPickAndPreview: (String) -> Unit,
     onResolve: (String, ConflictResolution) -> Unit,
     onMerge: () -> Unit,
     onReplace: () -> Unit,
 ) {
     var replaceConfirmVisible by remember { mutableStateOf(false) }
+    var restorePassword by remember { mutableStateOf("") }
     val preview = session?.preview
+    var selectedMode by remember(preview?.differentHousehold) {
+        mutableStateOf(
+            if (preview?.differentHousehold == true) {
+                RestoreMode.REPLACE
+            } else {
+                RestoreMode.MERGE
+            },
+        )
+    }
     val allConflictsResolved = preview?.conflicts?.all { conflict ->
         resolutions[conflict.key] != null
     } == true
@@ -64,6 +95,12 @@ fun RestoreBackupScreen(
         preview != null &&
         !preview.differentHousehold &&
         allConflictsResolved
+    val canConfirm = !submitting &&
+        preview != null &&
+        when (selectedMode) {
+            RestoreMode.MERGE -> canMerge
+            RestoreMode.REPLACE -> true
+        }
 
     Column(
         modifier = Modifier
@@ -90,62 +127,154 @@ fun RestoreBackupScreen(
         )
         if (preview == null) {
             Text(
-                modifier = Modifier.padding(top = 24.dp),
-                text = errorMessage ?: "暂时无法读取恢复预览。",
-                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 16.dp),
+                text = "先输入备份密码，再选择备份文件。密码对错要打开文件后才能判断；取消选文件会留在本页。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
             )
+            OutlinedTextField(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                value = restorePassword,
+                onValueChange = { value ->
+                    restorePassword = value
+                },
+                enabled = !submitting,
+                label = { Text("备份密码") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            Button(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
+                    .heightIn(min = 48.dp),
+                enabled = !submitting && restorePassword.length >= BackupFormat.MIN_PASSWORD_LENGTH,
+                colors = ButtonDefaults.buttonColors(containerColor = WherePrimaryColor),
+                onClick = {
+                    onPickAndPreview(restorePassword)
+                },
+            ) {
+                Text("选择备份并预览")
+            }
+            progressText?.let { text ->
+                Text(
+                    modifier = Modifier.padding(top = 12.dp),
+                    text = text,
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            errorMessage?.let { text ->
+                Text(
+                    modifier = Modifier.padding(top = 12.dp),
+                    text = text,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             return@Column
         }
+        val backupTitle = buildString {
+            append(session.envelope.snapshot.household.name)
+            if (!formattedBackupCreatedAt.isNullOrBlank()) {
+                append(" · ")
+                append(formattedBackupCreatedAt)
+            }
+        }
+        val photoCount = preview.itemPhotoCount + preview.locationPhotoCount
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 16.dp),
             shape = RoundedCornerShape(18.dp),
-            color = WhereSurfaceColor,
-            border = BorderStroke(1.dp, WhereOutlineColor),
+            color = WhereSelectedContainerColor,
+            border = BorderStroke(1.dp, WherePrimaryColor),
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "备份摘要",
-                    color = WherePrimaryColor,
-                    fontWeight = FontWeight.SemiBold,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        modifier = Modifier.weight(1f),
+                        text = backupTitle,
+                        color = WherePrimaryTextColor,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = WherePrimaryColor,
+                    ) {
+                        Text(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            text = "校验通过",
+                            color = WhereSurfaceColor,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
                 Text(
                     modifier = Modifier.padding(top = 8.dp),
-                    text = "格式版本 ${preview.manifest.formatVersion}",
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text("加密：${preview.manifest.encryptionAlgorithm}")
-                Text("物品 ${preview.itemCount} 件，位置 ${preview.locationCount} 个")
-                Text("物品照片 ${preview.itemPhotoCount} 张")
-                Text(
-                    "新增 ${preview.addedCount}，更新 ${preview.updatedCount}，删除 ${preview.deletedCount}，冲突 ${preview.conflictCount}",
-                )
-                Text(
-                    modifier = Modifier.padding(top = 8.dp),
-                    text = lastVerifiedBackupText ?: "尚未成功备份。密码丢失后无法恢复。",
+                    text = "格式 v${preview.manifest.formatVersion} · " +
+                        "${visiblePackageSize(preview.packageSizeBytes)} · 加密数据包",
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                currentSummary?.let { summary ->
-                    Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = "当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。",
-                        color = WhereSecondaryTextColor,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if (preview.differentHousehold) {
-                    Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = "备份来自另一个家庭，只能替换，不能合并。",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                Text(
+                    text = "${preview.itemCount} 件物品 · ${photoCount} 张照片 · ${preview.locationCount} 个位置",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
+        }
+        Text(
+            modifier = Modifier.padding(top = 18.dp, bottom = 8.dp),
+            text = "恢复预览",
+            color = WhereSecondaryTextColor,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            RestoreStatCard(
+                modifier = Modifier.weight(1f),
+                value = preview.addedCount.toString(),
+                label = "新增",
+                emphasized = true,
+            )
+            RestoreStatCard(
+                modifier = Modifier.weight(1f),
+                value = preview.updatedCount.toString(),
+                label = "更新",
+                emphasized = false,
+            )
+            RestoreStatCard(
+                modifier = Modifier.weight(1f),
+                value = preview.deletedCount.toString(),
+                label = "删除",
+                emphasized = false,
+            )
+            RestoreStatCard(
+                modifier = Modifier.weight(1f),
+                value = preview.conflictCount.toString(),
+                label = "冲突",
+                emphasized = false,
+                warning = preview.conflictCount > 0,
+            )
+        }
+        if (preview.differentHousehold) {
+            Text(
+                modifier = Modifier.padding(top = 12.dp),
+                text = "备份来自另一个家庭，只能替换，不能合并。",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         preview.conflicts.forEach { conflict ->
             val selected = resolutions[conflict.key]
@@ -153,51 +282,73 @@ fun RestoreBackupScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 12.dp),
-                shape = RoundedCornerShape(18.dp),
-                color = WhereSurfaceColor,
-                border = BorderStroke(1.dp, WhereOutlineColor),
+                shape = RoundedCornerShape(15.dp),
+                color = RestoreWarningFill,
+                border = BorderStroke(1.dp, RestoreWarningStroke),
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "${conflict.entityLabel} · ${conflict.conflictFields.joinToString("、")}",
+                        text = "发现冲突：${conflict.entityLabel}",
+                        color = RestoreWarningTitle,
                         fontWeight = FontWeight.Bold,
-                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         modifier = Modifier.padding(top = 6.dp),
-                        text = "当前：${conflict.localValue}",
+                        text = "冲突字段：${conflict.conflictFields.joinToString("、")}\n" +
+                            "本机：${conflict.localValue}\n" +
+                            "备份：${conflict.incomingValue}",
+                        color = RestoreWarningBody,
+                        style = MaterialTheme.typography.bodySmall,
                     )
-                    Text("备份：${conflict.incomingValue}")
-                    Row(modifier = Modifier.padding(top = 6.dp)) {
+                    Row(
+                        modifier = Modifier.padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         if (ConflictResolution.KEEP_LOCAL in conflict.allowedResolutions) {
-                            TextButton(
+                            RestoreConflictChoice(
+                                modifier = Modifier.weight(1f),
+                                label = if (selected == ConflictResolution.KEEP_LOCAL) {
+                                    "已保留本机"
+                                } else {
+                                    "保留本机"
+                                },
+                                selected = selected == ConflictResolution.KEEP_LOCAL,
                                 enabled = !submitting,
                                 onClick = {
                                     onResolve(conflict.key, ConflictResolution.KEEP_LOCAL)
                                 },
-                            ) {
-                                Text(if (selected == ConflictResolution.KEEP_LOCAL) "已保留本机" else "保留本机")
-                            }
+                            )
                         }
                         if (ConflictResolution.USE_INCOMING in conflict.allowedResolutions) {
-                            TextButton(
+                            RestoreConflictChoice(
+                                modifier = Modifier.weight(1f),
+                                label = if (selected == ConflictResolution.USE_INCOMING) {
+                                    "已采用备份"
+                                } else {
+                                    "采用备份"
+                                },
+                                selected = selected == ConflictResolution.USE_INCOMING,
                                 enabled = !submitting,
                                 onClick = {
                                     onResolve(conflict.key, ConflictResolution.USE_INCOMING)
                                 },
-                            ) {
-                                Text(if (selected == ConflictResolution.USE_INCOMING) "已采用备份" else "采用备份")
-                            }
+                            )
                         }
                         if (ConflictResolution.KEEP_BOTH in conflict.allowedResolutions) {
-                            TextButton(
+                            RestoreConflictChoice(
+                                modifier = Modifier.weight(1f),
+                                label = if (selected == ConflictResolution.KEEP_BOTH) {
+                                    "已保留双方"
+                                } else {
+                                    "保留双方"
+                                },
+                                selected = selected == ConflictResolution.KEEP_BOTH,
                                 enabled = !submitting,
                                 onClick = {
                                     onResolve(conflict.key, ConflictResolution.KEEP_BOTH)
                                 },
-                            ) {
-                                Text(if (selected == ConflictResolution.KEEP_BOTH) "已保留双方" else "保留双方")
-                            }
+                            )
                         }
                     }
                 }
@@ -210,6 +361,66 @@ fun RestoreBackupScreen(
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+        Text(
+            modifier = Modifier.padding(top = 18.dp, bottom = 8.dp),
+            text = "恢复方式",
+            color = WhereSecondaryTextColor,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            RestoreModeCard(
+                modifier = Modifier.weight(1f),
+                title = "合并",
+                description = "保留当前数据",
+                icon = WhereIcons.Confirm,
+                selected = selectedMode == RestoreMode.MERGE,
+                enabled = !submitting && !preview.differentHousehold,
+                onClick = {
+                    selectedMode = RestoreMode.MERGE
+                },
+            )
+            RestoreModeCard(
+                modifier = Modifier.weight(1f),
+                title = "替换",
+                description = "覆盖当前家庭",
+                icon = WhereIcons.Repeat,
+                selected = selectedMode == RestoreMode.REPLACE,
+                enabled = !submitting,
+                onClick = {
+                    selectedMode = RestoreMode.REPLACE
+                },
+            )
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            shape = RoundedCornerShape(13.dp),
+            color = WhereSurfaceColor,
+            border = BorderStroke(1.dp, WhereOutlineColor),
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                Icon(
+                    modifier = Modifier.size(20.dp),
+                    imageVector = WhereIcons.Confirm,
+                    contentDescription = null,
+                    tint = WherePrimaryColor,
+                )
+                Text(
+                    text = "恢复前将自动备份当前数据，失败时自动回滚。",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         if (errorMessage != null) {
             Text(
@@ -227,28 +438,22 @@ fun RestoreBackupScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        OutlinedButton(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 20.dp)
-                .heightIn(min = 52.dp),
-            enabled = !submitting,
-            onClick = { replaceConfirmVisible = true },
-            shape = RoundedCornerShape(14.dp),
-        ) {
-            Text("替换当前家庭")
-        }
         Button(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 10.dp)
+                .padding(top = 16.dp)
                 .heightIn(min = 52.dp),
-            enabled = canMerge,
-            onClick = onMerge,
-            shape = RoundedCornerShape(14.dp),
+            enabled = canConfirm,
+            onClick = {
+                when (selectedMode) {
+                    RestoreMode.MERGE -> onMerge()
+                    RestoreMode.REPLACE -> replaceConfirmVisible = true
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = WherePrimaryColor),
         ) {
-            Text("合并到当前家庭")
+            Text("确认恢复")
         }
     }
 
@@ -279,6 +484,147 @@ fun RestoreBackupScreen(
             currentSummary?.let { summary ->
                 Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
             }
+        }
+    }
+}
+
+/**
+ * 把数据包大小收成用户能扫一眼的单位，避免只看到原始字节。
+ */
+private fun visiblePackageSize(bytes: Long): String {
+    require(bytes > 0L) { "Visible package size must be greater than zero." }
+    return if (bytes >= 1_000_000L) {
+        "${bytes / 1_000_000L} MB"
+    } else if (bytes >= 1_000L) {
+        "${bytes / 1_000L} KB"
+    } else {
+        "$bytes 字节"
+    }
+}
+
+/**
+ * 恢复预览四个变化数量卡。
+ */
+@Composable
+private fun RestoreStatCard(
+    modifier: Modifier,
+    value: String,
+    label: String,
+    emphasized: Boolean,
+    warning: Boolean = false,
+) {
+    val fill = when {
+        warning -> RestoreWarningFill
+        emphasized -> WhereSelectedContainerColor
+        else -> Color(0xFFEEF1F4)
+    }
+    val content = when {
+        warning -> RestoreWarningTitle
+        emphasized -> WherePrimaryColor
+        else -> WherePrimaryTextColor
+    }
+    Surface(
+        modifier = modifier.height(84.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = fill,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = value,
+                color = content,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            Text(
+                text = label,
+                color = content,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+}
+
+/**
+ * 冲突处理方式，选中后用实心底强调已决定。
+ */
+@Composable
+private fun RestoreConflictChoice(
+    modifier: Modifier,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier
+            .heightIn(min = 32.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = if (selected) WhereSurfaceColor else Color(0x80FFFFFF),
+        border = BorderStroke(1.dp, if (selected) RestoreWarningTitle else RestoreWarningStroke),
+    ) {
+        Text(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+            text = label,
+            color = RestoreWarningBody,
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+/**
+ * 合并或替换二选一，对齐原型的恢复方式卡。
+ */
+@Composable
+private fun RestoreModeCard(
+    modifier: Modifier,
+    title: String,
+    description: String,
+    icon: ImageVector,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier
+            .height(96.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        shape = RoundedCornerShape(15.dp),
+        color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) WherePrimaryColor else WhereOutlineColor,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                modifier = Modifier.size(22.dp),
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (selected) WherePrimaryColor else WhereSecondaryTextColor,
+            )
+            Text(
+                modifier = Modifier.padding(top = 6.dp),
+                text = title,
+                color = if (selected) WherePrimaryColor else WherePrimaryTextColor,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = description,
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
