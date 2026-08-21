@@ -77,6 +77,7 @@ import com.vichua.where.core.model.RestoreSession
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
+ * @param onDiagnosticLoggingChange 切换是否写入不含敏感内容的本机诊断事件。
  * @param onCreateBackup 使用密码创建加密备份。
  * @param onExportHousehold 使用密码导出完整家庭数据。
  * @param onVerifyBackup 使用密码只读验证备份。
@@ -112,6 +113,7 @@ fun SettingsScreen(
     onAiAssistanceChange: (Boolean) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
     onBackupReminderChange: (Boolean) -> Unit,
+    onDiagnosticLoggingChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
     onExportHousehold: (String, String, ExportDestination) -> Unit,
     onVerifyBackup: (String) -> Unit,
@@ -265,6 +267,13 @@ fun SettingsScreen(
             checked = appPreferences?.backupReminderEnabled == true,
             enabled = appPreferences != null,
             onCheckedChange = onBackupReminderChange,
+        )
+        SettingsSwitchRow(
+            title = "诊断日志",
+            description = "只记录不含物品名称、位置和查询原文的操作结果，用于排查问题",
+            checked = appPreferences?.diagnosticLoggingEnabled == true,
+            enabled = appPreferences != null,
+            onCheckedChange = onDiagnosticLoggingChange,
         )
         Text(
             modifier = Modifier.padding(bottom = 10.dp),

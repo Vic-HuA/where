@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
         val documentGateway = AndroidDocumentGateway(this)
         val speechRecognitionGateway = AndroidSpeechRecognitionGateway(this)
         val aiAssistanceGateway = AndroidAiAssistanceGateway()
+        val diagnosticLogGateway = AndroidDiagnosticLogGateway()
         setContent {
             WhereApp(
                 hasActiveHouseholdUseCase = container.hasActiveHouseholdUseCase,
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
                 speechRecognitionGateway = speechRecognitionGateway,
                 prepareAiPhotoRequestUseCase = container.prepareAiPhotoRequestUseCase,
                 aiAssistanceGateway = aiAssistanceGateway,
+                diagnosticLogGateway = diagnosticLogGateway,
                 loadLatestBackupStatusUseCase = container.loadLatestBackupStatusUseCase,
                 createEncryptedBackupUseCase = container.createEncryptedBackupUseCase(documentGateway),
                 exportHouseholdDataUseCase = container.exportHouseholdDataUseCase(documentGateway),

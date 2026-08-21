@@ -25,6 +25,8 @@ import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
+import com.vichua.where.core.platform.DiagnosticEvent
+import com.vichua.where.core.platform.DiagnosticLogGateway
 import com.vichua.where.core.platform.HapticFeedbackGateway
 import com.vichua.where.core.platform.HapticFeedbackKind
 import com.vichua.where.core.platform.PhotoPickerGateway
@@ -143,6 +145,7 @@ import kotlinx.coroutines.launch
  * @param speechRecognitionGateway 可选语音识别入口。
  * @param prepareAiPhotoRequestUseCase 把用户选出的照片收成一次 AI 请求。
  * @param aiAssistanceGateway 可选 AI 辅助入口。
+ * @param diagnosticLogGateway 不含敏感内容的本机诊断日志入口。
  * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
  * @param createEncryptedBackupUseCase 创建加密备份的用例。
  * @param exportHouseholdDataUseCase 导出完整家庭数据的用例。
@@ -197,6 +200,7 @@ fun WhereApp(
     speechRecognitionGateway: SpeechRecognitionGateway,
     prepareAiPhotoRequestUseCase: PrepareAiPhotoRequestUseCase,
     aiAssistanceGateway: AiAssistanceGateway,
+    diagnosticLogGateway: DiagnosticLogGateway,
     loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
     createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
     exportHouseholdDataUseCase: ExportHouseholdDataUseCase,
@@ -286,6 +290,18 @@ fun WhereApp(
                 }
             } catch (_: Exception) {
                 // Haptic failure must not block the current action.
+            }
+        }
+    }
+    /**
+     * 开关打开时只写入固定事件码，避免把家庭数据打进日志。
+     */
+    val recordDiagnostic: (DiagnosticEvent) -> Unit = { event ->
+        if (appPreferences?.diagnosticLoggingEnabled == true) {
+            try {
+                diagnosticLogGateway.record(event)
+            } catch (_: Exception) {
+                // Diagnostic logging must not block the current action.
             }
         }
     }
@@ -673,6 +689,7 @@ fun WhereApp(
                                 )
                             } catch (_: Exception) {
                                 searchSpeechError = "当前设备无法朗读。"
+                                recordDiagnostic(DiagnosticEvent.TTS_UNAVAILABLE)
                             }
                         }
                     },
@@ -774,6 +791,7 @@ fun WhereApp(
                                 null
                             } else if (!aiAssistanceGateway.isAvailable()) {
                                 itemCreationError = "当前无法使用 AI 辅助，请先手动填写。"
+                                recordDiagnostic(DiagnosticEvent.AI_UNAVAILABLE)
                                 null
                             } else {
                                 val outcome = aiAssistanceGateway.analyzePhotos(selectedPhotos)
@@ -835,6 +853,7 @@ fun WhereApp(
                                             )
                                         } catch (_: Exception) {
                                             confirmationSpeechError = "当前设备无法朗读。"
+                                            recordDiagnostic(DiagnosticEvent.TTS_UNAVAILABLE)
                                         }
                                     }
                                     destination = AppDestination.HOME
@@ -842,6 +861,7 @@ fun WhereApp(
                                     itemCreationError = "请检查物品名称和所在位置。"
                                 } catch (_: Exception) {
                                     itemCreationError = "保存失败，请稍后重试。"
+                                    recordDiagnostic(DiagnosticEvent.ITEM_SAVE_FAILED)
                                 } finally {
                                     itemCreationSubmitting = false
                                 }
@@ -1067,6 +1087,25 @@ fun WhereApp(
                             }
                         }
                     },
+                    onDiagnosticLoggingChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    appPreferences =
+                                        updateAppPreferencesUseCase.setDiagnosticLogging(enabled)
+                                    if (enabled) {
+                                        recordDiagnostic(DiagnosticEvent.ENABLED)
+                                    }
+                                } catch (_: Exception) {
+                                    settingsError = "保存诊断日志失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onCreateBackup = { password, confirmation ->
                         if (!backupSubmitting) {
                             coroutineScope.launch {
@@ -1089,6 +1128,7 @@ fun WhereApp(
                                 } catch (_: Exception) {
                                     settingsError = "创建备份失败，请稍后重试。"
                                     backupProgressText = null
+                                    recordDiagnostic(DiagnosticEvent.BACKUP_CREATE_FAILED)
                                 } finally {
                                     backupSubmitting = false
                                 }
@@ -1293,6 +1333,7 @@ fun WhereApp(
                                     itemSpeechCanRepeat = true
                                 } catch (_: Exception) {
                                     itemSpeechError = "当前设备无法朗读。"
+                                    recordDiagnostic(DiagnosticEvent.TTS_UNAVAILABLE)
                                 } finally {
                                     itemSpeechSubmitting = false
                                 }

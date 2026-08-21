@@ -110,4 +110,19 @@ class UpdateAppPreferencesUseCase(
         repository.save(updated)
         return updated
     }
+
+    /**
+     * 单独调整诊断日志，不改变 AI、云端语音或备份提醒。
+     *
+     * 关闭后不再写入诊断事件；开启后也不得记录物品名称、位置或查询原文。
+     */
+    suspend fun setDiagnosticLogging(enabled: Boolean): LocalAppPreferences {
+        val current = repository.load()
+        val updated = current.copy(
+            diagnosticLoggingEnabled = enabled,
+            updatedAt = UtcTimestamp(clock.now()),
+        )
+        repository.save(updated)
+        return updated
+    }
 }

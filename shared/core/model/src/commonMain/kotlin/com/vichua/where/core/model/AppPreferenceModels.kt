@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
  * @property aiDisclosureVersionAccepted 最近确认的 AI 披露版本；未确认时为空。
  * @property cloudSpeechDisclosureVersionAccepted 最近确认的云端语音披露版本；未确认时为空。
  * @property backupReminderEnabled 是否在尚未成功备份时于首页提醒。
- * @property diagnosticLoggingEnabled 是否启用不含敏感内容的诊断日志；本步只持久化。
+ * @property diagnosticLoggingEnabled 是否写入不含敏感内容的本机诊断事件。
  * @property updatedAt 最近更新时间。
  */
 @Serializable
