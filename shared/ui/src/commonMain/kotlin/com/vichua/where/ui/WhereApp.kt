@@ -341,6 +341,16 @@ fun WhereApp(
     var householdSummary by remember { mutableStateOf<HouseholdDataSummary?>(null) }
     var restoreSession by remember { mutableStateOf<RestoreSession?>(null) }
     var conflictResolutions by remember { mutableStateOf<Map<String, ConflictResolution>>(emptyMap()) }
+
+    /**
+     * 离开恢复页时丢掉未执行的会话，避免返回设置后仍占用预览状态。
+     */
+    fun leaveRestoreAndPop() {
+        restoreSession = null
+        conflictResolutions = emptyMap()
+        popNavigation()
+    }
+
     var searchSpeechError by remember { mutableStateOf<String?>(null) }
     var confirmationSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
@@ -359,6 +369,55 @@ fun WhereApp(
             }
         }
     }
+
+    /**
+     * 执行合并或替换后回到设置页，失败则留在恢复页展示错误。
+     */
+    fun applyRestore(mode: RestoreMode) {
+        val session = restoreSession
+        if (backupSubmitting || session == null) {
+            return
+        }
+        performHaptic(
+            if (mode == RestoreMode.REPLACE) {
+                HapticFeedbackKind.WARNING
+            } else {
+                HapticFeedbackKind.CONFIRM
+            },
+        )
+        coroutineScope.launch {
+            backupSubmitting = true
+            backupProgressText = if (mode == RestoreMode.REPLACE) {
+                "正在替换家庭数据…"
+            } else {
+                "正在合并家庭数据…"
+            }
+            settingsError = null
+            try {
+                applyBackupRestoreUseCase(session, mode, conflictResolutions)
+                restoreSession = null
+                conflictResolutions = emptyMap()
+                householdSummary = clearHouseholdDataUseCase.loadSummary()
+                latestBackupStatus = loadLatestBackupStatusUseCase()
+                homeLoadAttempt += 1
+                backupProgressText = if (mode == RestoreMode.REPLACE) {
+                    "已用备份替换当前家庭。"
+                } else {
+                    "已合并备份到当前家庭。"
+                }
+                popNavigation()
+            } catch (_: IllegalArgumentException) {
+                settingsError = "未处理的冲突不能合并，或备份来自另一个家庭。"
+                backupProgressText = null
+            } catch (_: Exception) {
+                settingsError = "恢复失败，已保留恢复前的家庭数据。"
+                backupProgressText = null
+            } finally {
+                backupSubmitting = false
+            }
+        }
+    }
+
     /**
      * 开关打开时只写入固定事件码，避免把家庭数据打进日志。
      */
@@ -532,7 +591,8 @@ fun WhereApp(
             destination == AppDestination.SEARCH ||
             destination == AppDestination.ADD_ITEM ||
             destination == AppDestination.ITEM_DETAIL ||
-            destination == AppDestination.MOVE_ITEM
+            destination == AppDestination.MOVE_ITEM ||
+            destination == AppDestination.RESTORE_BACKUP
         if (shouldLoadPreferences && accessibilityPreferences == null) {
             settingsLoading = true
             settingsError = null
@@ -574,10 +634,10 @@ fun WhereApp(
                 enabled = destination.canEnterBackStack() &&
                     destination != AppDestination.HOME,
                 onBack = {
-                    if (destination == AppDestination.ITEM_DETAIL) {
-                        leaveItemDetailAndPop()
-                    } else {
-                        popNavigation()
+                    when (destination) {
+                        AppDestination.ITEM_DETAIL -> leaveItemDetailAndPop()
+                        AppDestination.RESTORE_BACKUP -> leaveRestoreAndPop()
+                        else -> popNavigation()
                     }
                 },
             )
@@ -1034,8 +1094,6 @@ fun WhereApp(
                     backupProgressText = backupProgressText,
                     verificationResult = backupVerificationResult,
                     householdSummary = householdSummary,
-                    restoreSession = restoreSession,
-                    conflictResolutions = conflictResolutions,
                     onBack = {
                         popNavigation()
                     },
@@ -1301,60 +1359,12 @@ fun WhereApp(
                                     restoreSession = session
                                     householdSummary = session.preview.currentSummary
                                     backupProgressText = null
+                                    navigateTo(AppDestination.RESTORE_BACKUP)
                                 } catch (_: IllegalArgumentException) {
                                     settingsError = "密码错误、格式不兼容或备份已损坏。"
                                     backupProgressText = null
                                 } catch (_: Exception) {
                                     settingsError = "恢复预览失败，请稍后重试。"
-                                    backupProgressText = null
-                                } finally {
-                                    backupSubmitting = false
-                                }
-                            }
-                        }
-                    },
-                    onDismissRestore = {
-                        restoreSession = null
-                        conflictResolutions = emptyMap()
-                    },
-                    onResolveConflict = { key, resolution ->
-                        conflictResolutions = conflictResolutions + (key to resolution)
-                    },
-                    onApplyRestore = { mode ->
-                        val session = restoreSession
-                        if (!backupSubmitting && session != null) {
-                            performHaptic(
-                                if (mode == RestoreMode.REPLACE) {
-                                    HapticFeedbackKind.WARNING
-                                } else {
-                                    HapticFeedbackKind.CONFIRM
-                                },
-                            )
-                            coroutineScope.launch {
-                                backupSubmitting = true
-                                backupProgressText = if (mode == RestoreMode.REPLACE) {
-                                    "正在替换家庭数据…"
-                                } else {
-                                    "正在合并家庭数据…"
-                                }
-                                settingsError = null
-                                try {
-                                    applyBackupRestoreUseCase(session, mode, conflictResolutions)
-                                    restoreSession = null
-                                    conflictResolutions = emptyMap()
-                                    householdSummary = clearHouseholdDataUseCase.loadSummary()
-                                    latestBackupStatus = loadLatestBackupStatusUseCase()
-                                    homeLoadAttempt += 1
-                                    backupProgressText = if (mode == RestoreMode.REPLACE) {
-                                        "已用备份替换当前家庭。"
-                                    } else {
-                                        "已合并备份到当前家庭。"
-                                    }
-                                } catch (_: IllegalArgumentException) {
-                                    settingsError = "未处理的冲突不能合并，或备份来自另一个家庭。"
-                                    backupProgressText = null
-                                } catch (_: Exception) {
-                                    settingsError = "恢复失败，已保留恢复前的家庭数据。"
                                     backupProgressText = null
                                 } finally {
                                     backupSubmitting = false
@@ -1384,6 +1394,29 @@ fun WhereApp(
                                 }
                             }
                         }
+                    },
+                )
+                AppDestination.RESTORE_BACKUP -> RestoreBackupScreen(
+                    session = restoreSession,
+                    lastVerifiedBackupText = latestBackupStatus?.lastVerifiedAt?.let { timestamp ->
+                        "最近成功备份：${visibleDateTimeFormatter.format(timestamp.epochMilliseconds)}"
+                    },
+                    currentSummary = householdSummary,
+                    resolutions = conflictResolutions,
+                    submitting = backupSubmitting,
+                    progressText = backupProgressText,
+                    errorMessage = settingsError,
+                    onBack = {
+                        leaveRestoreAndPop()
+                    },
+                    onResolve = { key, resolution ->
+                        conflictResolutions = conflictResolutions + (key to resolution)
+                    },
+                    onMerge = {
+                        applyRestore(RestoreMode.MERGE)
+                    },
+                    onReplace = {
+                        applyRestore(RestoreMode.REPLACE)
                     },
                 )
                 AppDestination.ITEM_DETAIL -> ItemDetailScreen(
@@ -1788,6 +1821,7 @@ private enum class AppDestination {
     ADD_ITEM,
     LOCATION,
     SETTINGS,
+    RESTORE_BACKUP,
     ITEM_DETAIL,
     MOVE_ITEM,
 }
@@ -1801,6 +1835,7 @@ private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
     AppDestination.ADD_ITEM,
     AppDestination.LOCATION,
     AppDestination.SETTINGS,
+    AppDestination.RESTORE_BACKUP,
     AppDestination.ITEM_DETAIL,
     AppDestination.MOVE_ITEM,
     -> true

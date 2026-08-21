@@ -25,7 +25,6 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,13 +48,10 @@ import com.vichua.where.core.model.AiAssistanceDisclosure
 import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.CloudSpeechDisclosure
-import com.vichua.where.core.model.ConflictResolution
 import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.LocalAppPreferences
-import com.vichua.where.core.model.RestoreMode
-import com.vichua.where.core.model.RestoreSession
 
 /**
  * 设置与数据页：适老偏好、创建加密备份和只读验证。
@@ -82,13 +78,8 @@ import com.vichua.where.core.model.RestoreSession
  * @param onExportHousehold 使用密码导出完整家庭数据。
  * @param onVerifyBackup 使用密码只读验证备份。
  * @param onDismissVerification 关闭验证摘要。
- * @param householdSummary 当前家庭摘要，供恢复和清除二次确认使用。
- * @param restoreSession 校验通过后的恢复预览会话。
- * @param conflictResolutions 用户已选择的冲突处理方式。
- * @param onRestoreBackup 打开备份并生成恢复预览。
- * @param onDismissRestore 取消恢复会话。
- * @param onResolveConflict 为一条冲突选择处理方式。
- * @param onApplyRestore 在二次确认后执行合并或替换。
+ * @param householdSummary 当前家庭摘要，供清除二次确认使用。
+ * @param onRestoreBackup 打开备份并进入恢复预览页。
  * @param onClearHousehold 二次确认后清除家庭数据。
  */
 @Composable
@@ -102,8 +93,6 @@ fun SettingsScreen(
     backupProgressText: String?,
     verificationResult: BackupVerificationResult?,
     householdSummary: HouseholdDataSummary?,
-    restoreSession: RestoreSession?,
-    conflictResolutions: Map<String, ConflictResolution>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onElderFriendlyChange: (Boolean) -> Unit,
@@ -119,9 +108,6 @@ fun SettingsScreen(
     onVerifyBackup: (String) -> Unit,
     onDismissVerification: () -> Unit,
     onRestoreBackup: (String) -> Unit,
-    onDismissRestore: () -> Unit,
-    onResolveConflict: (String, ConflictResolution) -> Unit,
-    onApplyRestore: (RestoreMode) -> Unit,
     onClearHousehold: () -> Unit,
 ) {
     var aiAssistanceDisclosureVisible by remember { mutableStateOf(false) }
@@ -133,7 +119,6 @@ fun SettingsScreen(
     var pendingExportConfirmation by remember { mutableStateOf<String?>(null) }
     var verifyPasswordDialogVisible by remember { mutableStateOf(false) }
     var restorePasswordDialogVisible by remember { mutableStateOf(false) }
-    var replaceConfirmVisible by remember { mutableStateOf(false) }
     var clearFirstConfirmVisible by remember { mutableStateOf(false) }
     var clearSecondConfirmVisible by remember { mutableStateOf(false) }
 
@@ -503,52 +488,6 @@ fun SettingsScreen(
             },
         )
     }
-    if (restoreSession != null) {
-        RestorePreviewDialog(
-            session = restoreSession,
-            lastVerifiedBackupText = lastVerifiedBackupText,
-            currentSummary = householdSummary,
-            resolutions = conflictResolutions,
-            enabled = !submitting,
-            onDismiss = onDismissRestore,
-            onResolve = onResolveConflict,
-            onMerge = {
-                onApplyRestore(RestoreMode.MERGE)
-            },
-            onReplace = {
-                replaceConfirmVisible = true
-            },
-        )
-    }
-    if (replaceConfirmVisible && restoreSession != null) {
-        WhereDialog(
-            onDismissRequest = {
-                if (!submitting) {
-                    replaceConfirmVisible = false
-                }
-            },
-            title = "确认替换当前家庭",
-            confirmText = "确认替换",
-            onConfirm = {
-                replaceConfirmVisible = false
-                onApplyRestore(RestoreMode.REPLACE)
-            },
-            confirmEnabled = !submitting,
-            confirmDestructive = true,
-            dismissText = "取消",
-            onDismiss = { replaceConfirmVisible = false },
-            dismissEnabled = !submitting,
-        ) {
-                    Text("替换会用备份覆盖当前家庭数据，本机设置和草稿文字会保留。")
-                    Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = lastVerifiedBackupText ?: "尚未成功备份。密码丢失后无法恢复。",
-                    )
-                    householdSummary?.let { summary ->
-                        Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
-                    }
-        }
-    }
     if (clearFirstConfirmVisible) {
         WhereDialog(
             onDismissRequest = {
@@ -909,111 +848,5 @@ private fun BackupVerificationDialog(
                 Text("物品照片 ${result.itemPhotoCount} 张")
                 Text("已打包原图 ${result.includedMediaCount} 张")
                 Text("文件大小 ${result.packageSizeBytes} 字节")
-    }
-}
-
-@Composable
-private fun RestorePreviewDialog(
-    session: RestoreSession,
-    lastVerifiedBackupText: String?,
-    currentSummary: HouseholdDataSummary?,
-    resolutions: Map<String, ConflictResolution>,
-    enabled: Boolean,
-    onDismiss: () -> Unit,
-    onResolve: (String, ConflictResolution) -> Unit,
-    onMerge: () -> Unit,
-    onReplace: () -> Unit,
-) {
-    val preview = session.preview
-    val allConflictsResolved = preview.conflicts.all { conflict ->
-        resolutions[conflict.key] != null
-    }
-    val canMerge = enabled && !preview.differentHousehold && allConflictsResolved
-    WhereDialog(
-        onDismissRequest = {
-            if (enabled) {
-                onDismiss()
-            }
-        },
-        title = "恢复预览",
-        confirmText = "合并",
-        onConfirm = onMerge,
-        confirmEnabled = canMerge,
-        dismissText = "取消",
-        onDismiss = onDismiss,
-        dismissEnabled = enabled,
-        neutralText = "替换",
-        onNeutral = onReplace,
-        neutralEnabled = enabled,
-    ) {
-                Text("格式版本 ${preview.manifest.formatVersion}")
-                Text("加密：${preview.manifest.encryptionAlgorithm}")
-                Text("物品 ${preview.itemCount} 件，位置 ${preview.locationCount} 个")
-                Text("物品照片 ${preview.itemPhotoCount} 张")
-                Text("新增 ${preview.addedCount}，更新 ${preview.updatedCount}，删除 ${preview.deletedCount}，冲突 ${preview.conflictCount}")
-                Text(
-                    modifier = Modifier.padding(top = 8.dp),
-                    text = lastVerifiedBackupText ?: "尚未成功备份。密码丢失后无法恢复。",
-                )
-                currentSummary?.let { summary ->
-                    Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
-                }
-                if (preview.differentHousehold) {
-                    Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = "备份来自另一个家庭，只能替换，不能合并。",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                preview.conflicts.forEach { conflict ->
-                    val selected = resolutions[conflict.key]
-                    Column(modifier = Modifier.padding(top = 12.dp)) {
-                        Text(
-                            text = "${conflict.entityLabel} · ${conflict.conflictFields.joinToString("、")}",
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text("当前：${conflict.localValue}")
-                        Text("备份：${conflict.incomingValue}")
-                        Row(modifier = Modifier.padding(top = 6.dp)) {
-                            if (ConflictResolution.KEEP_LOCAL in conflict.allowedResolutions) {
-                                TextButton(
-                                    enabled = enabled,
-                                    onClick = {
-                                        onResolve(conflict.key, ConflictResolution.KEEP_LOCAL)
-                                    },
-                                ) {
-                                    Text(if (selected == ConflictResolution.KEEP_LOCAL) "已保留本机" else "保留本机")
-                                }
-                            }
-                            if (ConflictResolution.USE_INCOMING in conflict.allowedResolutions) {
-                                TextButton(
-                                    enabled = enabled,
-                                    onClick = {
-                                        onResolve(conflict.key, ConflictResolution.USE_INCOMING)
-                                    },
-                                ) {
-                                    Text(if (selected == ConflictResolution.USE_INCOMING) "已采用备份" else "采用备份")
-                                }
-                            }
-                            if (ConflictResolution.KEEP_BOTH in conflict.allowedResolutions) {
-                                TextButton(
-                                    enabled = enabled,
-                                    onClick = {
-                                        onResolve(conflict.key, ConflictResolution.KEEP_BOTH)
-                                    },
-                                ) {
-                                    Text(if (selected == ConflictResolution.KEEP_BOTH) "已保留双方" else "保留双方")
-                                }
-                            }
-                        }
-                    }
-                }
-                if (preview.conflicts.isNotEmpty() && !allConflictsResolved) {
-                    Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = "未处理的冲突不能执行合并。",
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
     }
 }
