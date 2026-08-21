@@ -62,7 +62,9 @@ import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
 import com.vichua.where.feature.search.text.PrepareVoiceSearchQueryUseCase
 import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
 import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.LoadAiProviderCredentialsUseCase
 import com.vichua.where.feature.settings.preferences.LoadAppPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.UpdateAiProviderCredentialsUseCase
 import com.vichua.where.feature.settings.preferences.UpdateAppPreferencesUseCase
 
 /**
@@ -110,6 +112,8 @@ class AndroidAppContainer(
         database = database,
         clock = AndroidEpochMillisecondsClock,
     )
+    /** 本机 AI 接口凭证，只给适配器和设置用例使用。 */
+    val aiProviderCredentialsStore = AndroidAiProviderCredentialsStore(applicationContext)
     private val householdBackupRepository = RoomHouseholdBackupRepository(
         snapshotStore = HouseholdBackupSnapshotStore(database),
         recordStore = LocalBackupRecordStore(database),
@@ -160,6 +164,9 @@ class AndroidAppContainer(
 
     /** 解析受控照片路径，供首页和详情解码本地缩略图。 */
     val resolveMediaPath: (String) -> String? = mediaFileStore::resolveAbsolutePath
+
+    /** 按受控标识读取原图或缩略图字节，只交给 AI 适配器。 */
+    val readPhotoBytes: suspend (String) -> ByteArray? = mediaFileStore::readBytes
 
     /** 放弃新增页未转正的临时照片。 */
     val discardImportedPhotos: suspend (Collection<String>) -> Unit = mediaFileStore::discard
@@ -307,6 +314,14 @@ class AndroidAppContainer(
         repository = appPreferencesRepository,
         clock = AndroidEpochMillisecondsClock,
     )
+
+    /** 读取本机 AI 接口凭证的用例。 */
+    val loadAiProviderCredentialsUseCase =
+        LoadAiProviderCredentialsUseCase(aiProviderCredentialsStore)
+
+    /** 保存本机 AI 接口凭证的用例。 */
+    val updateAiProviderCredentialsUseCase =
+        UpdateAiProviderCredentialsUseCase(aiProviderCredentialsStore)
 
     /** 把语音查找转写收成本地关键词。 */
     val prepareVoiceSearchQueryUseCase = PrepareVoiceSearchQueryUseCase()

@@ -22,7 +22,10 @@ class MainActivity : ComponentActivity() {
         val shareGateway = AndroidShareGateway(this)
         val documentGateway = AndroidDocumentGateway(this)
         val speechRecognitionGateway = AndroidSpeechRecognitionGateway(this)
-        val aiAssistanceGateway = AndroidAiAssistanceGateway()
+        val aiAssistanceGateway = AndroidAiAssistanceGateway(
+            credentialsStore = container.aiProviderCredentialsStore,
+            readPhotoBytes = container.readPhotoBytes,
+        )
         val diagnosticLogGateway = AndroidDiagnosticLogGateway()
         setContent {
             WhereApp(
@@ -63,6 +66,8 @@ class MainActivity : ComponentActivity() {
                 updateAccessibilityPreferencesUseCase = container.updateAccessibilityPreferencesUseCase,
                 loadAppPreferencesUseCase = container.loadAppPreferencesUseCase,
                 updateAppPreferencesUseCase = container.updateAppPreferencesUseCase,
+                loadAiProviderCredentialsUseCase = container.loadAiProviderCredentialsUseCase,
+                updateAiProviderCredentialsUseCase = container.updateAiProviderCredentialsUseCase,
                 prepareVoiceSearchQueryUseCase = container.prepareVoiceSearchQueryUseCase,
                 speechRecognitionGateway = speechRecognitionGateway,
                 prepareAiPhotoRequestUseCase = container.prepareAiPhotoRequestUseCase,

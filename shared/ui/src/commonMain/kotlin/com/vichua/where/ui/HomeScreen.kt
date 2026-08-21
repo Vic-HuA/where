@@ -2,24 +2,18 @@ package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,9 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -73,7 +65,8 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onUndoDeletion 撤销最近一次物品删除。
  * @param onRetry 重试加载首页数据。
  * @param onTextSearch 提交首页键盘查询。
- * @param onVoiceSearchRequested 长按语音区域后请求语音查找。
+ * @param onVoiceSearchRequested 按下语音区域后开始听。
+ * @param onVoiceSearchReleased 松开后结束本轮收听。
  * @param onItemClick 打开最近物品详情。
  * @param onRecentSearchClick 用同一查询再次执行本地搜索。
  * @param onFavoriteLocationClick 按常用位置名称查找该处物品。
@@ -99,6 +92,7 @@ fun HomeScreen(
     onRetry: () -> Unit,
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
+    onVoiceSearchReleased: () -> Unit = {},
     onItemClick: (HomeItemSummary) -> Unit,
     onRecentSearchClick: (String) -> Unit,
     onFavoriteLocationClick: (FavoriteLocationSummary) -> Unit,
@@ -111,7 +105,9 @@ fun HomeScreen(
     Scaffold(
         containerColor = WhereBackgroundColor,
         bottomBar = {
-            HomeBottomNavigation(
+            WhereBottomNavigation(
+                selected = WhereRootTab.HOME,
+                onHomeClick = {},
                 onLocationClick = onLocationClick,
                 onSettingsClick = onSettingsClick,
             )
@@ -228,6 +224,7 @@ fun HomeScreen(
                     modifier = Modifier.padding(top = 18.dp),
                     onTextSearch = onTextSearch,
                     onVoiceSearchRequested = onVoiceSearchRequested,
+                    onVoiceSearchReleased = onVoiceSearchReleased,
                     voiceListening = voiceListening,
                 )
                 Button(
@@ -369,11 +366,11 @@ fun HomeScreen(
  * 首页语音和文字查找入口。
  */
 @Composable
-@OptIn(ExperimentalFoundationApi::class)
 private fun HomeSearchSurface(
     modifier: Modifier,
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
+    onVoiceSearchReleased: () -> Unit,
     voiceListening: Boolean,
 ) {
     var textModeEnabled by remember { mutableStateOf(false) }
@@ -448,11 +445,10 @@ private fun HomeSearchSurface(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .combinedClickable(
-                            role = Role.Button,
-                            onClick = onVoiceSearchRequested,
-                            onLongClick = onVoiceSearchRequested,
-                            onLongClickLabel = "按住说话查找物品",
+                        .holdToSpeak(
+                            enabled = true,
+                            onPress = onVoiceSearchRequested,
+                            onRelease = onVoiceSearchReleased,
                         )
                         .semantics(mergeDescendants = true) {}
                         .padding(start = 16.dp),
@@ -684,93 +680,6 @@ private fun HomeLoadError(
             onClick = onRetry,
         ) {
             Text("重试")
-        }
-    }
-}
-
-/**
- * 首页、位置和设置三个固定底部导航入口。
- */
-@Composable
-private fun HomeBottomNavigation(
-    onLocationClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = WhereSurfaceColor,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .heightIn(min = 74.dp)
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BottomNavigationItem(
-                icon = WhereIcons.Home,
-                label = "首页",
-                selected = true,
-                onClick = {},
-            )
-            BottomNavigationItem(
-                icon = WhereIcons.Location,
-                label = "位置",
-                selected = false,
-                onClick = onLocationClick,
-            )
-            BottomNavigationItem(
-                icon = WhereIcons.Settings,
-                label = "设置",
-                selected = false,
-                onClick = onSettingsClick,
-            )
-        }
-    }
-}
-
-/**
- * 单个底部导航项。
- */
-@Composable
-private fun BottomNavigationItem(
-    icon: ImageVector,
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier
-            .widthIn(min = 80.dp)
-            .heightIn(min = 48.dp)
-            .clickable(
-                role = Role.Tab,
-                onClick = onClick,
-            )
-            .semantics(mergeDescendants = true) {
-                this.selected = selected
-                stateDescription = if (selected) "当前页面" else "未选中"
-            },
-        color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
-        contentColor = if (selected) WherePrimaryColor else WhereSecondaryTextColor,
-        shape = RoundedCornerShape(16.dp),
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Icon(
-                modifier = Modifier.size(18.dp),
-                imageVector = icon,
-                contentDescription = null,
-            )
-            Text(
-                modifier = Modifier.padding(top = 2.dp),
-                text = label,
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
     }
 }

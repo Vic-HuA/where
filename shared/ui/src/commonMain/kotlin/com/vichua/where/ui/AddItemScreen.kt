@@ -72,6 +72,7 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * @param onSubmit 确认后提交基础手动物品请求。
  * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
  * @param onSpeakRequested 用户主动说话后返回转写文字；取消或失败时为空。
+ * @param onSpeakReleased 松开语音区域后结束本轮收听。
  * @param onAiRecognizeRequested 用户主动选择识别后返回建议；取消或失败时为空，不得自动保存。
  */
 @Composable
@@ -91,6 +92,7 @@ fun AddItemScreen(
     onSubmit: (CreateManualItemRequest) -> Unit,
     elderFriendlyMode: Boolean = false,
     onSpeakRequested: suspend () -> String? = { null },
+    onSpeakReleased: () -> Unit = {},
     onAiRecognizeRequested: suspend () -> AiFieldSuggestions? = { null },
 ) {
     val speakScope = rememberCoroutineScope()
@@ -397,10 +399,10 @@ fun AddItemScreen(
                 .fillMaxWidth()
                 .padding(top = 16.dp)
                 .heightIn(min = 64.dp)
-                .clickable(
-                    enabled = !submitting && !speechSubmitting && !aiSubmitting,
-                    role = Role.Button,
-                    onClick = requestSpeech,
+                .holdToSpeak(
+                    enabled = !submitting && !aiSubmitting,
+                    onPress = requestSpeech,
+                    onRelease = onSpeakReleased,
                 ),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(16.dp),

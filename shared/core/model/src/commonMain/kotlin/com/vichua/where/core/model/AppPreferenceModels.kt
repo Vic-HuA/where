@@ -76,20 +76,68 @@ data class LocalAppPreferences(
 /**
  * AI 辅助披露的冻结文案和版本。
  *
- * 版本变化后必须重新确认。当前适配器尚未配置供应商，开启后也不会上传。
+ * 版本变化后必须重新确认。未填写本机 Key 时不会上传。
  */
 object AiAssistanceDisclosure {
     /** 当前披露版本。 */
-    const val VERSION = "ai-assistance-v1"
+    const val VERSION = "ai-assistance-v2"
 
     /** 将处理的数据类型。 */
     const val DATA_TYPE = "你为当前这次记录主动选择的照片（最多 6 张）以及你主动提交的文字"
 
     /** 服务供应商说明。 */
-    const val VENDOR = "云端视觉识别服务（尚未配置供应商）"
+    const val VENDOR = "你填写的 OpenAI 兼容视觉接口"
 
     /** 处理用途。 */
     const val PURPOSE = "根据选中内容建议物品名称、分类和位置描述，经你确认后才写入"
+}
+
+/**
+ * 本机 AI 接口凭证。
+ *
+ * 只存在当前设备，不进入家庭备份、导出或诊断日志。
+ *
+ * @property apiKey 用户填写的接口密钥；为空表示尚未配置。
+ * @property baseUrl HTTPS 接口根地址，默认官方 OpenAI。
+ */
+data class AiProviderCredentials(
+    val apiKey: String,
+    val baseUrl: String,
+) {
+    init {
+        require(apiKey.isEmpty() || apiKey.isNotBlank()) {
+            "AI API key must be empty or non-blank."
+        }
+        require(baseUrl.isNotBlank()) { "AI provider base URL must not be blank." }
+        require(baseUrl.startsWith("https://")) { "AI provider base URL must use HTTPS." }
+        require(' ' !in baseUrl) { "AI provider base URL must not contain spaces." }
+    }
+
+    /** 有 Key 时才允许真正发起识别。 */
+    val isConfigured: Boolean
+        get() = apiKey.isNotBlank()
+
+    companion object {
+        /** 未填写时使用的官方兼容根地址。 */
+        const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+        /** 默认视觉模型；兼容接口通常接受同一名称。 */
+        const val DEFAULT_MODEL = "gpt-4o-mini"
+
+        /**
+         * 整理用户输入。地址留空时回落到默认官方根地址。
+         */
+        fun normalized(
+            apiKey: String,
+            baseUrl: String,
+        ): AiProviderCredentials {
+            val trimmedUrl = baseUrl.trim().trimEnd('/')
+            return AiProviderCredentials(
+                apiKey = apiKey.trim(),
+                baseUrl = trimmedUrl.ifEmpty { DEFAULT_BASE_URL },
+            )
+        }
+    }
 }
 
 /**

@@ -19,6 +19,9 @@ class PrepareAiPhotoRequestUseCase {
                 AiPhotoInput(
                     role = photo.role,
                     sizeBytes = photo.media.sizeBytes,
+                    storageKey = photo.media.tempStorageKey,
+                    thumbnailStorageKey = photo.media.thumbnailTempStorageKey,
+                    mimeType = photo.media.mimeType,
                 )
             }
     }

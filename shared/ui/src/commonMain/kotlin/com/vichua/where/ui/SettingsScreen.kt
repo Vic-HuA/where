@@ -10,25 +10,22 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.AiAssistanceDisclosure
+import com.vichua.where.core.model.AiProviderCredentials
 import com.vichua.where.core.model.BackupFormat
 import com.vichua.where.core.model.BackupVerificationResult
 import com.vichua.where.core.model.CloudSpeechDisclosure
@@ -63,14 +61,17 @@ import com.vichua.where.core.model.LocalAppPreferences
  * @param lastVerifiedBackupText 最近成功备份时间；尚未验证时为空。
  * @param backupProgressText 备份或验证进行中的英文进度，界面展示中文包装。
  * @param verificationResult 只读验证成功后的摘要。
- * @param onBack 返回首页。
+ * @param onHomeClick 切换到首页根入口。
+ * @param onLocationClick 切换到位置根入口。
  * @param onRetry 重新读取偏好。
  * @param appPreferences 当前设备应用开关；加载失败时为空。
  * @param onElderFriendlyChange 切换适老展示。
  * @param onHighContrastChange 单独切换高对比度。
  * @param onAutoReadConfirmationChange 切换确认保存后是否自动朗读。
  * @param onHapticFeedbackChange 切换主要操作和危险确认是否震动。
+ * @param aiProviderCredentials 本机 AI 接口凭证；未加载时为空。
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
+ * @param onSaveAiProviderCredentials 保存本机 Key 和可选接口地址。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
  * @param onDiagnosticLoggingChange 切换是否写入不含敏感内容的本机诊断事件。
@@ -86,6 +87,7 @@ import com.vichua.where.core.model.LocalAppPreferences
 fun SettingsScreen(
     preferences: LocalAccessibilityPreferences?,
     appPreferences: LocalAppPreferences?,
+    aiProviderCredentials: AiProviderCredentials?,
     loading: Boolean,
     submitting: Boolean,
     errorMessage: String?,
@@ -93,13 +95,15 @@ fun SettingsScreen(
     backupProgressText: String?,
     verificationResult: BackupVerificationResult?,
     householdSummary: HouseholdDataSummary?,
-    onBack: () -> Unit,
+    onHomeClick: () -> Unit,
+    onLocationClick: () -> Unit,
     onRetry: () -> Unit,
     onElderFriendlyChange: (Boolean) -> Unit,
     onHighContrastChange: (Boolean) -> Unit,
     onAutoReadConfirmationChange: (Boolean) -> Unit,
     onHapticFeedbackChange: (Boolean) -> Unit,
     onAiAssistanceChange: (Boolean) -> Unit,
+    onSaveAiProviderCredentials: (String, String) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
     onBackupReminderChange: (Boolean) -> Unit,
     onDiagnosticLoggingChange: (Boolean) -> Unit,
@@ -110,6 +114,7 @@ fun SettingsScreen(
     onRestoreBackup: () -> Unit,
     onClearHousehold: () -> Unit,
 ) {
+    var aiProviderDialogVisible by remember { mutableStateOf(false) }
     var aiAssistanceDisclosureVisible by remember { mutableStateOf(false) }
     var cloudSpeechDisclosureVisible by remember { mutableStateOf(false) }
     var createPasswordDialogVisible by remember { mutableStateOf(false) }
@@ -121,29 +126,29 @@ fun SettingsScreen(
     var clearFirstConfirmVisible by remember { mutableStateOf(false) }
     var clearSecondConfirmVisible by remember { mutableStateOf(false) }
 
+    Scaffold(
+        containerColor = WhereBackgroundColor,
+        bottomBar = {
+            WhereBottomNavigation(
+                selected = WhereRootTab.SETTINGS,
+                onHomeClick = onHomeClick,
+                onLocationClick = onLocationClick,
+                onSettingsClick = {},
+            )
+        },
+    ) { innerPadding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(innerPadding)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clickable(role = Role.Button, onClick = onBack)
-                    .padding(12.dp),
-                imageVector = WhereIcons.Back,
-                contentDescription = "返回",
-                tint = WherePrimaryTextColor,
-            )
-            Text(
-                text = "设置与数据",
-                color = WherePrimaryTextColor,
-                style = MaterialTheme.typography.titleLarge,
-            )
-        }
+        Text(
+            text = "设置与数据",
+            color = WherePrimaryTextColor,
+            style = MaterialTheme.typography.titleLarge,
+        )
 
         if (loading && preferences == null) {
             CircularProgressIndicator(
@@ -195,6 +200,18 @@ fun SettingsScreen(
                 } else {
                     onAiAssistanceChange(false)
                 }
+            },
+        )
+        SettingsActionRow(
+            title = "AI 接口",
+            description = if (aiProviderCredentials?.isConfigured == true) {
+                "已保存 Key，只存在本机，不进入备份"
+            } else {
+                "填写后才能识别；不填可继续手填"
+            },
+            enabled = appPreferences != null && !submitting,
+            onClick = {
+                aiProviderDialogVisible = true
             },
         )
         SettingsSwitchRow(
@@ -312,6 +329,21 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(20.dp))
     }
 
+    if (aiProviderDialogVisible) {
+        AiProviderCredentialsDialog(
+            initialCredentials = aiProviderCredentials,
+            enabled = !submitting,
+            onDismiss = {
+                if (!submitting) {
+                    aiProviderDialogVisible = false
+                }
+            },
+            onSave = { apiKey, baseUrl ->
+                aiProviderDialogVisible = false
+                onSaveAiProviderCredentials(apiKey, baseUrl)
+            },
+        )
+    }
     if (aiAssistanceDisclosureVisible) {
         WhereDialog(
             onDismissRequest = {
@@ -343,7 +375,7 @@ fun SettingsScreen(
                     )
                     Text(
                         modifier = Modifier.padding(top = 10.dp),
-                        text = "不会后台自动上传。没有建议或你不采用时，本地手填、查找和备份不受影响。",
+                        text = "不会后台自动上传。没有 Key、没有建议或你不采用时，本地手填、查找和备份不受影响。",
                         color = WhereSecondaryTextColor,
                     )
         }
@@ -518,6 +550,7 @@ fun SettingsScreen(
             Text("此操作不能仅靠一次误触完成。确认后将返回家庭初始化页。")
         }
     }
+    }
 }
 
 @Composable
@@ -674,6 +707,67 @@ private fun SettingsActionRow(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+/**
+ * 在弹窗里填写 Key，避免设置首页露出密钥输入框。
+ */
+@Composable
+private fun AiProviderCredentialsDialog(
+    initialCredentials: AiProviderCredentials?,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit,
+) {
+    var apiKey by remember {
+        mutableStateOf(initialCredentials?.apiKey.orEmpty())
+    }
+    var baseUrl by remember {
+        mutableStateOf(initialCredentials?.baseUrl ?: AiProviderCredentials.DEFAULT_BASE_URL)
+    }
+    WhereDialog(
+        onDismissRequest = onDismiss,
+        title = "AI 接口",
+        confirmText = "保存",
+        onConfirm = {
+            onSave(apiKey, baseUrl)
+        },
+        confirmEnabled = enabled,
+        dismissText = "取消",
+        onDismiss = onDismiss,
+        dismissEnabled = enabled,
+    ) {
+        Text(
+            text = "可填 OpenAI 或兼容接口。Key 只存在本机，不进入备份。地址必须是 https。",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedTextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            value = apiKey,
+            onValueChange = { value ->
+                apiKey = value
+            },
+            enabled = enabled,
+            label = { Text("接口 Key") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+        )
+        OutlinedTextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            value = baseUrl,
+            onValueChange = { value ->
+                baseUrl = value
+            },
+            enabled = enabled,
+            label = { Text("接口地址（可选）") },
+            singleLine = true,
+        )
     }
 }
 

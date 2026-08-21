@@ -215,6 +215,11 @@ interface SpeechRecognitionGateway {
     suspend fun listen(allowNetwork: Boolean): SpeechRecognitionOutcome
 
     /**
+     * 松开按住说话时结束本轮收听，尽量交出已听到的文字。
+     */
+    fun finishListening()
+
+    /**
      * 立即停止当前识别，不保存录音。
      */
     fun cancel()
@@ -225,13 +230,22 @@ interface SpeechRecognitionGateway {
  *
  * @property role 用户选择的照片用途。
  * @property sizeBytes 原图大小，只用于数量和上限判断，不写入日志。
+ * @property storageKey 原图受控标识，由适配器读取字节，不把绝对路径交给界面。
+ * @property thumbnailStorageKey 缩略图受控标识，原图过大时改传缩略图。
+ * @property mimeType 原图 MIME，用于构造上传内容。
  */
 data class AiPhotoInput(
     val role: PhotoRole,
     val sizeBytes: Long,
+    val storageKey: String,
+    val thumbnailStorageKey: String,
+    val mimeType: String,
 ) {
     init {
         require(sizeBytes > 0L) { "AI photo size must be greater than zero." }
+        StorageKeys.validate(storageKey)
+        StorageKeys.validate(thumbnailStorageKey)
+        require(mimeType.isNotBlank()) { "AI photo MIME type must not be blank." }
     }
 }
 

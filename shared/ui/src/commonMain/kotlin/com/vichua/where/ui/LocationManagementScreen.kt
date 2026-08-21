@@ -6,14 +6,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,7 +53,8 @@ fun LocationManagementScreen(
     submitting: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
-    onBack: () -> Unit,
+    onHomeClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onCreate: (CreateLocationRequest) -> Unit,
     onRename: (LocationTreeNode, String) -> Unit,
     onDelete: (LocationTreeNode) -> Unit,
@@ -73,23 +72,25 @@ fun LocationManagementScreen(
     var editorState by remember { mutableStateOf<LocationEditorState?>(null) }
     var locationQuery by remember { mutableStateOf("") }
 
+    Scaffold(
+        containerColor = WhereBackgroundColor,
+        bottomBar = {
+            WhereBottomNavigation(
+                selected = WhereRootTab.LOCATION,
+                onHomeClick = onHomeClick,
+                onLocationClick = {},
+                onSettingsClick = onSettingsClick,
+            )
+        },
+    ) { innerPadding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(innerPadding)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                modifier = Modifier
-                    .clickable(role = Role.Button, onClick = onBack)
-                    .padding(12.dp),
-                imageVector = WhereIcons.Back,
-                contentDescription = "返回",
-            )
-            Text("位置管理", style = MaterialTheme.typography.titleLarge)
-        }
+        Text("位置管理", style = MaterialTheme.typography.titleLarge)
 
         when {
             loading && snapshot == null -> {
@@ -230,6 +231,7 @@ fun LocationManagementScreen(
                 Text("删除“${editor.node.name}”后，该空位置不再出现在位置树中。")
         }
         null -> Unit
+    }
     }
 }
 

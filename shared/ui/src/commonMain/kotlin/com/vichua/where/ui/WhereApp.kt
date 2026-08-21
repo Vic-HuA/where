@@ -97,7 +97,10 @@ import com.vichua.where.feature.search.text.SearchItemsUseCase
 import com.vichua.where.feature.search.text.PrepareVoiceSearchQueryUseCase
 import com.vichua.where.feature.settings.accessibility.LoadAccessibilityPreferencesUseCase
 import com.vichua.where.feature.settings.accessibility.UpdateAccessibilityPreferencesUseCase
+import com.vichua.where.core.model.AiProviderCredentials
+import com.vichua.where.feature.settings.preferences.LoadAiProviderCredentialsUseCase
 import com.vichua.where.feature.settings.preferences.LoadAppPreferencesUseCase
+import com.vichua.where.feature.settings.preferences.UpdateAiProviderCredentialsUseCase
 import com.vichua.where.feature.settings.preferences.UpdateAppPreferencesUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -142,6 +145,8 @@ import kotlinx.coroutines.launch
  * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
  * @param loadAppPreferencesUseCase 读取当前设备应用开关的用例。
  * @param updateAppPreferencesUseCase 更新当前设备应用开关的用例。
+ * @param loadAiProviderCredentialsUseCase 读取本机 AI 接口凭证的用例。
+ * @param updateAiProviderCredentialsUseCase 保存本机 AI 接口凭证的用例。
  * @param prepareVoiceSearchQueryUseCase 把语音查找转写收成本地关键词。
  * @param speechRecognitionGateway 可选语音识别入口。
  * @param prepareAiPhotoRequestUseCase 把用户选出的照片收成一次 AI 请求。
@@ -197,6 +202,8 @@ fun WhereApp(
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
     loadAppPreferencesUseCase: LoadAppPreferencesUseCase,
     updateAppPreferencesUseCase: UpdateAppPreferencesUseCase,
+    loadAiProviderCredentialsUseCase: LoadAiProviderCredentialsUseCase,
+    updateAiProviderCredentialsUseCase: UpdateAiProviderCredentialsUseCase,
     prepareVoiceSearchQueryUseCase: PrepareVoiceSearchQueryUseCase,
     speechRecognitionGateway: SpeechRecognitionGateway,
     prepareAiPhotoRequestUseCase: PrepareAiPhotoRequestUseCase,
@@ -234,6 +241,19 @@ fun WhereApp(
     var searchInProgress by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var selectedItemId by remember { mutableStateOf<ItemId?>(null) }
+
+    /**
+     * 首页、位置、设置之间替换当前根页，不把彼此压进返回栈。
+     */
+    fun switchRootTab(target: AppDestination) {
+        require(target.isRootTab()) { "Only root tabs can replace each other." }
+        if (destination == target) {
+            return
+        }
+        navigationBackStack.clear()
+        selectedItemId = null
+        destination = target
+    }
 
     /**
      * 进入可返回页面时压入当前页，系统 Back 和左上角返回共用这一层栈。
@@ -329,6 +349,7 @@ fun WhereApp(
         mutableStateOf<LocalAccessibilityPreferences?>(null)
     }
     var appPreferences by remember { mutableStateOf<LocalAppPreferences?>(null) }
+    var aiProviderCredentials by remember { mutableStateOf<AiProviderCredentials?>(null) }
     var voiceListening by remember { mutableStateOf(false) }
     var settingsLoading by remember { mutableStateOf(false) }
     var settingsSubmitting by remember { mutableStateOf(false) }
@@ -599,6 +620,7 @@ fun WhereApp(
             try {
                 accessibilityPreferences = loadAccessibilityPreferencesUseCase()
                 appPreferences = loadAppPreferencesUseCase()
+                aiProviderCredentials = loadAiProviderCredentialsUseCase()
             } catch (_: Exception) {
                 settingsError = "暂时无法读取辅助设置。"
             } finally {
@@ -705,7 +727,7 @@ fun WhereApp(
                         null
                     },
                     onBackupReminderClick = {
-                        navigateTo(AppDestination.SETTINGS)
+                        switchRootTab(AppDestination.SETTINGS)
                     },
                     onUndoDeletion = {
                         val undo = pendingItemDeletionUndo
@@ -775,6 +797,9 @@ fun WhereApp(
                             }
                         }
                     },
+                    onVoiceSearchReleased = {
+                        speechRecognitionGateway.finishListening()
+                    },
                     onItemClick = { item ->
                         navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
                     },
@@ -792,10 +817,10 @@ fun WhereApp(
                         navigateTo(AppDestination.ADD_ITEM)
                     },
                     onLocationClick = {
-                        navigateTo(AppDestination.LOCATION)
+                        switchRootTab(AppDestination.LOCATION)
                     },
                     onSettingsClick = {
-                        navigateTo(AppDestination.SETTINGS)
+                        switchRootTab(AppDestination.SETTINGS)
                     },
                     elderFriendlyMode = elderFriendlyMode,
                     voiceListening = voiceListening,
@@ -949,6 +974,9 @@ fun WhereApp(
                             }
                         }
                     },
+                    onSpeakReleased = {
+                        speechRecognitionGateway.finishListening()
+                    },
                     onSpeakRequested = suspend {
                         val preferences = appPreferences ?: loadAppPreferencesUseCase()
                         appPreferences = preferences
@@ -1020,8 +1048,11 @@ fun WhereApp(
                     onRetry = {
                         locationTreeAttempt += 1
                     },
-                    onBack = {
-                        popNavigation()
+                    onHomeClick = {
+                        switchRootTab(AppDestination.HOME)
+                    },
+                    onSettingsClick = {
+                        switchRootTab(AppDestination.SETTINGS)
                     },
                     onCreate = { request ->
                         if (!locationTreeSubmitting) {
@@ -1085,6 +1116,7 @@ fun WhereApp(
                 AppDestination.SETTINGS -> SettingsScreen(
                     preferences = accessibilityPreferences,
                     appPreferences = appPreferences,
+                    aiProviderCredentials = aiProviderCredentials,
                     loading = settingsLoading,
                     submitting = settingsSubmitting || backupSubmitting,
                     errorMessage = settingsError,
@@ -1094,13 +1126,37 @@ fun WhereApp(
                     backupProgressText = backupProgressText,
                     verificationResult = backupVerificationResult,
                     householdSummary = householdSummary,
-                    onBack = {
-                        popNavigation()
+                    onHomeClick = {
+                        switchRootTab(AppDestination.HOME)
+                    },
+                    onLocationClick = {
+                        switchRootTab(AppDestination.LOCATION)
                     },
                     onRetry = {
                         accessibilityPreferences = null
                         appPreferences = null
+                        aiProviderCredentials = null
                         settingsLoadAttempt += 1
+                    },
+                    onSaveAiProviderCredentials = { apiKey, baseUrl ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    aiProviderCredentials = updateAiProviderCredentialsUseCase(
+                                        apiKey = apiKey,
+                                        baseUrl = baseUrl,
+                                    )
+                                } catch (_: IllegalArgumentException) {
+                                    settingsError = "接口地址必须是 https 开头，且不能包含空格。"
+                                } catch (_: Exception) {
+                                    settingsError = "保存 AI 接口设置失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
                     },
                     onAiAssistanceChange = { enabled ->
                         if (!settingsSubmitting) {
@@ -1779,7 +1835,7 @@ private fun voiceRecognitionMessage(
     SpeechRecognitionOutcome.Unavailable -> if (cloudSpeechEnabled) {
         "当前设备无法语音识别，请先使用键盘输入。"
     } else {
-        "离线识别不可用。可在设置中开启云端语音识别，或改用键盘。"
+        "这台手机没有可用的离线识别。可在设置中开启云端语音识别，或改用键盘。"
     }
     SpeechRecognitionOutcome.NoMatch ->
         "没有听清，请再说一次或改用键盘。"
@@ -1838,6 +1894,10 @@ private enum class AppDestination {
 /**
  * 用户可来回进出的页面才进入返回栈；启动和初始化不压栈。
  */
+private fun AppDestination.isRootTab(): Boolean = this == AppDestination.HOME ||
+    this == AppDestination.LOCATION ||
+    this == AppDestination.SETTINGS
+
 private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
     AppDestination.HOME,
     AppDestination.SEARCH,
