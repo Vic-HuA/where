@@ -718,6 +718,14 @@ fun WhereApp(
                     onItemClick = { item ->
                         navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
                     },
+                    onRecentSearchClick = { query ->
+                        navigateTo(AppDestination.SEARCH)
+                        performSearch(query)
+                    },
+                    onFavoriteLocationClick = { favorite ->
+                        navigateTo(AppDestination.SEARCH)
+                        performSearch(favorite.name)
+                    },
                     onRecordItemClick = {
                         performHaptic(HapticFeedbackKind.CONFIRM)
                         confirmationSpeechError = null

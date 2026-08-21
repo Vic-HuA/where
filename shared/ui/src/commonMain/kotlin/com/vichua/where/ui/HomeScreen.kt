@@ -75,6 +75,8 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onTextSearch 提交首页键盘查询。
  * @param onVoiceSearchRequested 长按语音区域后请求语音查找。
  * @param onItemClick 打开最近物品详情。
+ * @param onRecentSearchClick 用同一查询再次执行本地搜索。
+ * @param onFavoriteLocationClick 按常用位置名称查找该处物品。
  * @param onRecordItemClick 打开新增物品流程。
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
@@ -98,6 +100,8 @@ fun HomeScreen(
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
     onItemClick: (HomeItemSummary) -> Unit,
+    onRecentSearchClick: (String) -> Unit,
+    onFavoriteLocationClick: (FavoriteLocationSummary) -> Unit,
     onRecordItemClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -325,6 +329,9 @@ fun HomeScreen(
                         HomeChip(
                             icon = WhereIcons.Search,
                             text = search.displayQuery,
+                            onClick = {
+                                onRecentSearchClick(search.displayQuery)
+                            },
                         )
                     }
                 }
@@ -344,7 +351,12 @@ fun HomeScreen(
                     loadedSnapshot.favoriteLocations
                         .take(MAX_VISIBLE_CHIPS)
                         .forEach { favorite ->
-                            FavoriteLocationChip(favorite)
+                            FavoriteLocationChip(
+                                favorite = favorite,
+                                onClick = {
+                                    onFavoriteLocationClick(favorite)
+                                },
+                            )
                         }
                 }
             }
@@ -603,6 +615,7 @@ private fun EmptyHomeCard(
 private fun HomeChip(
     icon: ImageVector,
     text: String,
+    onClick: () -> Unit,
 ) {
     Surface(
         color = WhereSurfaceColor,
@@ -612,6 +625,7 @@ private fun HomeChip(
         Row(
             modifier = Modifier
                 .heightIn(min = 40.dp)
+                .clickable(role = Role.Button, onClick = onClick)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -635,10 +649,14 @@ private fun HomeChip(
  * 常用位置胶囊。
  */
 @Composable
-private fun FavoriteLocationChip(favorite: FavoriteLocationSummary) {
+private fun FavoriteLocationChip(
+    favorite: FavoriteLocationSummary,
+    onClick: () -> Unit,
+) {
     HomeChip(
         icon = WhereIcons.room(favorite.iconKey.orEmpty()),
         text = "${favorite.name} ${favorite.itemCount}",
+        onClick = onClick,
     )
 }
 
