@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
         val container = (application as WhereApplication).container
         val photoPickerGateway = AndroidPhotoPickerGateway(this)
         textToSpeechGateway = AndroidTextToSpeechGateway(this)
+        val hapticFeedbackGateway = AndroidHapticFeedbackGateway(this)
         val shareGateway = AndroidShareGateway(this)
         val documentGateway = AndroidDocumentGateway(this)
         val speechRecognitionGateway = AndroidSpeechRecognitionGateway(this)
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
                 buildItemLocationSpeechUseCase = container.buildItemLocationSpeechUseCase,
                 buildItemLocationShareUseCase = container.buildItemLocationShareUseCase,
                 textToSpeechGateway = textToSpeechGateway,
+                hapticFeedbackGateway = hapticFeedbackGateway,
                 shareGateway = shareGateway,
                 loadMoveItemContextUseCase = container.loadMoveItemContextUseCase,
                 moveItemUseCase = container.moveItemUseCase,

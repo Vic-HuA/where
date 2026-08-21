@@ -90,4 +90,19 @@ class UpdateAccessibilityPreferencesUseCase(
         repository.save(updated)
         return updated
     }
+
+    /**
+     * 单独调整触觉反馈，不改变适老、高对比度或自动朗读。
+     *
+     * 关闭后主要按钮和危险确认都不再震动；设备不支持震动时仍允许保存该开关。
+     */
+    suspend fun setHapticFeedback(enabled: Boolean): LocalAccessibilityPreferences {
+        val current = repository.load()
+        val updated = current.copy(
+            hapticFeedbackEnabled = enabled,
+            updatedAt = UtcTimestamp(clock.now()),
+        )
+        repository.save(updated)
+        return updated
+    }
 }

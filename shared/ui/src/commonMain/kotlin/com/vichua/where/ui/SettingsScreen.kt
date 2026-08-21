@@ -73,6 +73,7 @@ import com.vichua.where.core.model.RestoreSession
  * @param onElderFriendlyChange 切换适老展示。
  * @param onHighContrastChange 单独切换高对比度。
  * @param onAutoReadConfirmationChange 切换确认保存后是否自动朗读。
+ * @param onHapticFeedbackChange 切换主要操作和危险确认是否震动。
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
  * @param onCreateBackup 使用密码创建加密备份。
@@ -106,6 +107,7 @@ fun SettingsScreen(
     onElderFriendlyChange: (Boolean) -> Unit,
     onHighContrastChange: (Boolean) -> Unit,
     onAutoReadConfirmationChange: (Boolean) -> Unit,
+    onHapticFeedbackChange: (Boolean) -> Unit,
     onAiAssistanceChange: (Boolean) -> Unit,
     onCloudSpeechChange: (Boolean) -> Unit,
     onCreateBackup: (String, String) -> Unit,
@@ -243,7 +245,13 @@ fun SettingsScreen(
             enabled = preferences != null,
             onCheckedChange = onAutoReadConfirmationChange,
         )
-        PendingSettingsRow("触觉反馈", "字段已预留，行为尚未接入")
+        SettingsSwitchRow(
+            title = "触觉反馈",
+            description = "主要按钮按下时轻震，删除和清除等危险确认更明显；设备不支持时自动忽略",
+            checked = preferences?.hapticFeedbackEnabled == true,
+            enabled = preferences != null,
+            onCheckedChange = onHapticFeedbackChange,
+        )
 
         SettingsSectionTitle("家庭与位置")
         PendingSettingsRow("位置管理", "请从首页底部进入，设置页不重复提供入口")

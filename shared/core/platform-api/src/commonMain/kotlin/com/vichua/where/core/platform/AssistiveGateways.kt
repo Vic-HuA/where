@@ -27,6 +27,36 @@ interface TextToSpeechGateway {
 }
 
 /**
+ * 一次触觉反馈的强度档位。
+ *
+ * 主要确认用短震；删除、替换和清除等危险确认用更长的节奏，避免和普通保存混淆。
+ */
+enum class HapticFeedbackKind {
+    /** 拍照记录、保存成功、查找成功等主要操作。 */
+    CONFIRM,
+
+    /** 删除物品、替换恢复、清除家庭等危险确认。 */
+    WARNING,
+}
+
+/**
+ * 本机触觉反馈入口。
+ *
+ * 设备没有震动器时必须忽略，不能让保存、查找或删除等核心流程崩溃。
+ */
+interface HapticFeedbackGateway {
+    /**
+     * 当前设备是否具备可用的震动器。
+     */
+    fun isAvailable(): Boolean
+
+    /**
+     * 按档位触发一次短反馈；不可用或被系统拒绝时静默返回。
+     */
+    fun perform(kind: HapticFeedbackKind)
+}
+
+/**
  * 一次系统分享需要的文本和可选本地照片。
  *
  * @property text 物品名称、位置和可选更新时间，不包含家庭数据包。

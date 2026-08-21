@@ -25,6 +25,8 @@ import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
+import com.vichua.where.core.platform.HapticFeedbackGateway
+import com.vichua.where.core.platform.HapticFeedbackKind
 import com.vichua.where.core.platform.PhotoPickerGateway
 import com.vichua.where.core.platform.ShareGateway
 import com.vichua.where.core.platform.SharePayload
@@ -125,6 +127,7 @@ import kotlinx.coroutines.launch
  * @param buildItemLocationSpeechUseCase 组装详情朗读文本的用例。
  * @param buildItemLocationShareUseCase 组装位置分享内容的用例。
  * @param textToSpeechGateway 本地文字朗读入口。
+ * @param hapticFeedbackGateway 本机触觉反馈入口。
  * @param shareGateway 系统分享面板入口。
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
@@ -178,6 +181,7 @@ fun WhereApp(
     buildItemLocationSpeechUseCase: BuildItemLocationSpeechUseCase,
     buildItemLocationShareUseCase: BuildItemLocationShareUseCase,
     textToSpeechGateway: TextToSpeechGateway,
+    hapticFeedbackGateway: HapticFeedbackGateway,
     shareGateway: ShareGateway,
     loadMoveItemContextUseCase: LoadMoveItemContextUseCase,
     moveItemUseCase: MoveItemUseCase,
@@ -271,6 +275,20 @@ fun WhereApp(
     var confirmationSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
+    /**
+     * 开关打开且设备支持时给一次短反馈；不可用时忽略，避免打断当前操作。
+     */
+    val performHaptic: (HapticFeedbackKind) -> Unit = { kind ->
+        if (accessibilityPreferences?.hapticFeedbackEnabled == true) {
+            try {
+                if (hapticFeedbackGateway.isAvailable()) {
+                    hapticFeedbackGateway.perform(kind)
+                }
+            } catch (_: Exception) {
+                // Haptic failure must not block the current action.
+            }
+        }
+    }
     val performSearch: (String) -> Unit = { query ->
         if (!searchInProgress) {
             searchQuery = query
@@ -280,6 +298,7 @@ fun WhereApp(
                 try {
                     searchResults = searchItemsUseCase(query)
                     homeLoadAttempt += 1
+                    performHaptic(HapticFeedbackKind.CONFIRM)
                 } catch (_: IllegalArgumentException) {
                     searchError = "请输入要查找的物品。"
                 } catch (_: Exception) {
@@ -552,6 +571,7 @@ fun WhereApp(
                     },
                     onVoiceSearchRequested = {
                         if (!voiceListening) {
+                            performHaptic(HapticFeedbackKind.CONFIRM)
                             coroutineScope.launch {
                                 voiceListening = true
                                 searchError = null
@@ -593,6 +613,7 @@ fun WhereApp(
                         destination = AppDestination.ITEM_DETAIL
                     },
                     onRecordItemClick = {
+                        performHaptic(HapticFeedbackKind.CONFIRM)
                         confirmationSpeechError = null
                         destination = AppDestination.ADD_ITEM
                     },
@@ -621,6 +642,7 @@ fun WhereApp(
                     elderFriendlyMode = elderFriendlyMode,
                     speechErrorMessage = searchSpeechError,
                     onReadLocation = { result ->
+                        performHaptic(HapticFeedbackKind.CONFIRM)
                         coroutineScope.launch {
                             searchSpeechError = null
                             try {
@@ -784,6 +806,7 @@ fun WhereApp(
                                     pendingItemPhotos = emptyList()
                                     itemDraft = null
                                     homeLoadAttempt += 1
+                                    performHaptic(HapticFeedbackKind.CONFIRM)
                                     val preferences = accessibilityPreferences
                                         ?: loadAccessibilityPreferencesUseCase()
                                     accessibilityPreferences = preferences
@@ -863,6 +886,7 @@ fun WhereApp(
                     },
                     onDelete = { node ->
                         if (!locationTreeSubmitting) {
+                            performHaptic(HapticFeedbackKind.WARNING)
                             coroutineScope.launch {
                                 locationTreeSubmitting = true
                                 locationTreeError = null
@@ -987,6 +1011,26 @@ fun WhereApp(
                                     }
                                 } catch (_: Exception) {
                                     settingsError = "保存自动朗读失败，请稍后重试。"
+                                } finally {
+                                    settingsSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onHapticFeedbackChange = { enabled ->
+                        if (!settingsSubmitting) {
+                            coroutineScope.launch {
+                                settingsSubmitting = true
+                                settingsError = null
+                                try {
+                                    accessibilityPreferences =
+                                        updateAccessibilityPreferencesUseCase
+                                            .setHapticFeedback(enabled)
+                                    if (enabled) {
+                                        performHaptic(HapticFeedbackKind.CONFIRM)
+                                    }
+                                } catch (_: Exception) {
+                                    settingsError = "保存触觉反馈失败，请稍后重试。"
                                 } finally {
                                     settingsSubmitting = false
                                 }
@@ -1126,6 +1170,13 @@ fun WhereApp(
                     onApplyRestore = { mode ->
                         val session = restoreSession
                         if (!backupSubmitting && session != null) {
+                            performHaptic(
+                                if (mode == RestoreMode.REPLACE) {
+                                    HapticFeedbackKind.WARNING
+                                } else {
+                                    HapticFeedbackKind.CONFIRM
+                                },
+                            )
                             coroutineScope.launch {
                                 backupSubmitting = true
                                 backupProgressText = if (mode == RestoreMode.REPLACE) {
@@ -1160,6 +1211,7 @@ fun WhereApp(
                     },
                     onClearHousehold = {
                         if (!backupSubmitting) {
+                            performHaptic(HapticFeedbackKind.WARNING)
                             coroutineScope.launch {
                                 backupSubmitting = true
                                 backupProgressText = "正在清除家庭数据…"
@@ -1197,6 +1249,7 @@ fun WhereApp(
                     onReadLocation = {
                         val detail = itemDetail
                         if (detail != null && !itemSpeechSubmitting) {
+                            performHaptic(HapticFeedbackKind.CONFIRM)
                             coroutineScope.launch {
                                 itemSpeechSubmitting = true
                                 itemSpeechError = null
@@ -1368,6 +1421,7 @@ fun WhereApp(
                     onDeleteItem = {
                         val itemId = selectedItemId
                         if (itemId != null && !itemDeletionSubmitting) {
+                            performHaptic(HapticFeedbackKind.WARNING)
                             coroutineScope.launch {
                                 itemDeletionSubmitting = true
                                 itemDeletionError = null

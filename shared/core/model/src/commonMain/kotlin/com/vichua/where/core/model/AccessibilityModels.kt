@@ -26,7 +26,7 @@ enum class DisplayMode {
  * @property followSystemFontScale 是否跟随系统字体缩放。
  * @property highContrastEnabled 是否启用应用内高对比度增强。
  * @property autoReadConfirmationEnabled 是否在确认保存物品后自动朗读名称、位置和更新时间。
- * @property hapticFeedbackEnabled 是否为主要操作提供触觉反馈；本步只持久化。
+ * @property hapticFeedbackEnabled 是否为主要操作提供触觉反馈；关闭后危险确认也不震动。
  * @property speechRate 本地文字朗读速度。
  * @property volumeHintEnabled 朗读前是否显示音量提示；本步只持久化。
  * @property updatedAt 最近更新时间。
