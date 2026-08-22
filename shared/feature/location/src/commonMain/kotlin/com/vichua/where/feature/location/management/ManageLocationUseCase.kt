@@ -92,6 +92,36 @@ data class CreateLocationRequest(
 )
 
 /**
+ * 一次创建一条位置链里的单层。
+ *
+ * @property type 这一层的位置类型。
+ * @property name 这一层的名称。
+ */
+data class CreateLocationPathSegment(
+    val type: LocationType,
+    val name: String,
+) {
+    init {
+        require(name.isNotBlank()) { "Location path segment name must not be blank." }
+    }
+}
+
+/**
+ * 一次创建一条位置链，例如房间、抽屉、格子。
+ *
+ * @property parentId 整条链的父位置，通常是家庭根或已有房间。
+ * @property segments 按层级顺序填写的名称和类型，至少一层。
+ */
+data class CreateLocationPathRequest(
+    val parentId: LocationNodeId,
+    val segments: List<CreateLocationPathSegment>,
+) {
+    init {
+        require(segments.isNotEmpty()) { "Location path must contain at least one segment." }
+    }
+}
+
+/**
  * 新增位置后需要原子保存的聚合。
  */
 data class LocationCreation(
@@ -234,6 +264,32 @@ class CreateLocationUseCase(
             ),
         )
         return location.id
+    }
+}
+
+/**
+ * 按填写顺序连续创建多层位置，后一层挂在刚创建的前一层下面。
+ */
+class CreateLocationPathUseCase(
+    private val createLocationUseCase: CreateLocationUseCase,
+) {
+    /**
+     * 返回最后一层的位置 ID，方便录入后直接选中。
+     */
+    suspend operator fun invoke(request: CreateLocationPathRequest): LocationNodeId {
+        var parentId = request.parentId
+        var lastCreatedId = request.parentId
+        request.segments.forEach { segment ->
+            lastCreatedId = createLocationUseCase(
+                CreateLocationRequest(
+                    parentId = parentId,
+                    type = segment.type,
+                    name = segment.name,
+                ),
+            )
+            parentId = lastCreatedId
+        }
+        return lastCreatedId
     }
 }
 

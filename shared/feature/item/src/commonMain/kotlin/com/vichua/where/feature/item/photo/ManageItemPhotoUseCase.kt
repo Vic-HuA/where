@@ -253,6 +253,56 @@ class MoveItemPhotoUseCase(
 }
 
 /**
+ * 把一张未删除照片直接放到新的画廊下标，供拖动调序一次完成。
+ *
+ * 相邻箭头仍走 [MoveItemPhotoUseCase]；这里只改可见顺序，不改封面。
+ */
+class ReorderItemPhotosUseCase(
+    private val repository: ItemPhotoRepository,
+    private val idGenerator: UniqueIdGenerator,
+    private val clock: EpochMillisecondsClock,
+) {
+    /**
+     * @param fromIndex 当前画廊下标。
+     * @param toIndex 松手后的目标下标。
+     */
+    suspend operator fun invoke(
+        itemId: ItemId,
+        photoId: PhotoAssetId,
+        fromIndex: Int,
+        toIndex: Int,
+    ) {
+        require(fromIndex != toIndex) { "Photo reorder must change the gallery index." }
+        val context = repository.load(itemId)
+        requireActivePhoto(context, photoId)
+        val activePhotos = context.photos
+            .filter { photo -> photo.deletedAt == null }
+            .sortedWith(compareBy(PhotoAsset::sortOrder, { photo -> photo.id.value }))
+        require(fromIndex in activePhotos.indices) { "Photo reorder source is out of range." }
+        require(toIndex in activePhotos.indices) { "Photo reorder target is out of range." }
+        require(activePhotos[fromIndex].id == photoId) { "Photo reorder source does not match." }
+        val reorderedPhotos = activePhotos.toMutableList().also { photos ->
+            val movedPhoto = photos.removeAt(fromIndex)
+            photos.add(toIndex, movedPhoto)
+        }
+        val nextOrders = reorderedPhotos.mapIndexed { index, photo ->
+            photo.id to SortOrder(index)
+        }.toMap()
+        val now = UtcTimestamp(clock.now())
+        applyCollectionUpdate(
+            context = context,
+            now = now,
+            idGenerator = idGenerator,
+            repository = repository,
+            transform = { photo ->
+                val nextOrder = nextOrders[photo.id] ?: return@applyCollectionUpdate photo
+                photo.copy(sortOrder = nextOrder)
+            },
+        )
+    }
+}
+
+/**
  * 软删除一张照片；删除封面时在同一事务中指定新封面。
  *
  * 删除最后一张照片仍保留物品档案，且不物理删除文件。

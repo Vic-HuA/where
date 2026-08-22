@@ -7,6 +7,7 @@ import com.vichua.where.core.model.AiProviderVendor
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.platform.AiAssistanceGateway
 import com.vichua.where.core.platform.AiAssistanceOutcome
+import com.vichua.where.core.platform.AiConnectionTestOutcome
 import com.vichua.where.core.platform.AiFieldSuggestions
 import com.vichua.where.core.platform.AiPhotoInput
 import com.vichua.where.feature.settings.preferences.AiProviderCredentialsStore
@@ -32,6 +33,56 @@ class AndroidAiAssistanceGateway(
      * 有本机 Key 时才允许发起识别。
      */
     override fun isAvailable(): Boolean = credentialsStore.load().isConfigured
+
+    /**
+     * 用当前填写发一次最小文本请求，确认 Key、地址和模型能通。
+     */
+    override suspend fun testConnection(
+        credentials: AiProviderCredentials,
+    ): AiConnectionTestOutcome {
+        if (!credentials.isConfigured) {
+            return AiConnectionTestOutcome.Incomplete
+        }
+        return withContext(Dispatchers.IO) {
+            try {
+                when (credentials.vendor) {
+                    AiProviderVendor.ANTHROPIC -> {
+                        postJson(
+                            url = anthropicMessagesUrl(credentials.baseUrl),
+                            body = buildAnthropicTestBody(credentials.model),
+                            headers = mapOf(
+                                "x-api-key" to credentials.apiKey,
+                                "anthropic-version" to ANTHROPIC_VERSION,
+                                "Content-Type" to "application/json",
+                            ),
+                        )
+                    }
+                    AiProviderVendor.OPENAI,
+                    AiProviderVendor.CUSTOM,
+                    -> {
+                        postJson(
+                            url = "${credentials.baseUrl}/chat/completions",
+                            body = buildOpenAiTestBody(credentials.model),
+                            headers = mapOf(
+                                "Authorization" to "Bearer ${credentials.apiKey}",
+                                "Content-Type" to "application/json",
+                            ),
+                        )
+                    }
+                }
+                Log.i(TAG, "AI connection test succeeded.")
+                AiConnectionTestOutcome.Success
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: IOException) {
+                Log.w(TAG, "AI connection test failed with status only.")
+                AiConnectionTestOutcome.Failed(userFacingConnectionError(error))
+            } catch (_: Exception) {
+                Log.w(TAG, "AI connection test failed without uploading details.")
+                AiConnectionTestOutcome.Failed("接口没有返回可用结果，请检查地址和模型。")
+            }
+        }
+    }
 
     /**
      * 把这次主动选出的照片交给用户配置的接口，返回可编辑建议。
@@ -105,6 +156,59 @@ class AndroidAiAssistanceGateway(
                 mimeType = photo.mimeType,
                 base64 = Base64.encodeToString(bytes, Base64.NO_WRAP),
             )
+        }
+    }
+
+    /**
+     * 构造不含照片的最小 OpenAI 兼容请求，只用来确认连通。
+     */
+    private fun buildOpenAiTestBody(model: String): String =
+        JSONObject()
+            .put("model", model)
+            .put("max_tokens", 8)
+            .put(
+                "messages",
+                JSONArray().put(
+                    JSONObject()
+                        .put("role", "user")
+                        .put("content", "Reply with OK."),
+                ),
+            )
+            .toString()
+
+    /**
+     * 构造不含照片的最小 Anthropic 兼容请求，只用来确认连通。
+     */
+    private fun buildAnthropicTestBody(model: String): String =
+        JSONObject()
+            .put("model", model)
+            .put("max_tokens", 8)
+            .put(
+                "messages",
+                JSONArray().put(
+                    JSONObject()
+                        .put("role", "user")
+                        .put("content", "Reply with OK."),
+                ),
+            )
+            .toString()
+
+    /**
+     * 把连通失败收成可展示的中文原因，不包含 Key 或响应正文。
+     */
+    private fun userFacingConnectionError(error: IOException): String {
+        val message = error.message.orEmpty()
+        return when {
+            message.contains("HTTP status 401") || message.contains("HTTP status 403") ->
+                "Key 未被接受，请检查密钥。"
+            message.contains("HTTP status 404") ->
+                "接口地址或模型不存在，请检查填写。"
+            message.contains("HTTP status 429") ->
+                "接口暂时限流，请稍后重试。"
+            message.contains("HTTP status") ->
+                "接口拒绝了这次测试，请检查地址和模型。"
+            else ->
+                "无法连接接口，请检查网络和地址。"
         }
     }
 

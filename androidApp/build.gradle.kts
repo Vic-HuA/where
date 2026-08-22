@@ -29,6 +29,12 @@ android {
         // Kotlin 2.4.10 当前只声明兼容到 AGP 9.1 和 Gradle 9.5，不能跟随通用升级提示。
         disable += "AndroidGradlePluginVersion"
     }
+
+    packaging {
+        jniLibs {
+            pickFirsts += "lib/**/libvosk.so"
+        }
+    }
 }
 
 dependencies {
@@ -37,4 +43,5 @@ dependencies {
     implementation(project(":shared:core:platform-api"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.vosk.android)
 }

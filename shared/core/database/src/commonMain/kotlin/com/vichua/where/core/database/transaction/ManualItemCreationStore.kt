@@ -17,6 +17,7 @@ import com.vichua.where.core.model.PhotoAsset
  * 数据库层提供的物品可选位置。
  *
  * @property locationId 位置节点 ID。
+ * @property parentId 父节点 ID，用于按层级更换同级位置。
  * @property displayPath 当前完整位置路径。
  * @property name 当前位置节点名称，给常用位置卡片使用。
  * @property type 位置语义类型。
@@ -24,6 +25,7 @@ import com.vichua.where.core.model.PhotoAsset
  */
 data class StoredItemCreationLocation(
     val locationId: LocationNodeId,
+    val parentId: LocationNodeId?,
     val displayPath: String,
     val name: String,
     val type: LocationType,
@@ -72,6 +74,7 @@ class ManualItemCreationStore(
             .map { location ->
                 StoredItemCreationLocation(
                     locationId = location.id,
+                    parentId = location.parentId,
                     displayPath = buildLocationPath(location, locationsById),
                     name = location.name,
                     type = location.type,

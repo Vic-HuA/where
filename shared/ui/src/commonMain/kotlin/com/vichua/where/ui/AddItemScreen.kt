@@ -1050,7 +1050,7 @@ private fun LocationSelectionField(
 }
 
 /**
- * 位置选择对话框。
+ * 位置选择对话框：带搜索、图标和路径，避免只剩一列光秃秃的文字。
  */
 @Composable
 private fun LocationSelectionDialog(
@@ -1058,27 +1058,77 @@ private fun LocationSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (ItemCreationLocation) -> Unit,
 ) {
+    var query by remember { mutableStateOf("") }
+    val trimmedQuery = query.trim()
+    val visibleLocations = locations.filter { location ->
+        trimmedQuery.isEmpty() ||
+            location.name.contains(trimmedQuery, ignoreCase = true) ||
+            location.displayPath.contains(trimmedQuery, ignoreCase = true)
+    }
     WhereDialog(
         onDismissRequest = onDismiss,
         title = "选择所在位置",
         dismissText = "取消",
         onDismiss = onDismiss,
     ) {
-        locations.forEach { location ->
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = query,
+            onValueChange = { value ->
+                query = value
+            },
+            singleLine = true,
+            label = { Text("搜索房间、家具或容器") },
+        )
+        if (visibleLocations.isEmpty()) {
+            Text(
+                modifier = Modifier.padding(top = 16.dp),
+                text = if (trimmedQuery.isEmpty()) {
+                    "还没有可选择的位置，请先到位置管理里新增。"
+                } else {
+                    "没有匹配“$trimmedQuery”的位置。"
+                },
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        visibleLocations.forEach { location ->
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
+                    .padding(top = 10.dp)
+                    .clickable(role = Role.Button) {
                         onSelect(location)
                     },
+                shape = RoundedCornerShape(16.dp),
                 color = WhereSurfaceColor,
+                border = BorderStroke(1.dp, WhereOutlineColor),
             ) {
-                Text(
-                    modifier = Modifier.padding(vertical = 14.dp),
-                    text = visibleLocationPath(location.displayPath),
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        imageVector = WhereIcons.location(location.iconKey, location.type),
+                        contentDescription = locationTypeLabel(location.type),
+                        tint = WherePrimaryColor,
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = location.name,
+                            color = WherePrimaryTextColor,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Text(
+                            modifier = Modifier.padding(top = 4.dp),
+                            text = visibleLocationPath(location.displayPath),
+                            color = WhereSecondaryTextColor,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
             }
         }
     }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -52,7 +53,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
+import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.feature.item.detail.ItemDetail
+import com.vichua.where.feature.item.detail.ItemDetailLocationHistory
 import com.vichua.where.feature.item.detail.ItemDetailPhoto
 
 /**
@@ -69,6 +72,7 @@ import com.vichua.where.feature.item.detail.ItemDetailPhoto
  * @param speechErrorMessage 可展示的中文朗读错误。
  * @param canRepeatSpeech 用户主动朗读成功后，是否展示再听一遍。
  * @param formattedUpdatedAt 当前位置的本地更新时间文本。
+ * @param formatOccurredAt 把位置历史时间格式化为本地可见文本。
  * @param shareSubmitting 是否正在打开系统分享。
  * @param shareErrorMessage 可展示的中文分享错误。
  * @param onShareLocation 预览确认后分享名称、位置、可选更新时间和选定照片。
@@ -103,6 +107,7 @@ fun ItemDetailScreen(
     speechErrorMessage: String?,
     canRepeatSpeech: Boolean,
     formattedUpdatedAt: String,
+    formatOccurredAt: (Long) -> String,
     shareSubmitting: Boolean,
     shareErrorMessage: String?,
     onShareLocation: (Boolean, List<PhotoAssetId>) -> Unit,
@@ -327,7 +332,10 @@ fun ItemDetailScreen(
         }
 
         if (!elderFriendlyMode) {
-            ItemDetailNoteAndHistory(detail = detail)
+            ItemDetailNoteAndHistory(
+                detail = detail,
+                formatOccurredAt = formatOccurredAt,
+            )
         }
 
         Row(
@@ -469,7 +477,10 @@ fun ItemDetailScreen(
                         text = "编辑",
                     )
                 }
-                ItemDetailNoteAndHistory(detail = detail)
+                ItemDetailNoteAndHistory(
+                    detail = detail,
+                    formatOccurredAt = formatOccurredAt,
+                )
                 ItemDetailShareAndDelete(
                     shareSubmitting = shareSubmitting,
                     speechSubmitting = speechSubmitting,
@@ -865,6 +876,7 @@ private fun ItemDetailPhotoManagement(
 @Composable
 private fun ItemDetailNoteAndHistory(
     detail: ItemDetail,
+    formatOccurredAt: (Long) -> String,
 ) {
     val note = detail.note
     if (!note.isNullOrBlank()) {
@@ -891,11 +903,18 @@ private fun ItemDetailNoteAndHistory(
             }
         }
     }
+    var historyVisible by remember { mutableStateOf(false) }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 14.dp)
-            .heightIn(min = 52.dp),
+            .heightIn(min = 52.dp)
+            .clickable(
+                enabled = detail.locationHistory.isNotEmpty(),
+                role = Role.Button,
+            ) {
+                historyVisible = true
+            },
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.dp, WhereOutlineColor),
@@ -905,12 +924,90 @@ private fun ItemDetailNoteAndHistory(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
+                modifier = Modifier.weight(1f),
                 text = "位置历史 · ${detail.locationHistory.size} 条记录",
                 color = WherePrimaryTextColor,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            if (detail.locationHistory.isNotEmpty()) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                    contentDescription = "查看位置历史",
+                    tint = WhereSecondaryTextColor,
+                )
+            }
         }
     }
+    if (historyVisible) {
+        ItemLocationHistoryDialog(
+            history = detail.locationHistory,
+            formatOccurredAt = formatOccurredAt,
+            onDismiss = { historyVisible = false },
+        )
+    }
+}
+
+/**
+ * 点开后按时间倒序展示每条位置变化，避免历史只能看见条数。
+ */
+@Composable
+private fun ItemLocationHistoryDialog(
+    history: List<ItemDetailLocationHistory>,
+    formatOccurredAt: (Long) -> String,
+    onDismiss: () -> Unit,
+) {
+    WhereDialog(
+        onDismissRequest = onDismiss,
+        title = "位置历史",
+        confirmText = "关闭",
+        onConfirm = onDismiss,
+        dismissText = null,
+    ) {
+        history.forEach { event ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = WhereSurfaceColor,
+                border = BorderStroke(1.dp, WhereOutlineColor),
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        text = locationHistoryReasonLabel(event.reason),
+                        color = WherePrimaryColor,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 4.dp),
+                        text = formatOccurredAt(event.occurredAt.epochMilliseconds),
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = event.fromPath?.let { path ->
+                            "${visibleLocationPath(path)} › ${visibleLocationPath(event.toPath)}"
+                        } ?: visibleLocationPath(event.toPath),
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun locationHistoryReasonLabel(reason: ItemLocationReason): String = when (reason) {
+    ItemLocationReason.CREATED -> "首次记录"
+    ItemLocationReason.MOVED -> "更新位置"
+    ItemLocationReason.BATCH_MOVED -> "批量移动"
+    ItemLocationReason.LOCATION_DELETED -> "原位置被删除"
+    ItemLocationReason.LOCATION_MERGED -> "位置合并"
+    ItemLocationReason.IMPORT -> "导入"
+    ItemLocationReason.SYNC -> "同步"
+    ItemLocationReason.CORRECTION -> "位置纠正"
 }
 
 /**

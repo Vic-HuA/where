@@ -6,6 +6,7 @@ import com.vichua.where.core.common.UniqueIdGenerator
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.core.platform.ImportedMediaFile
@@ -184,7 +185,11 @@ class CreateManualItemUseCaseTest {
             availableLocations = listOf(
                 ItemCreationLocation(
                     locationId = TEST_LOCATION_ID,
+                    parentId = null,
                     displayPath = TEST_LOCATION_PATH,
+                    name = "第二层",
+                    type = LocationType.SLOT,
+                    iconKey = "location.slot",
                 ),
             ),
         )

@@ -1,5 +1,6 @@
 package com.vichua.where.core.platform
 
+import com.vichua.where.core.model.AiProviderCredentials
 import com.vichua.where.core.model.PhotoRole
 
 /**
@@ -208,6 +209,18 @@ interface SpeechRecognitionGateway {
     fun isAvailable(allowNetwork: Boolean): Boolean
 
     /**
+     * 本机离线模型是否已经解压并可以立刻开始听。
+     */
+    fun isEngineReady(): Boolean
+
+    /**
+     * 首次使用时准备离线引擎；已就绪时立即成功。
+     *
+     * 需要联网下载中文模型时会阻塞到完成或失败，界面应提示正在准备。
+     */
+    suspend fun ensureEngine(): Boolean
+
+    /**
      * 开始听用户主动说的一句话，结束后返回转写结果。
      *
      * @param allowNetwork 是否允许联网识别；关闭时只走离线识别。
@@ -289,6 +302,22 @@ sealed class AiAssistanceOutcome {
 }
 
 /**
+ * 一次接口连通测试的结果。
+ *
+ * 不得把 Key、完整地址或响应正文写入诊断日志。
+ */
+sealed class AiConnectionTestOutcome {
+    /** 接口接受了当前 Key、地址和模型。 */
+    data object Success : AiConnectionTestOutcome()
+
+    /** 当前填写还不完整，不能发请求。 */
+    data object Incomplete : AiConnectionTestOutcome()
+
+    /** 请求失败，界面展示中文原因，日志只记状态。 */
+    data class Failed(val message: String) : AiConnectionTestOutcome()
+}
+
+/**
  * 可选 AI 辅助入口。
  *
  * 只有用户主动选择识别后才处理这次选中的照片或文字；开关关闭或未配置供应商时必须降级。
@@ -298,6 +327,13 @@ interface AiAssistanceGateway {
      * 当前是否具备可发起请求的供应商。
      */
     fun isAvailable(): Boolean
+
+    /**
+     * 用当前填写的协议、地址、模型和 Key 发一次最小文本请求，确认能连通。
+     *
+     * 不读取照片，也不写入本机凭证。
+     */
+    suspend fun testConnection(credentials: AiProviderCredentials): AiConnectionTestOutcome
 
     /**
      * 分析用户为当前任务主动选出的照片。

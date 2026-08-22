@@ -53,6 +53,7 @@ class RoomItemMovementRepository(
     private fun toTarget(location: StoredItemCreationLocation): MoveTargetLocation =
         MoveTargetLocation(
             locationId = location.locationId,
+            parentId = location.parentId,
             displayPath = location.displayPath,
             name = location.name,
             type = location.type,

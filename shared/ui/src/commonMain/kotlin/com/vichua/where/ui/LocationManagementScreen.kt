@@ -46,7 +46,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.LocationType
-import com.vichua.where.feature.location.management.CreateLocationRequest
+import com.vichua.where.feature.location.management.CreateLocationPathRequest
 import com.vichua.where.feature.location.management.LocationTreeNode
 import com.vichua.where.feature.location.management.LocationTreeSnapshot
 
@@ -64,7 +64,7 @@ fun LocationManagementScreen(
     onRetry: () -> Unit,
     onHomeClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onCreate: (CreateLocationRequest) -> Unit,
+    onCreate: (CreateLocationPathRequest) -> Unit,
     onRename: (LocationTreeNode, String) -> Unit,
     onDelete: (LocationTreeNode) -> Unit,
 ) {
@@ -210,18 +210,16 @@ fun LocationManagementScreen(
         }
 
         when (val editor = editorState) {
-            is LocationEditorState.Create -> LocationNameDialog(
-                title = "新增位置",
-                confirmText = "添加",
-                initialName = "",
-                allowedTypes = editor.parent.allowedChildTypes,
+            is LocationEditorState.Create -> LocationPathCreateDialog(
+                parentLabel = editor.parent.name,
+                parentType = editor.parent.type,
+                submitting = submitting,
                 onDismiss = { editorState = null },
-                onConfirm = { type, name ->
+                onConfirm = { segments ->
                     onCreate(
-                        CreateLocationRequest(
+                        CreateLocationPathRequest(
                             parentId = editor.parent.locationId,
-                            type = type,
-                            name = name,
+                            segments = segments,
                         ),
                     )
                     editorState = null
@@ -613,18 +611,6 @@ private fun isVisible(
         currentParentId = parent.parentId
     }
     return true
-}
-
-/**
- * 返回位置类型的中文标签。
- */
-private fun locationTypeLabel(type: LocationType): String = when (type) {
-    LocationType.HOME -> "家庭"
-    LocationType.ROOM -> "房间"
-    LocationType.AREA -> "区域"
-    LocationType.FURNITURE -> "家具"
-    LocationType.CONTAINER -> "容器"
-    LocationType.SLOT -> "具体位置"
 }
 
 /**

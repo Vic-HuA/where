@@ -33,6 +33,8 @@ import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
 import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
 import com.vichua.where.feature.item.photo.MoveItemPhotoUseCase
+import com.vichua.where.feature.item.photo.ReorderItemPhotosUseCase
+import com.vichua.where.feature.location.management.CreateLocationPathUseCase
 import com.vichua.where.feature.item.photo.PrepareAiPhotoRequestUseCase
 import com.vichua.where.feature.item.photo.SetItemPhotoCoverUseCase
 import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
@@ -235,6 +237,13 @@ class AndroidAppContainer(
         clock = AndroidEpochMillisecondsClock,
     )
 
+    /** 拖动后一次性重排照片顺序的用例。 */
+    val reorderItemPhotosUseCase = ReorderItemPhotosUseCase(
+        repository = itemPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
     /** 软删除物品照片的用例。 */
     val deleteItemPhotoUseCase = DeleteItemPhotoUseCase(
         repository = itemPhotoRepository,
@@ -279,6 +288,11 @@ class AndroidAppContainer(
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,
+    )
+
+    /** 一次创建多层位置的用例。 */
+    val createLocationPathUseCase = CreateLocationPathUseCase(
+        createLocationUseCase = createLocationUseCase,
     )
 
     /** 重命名非根位置的用例。 */

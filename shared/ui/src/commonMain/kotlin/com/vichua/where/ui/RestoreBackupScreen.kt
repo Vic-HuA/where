@@ -119,15 +119,9 @@ fun RestoreBackupScreen(
             )
             Text("恢复备份", style = MaterialTheme.typography.titleLarge)
         }
-        Text(
-            modifier = Modifier.padding(top = 8.dp),
-            text = "先核对备份摘要和冲突，再决定合并或替换。未执行前不会改当前家庭。",
-            color = WhereSecondaryTextColor,
-            style = MaterialTheme.typography.bodyMedium,
-        )
         if (preview == null) {
             Text(
-                modifier = Modifier.padding(top = 16.dp),
+                modifier = Modifier.padding(top = 8.dp),
                 text = "先输入备份密码，再选择备份文件。密码对错要打开文件后才能判断；取消选文件会留在本页。",
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodyMedium,
@@ -175,6 +169,12 @@ fun RestoreBackupScreen(
             }
             return@Column
         }
+        Text(
+            modifier = Modifier.padding(top = 8.dp),
+            text = "先核对备份摘要和冲突，再决定合并或替换。未执行前不会改当前家庭。",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodyMedium,
+        )
         val backupTitle = buildString {
             append(session.envelope.snapshot.household.name)
             if (!formattedBackupCreatedAt.isNullOrBlank()) {
@@ -485,20 +485,6 @@ fun RestoreBackupScreen(
                 Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
             }
         }
-    }
-}
-
-/**
- * 把数据包大小收成用户能扫一眼的单位，避免只看到原始字节。
- */
-private fun visiblePackageSize(bytes: Long): String {
-    require(bytes > 0L) { "Visible package size must be greater than zero." }
-    return if (bytes >= 1_000_000L) {
-        "${bytes / 1_000_000L} MB"
-    } else if (bytes >= 1_000L) {
-        "${bytes / 1_000L} KB"
-    } else {
-        "$bytes 字节"
     }
 }
 

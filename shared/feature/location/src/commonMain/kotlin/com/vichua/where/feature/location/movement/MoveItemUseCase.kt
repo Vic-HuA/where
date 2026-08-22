@@ -18,6 +18,7 @@ import com.vichua.where.core.model.UtcTimestamp
 /** 更新位置页面可选择的位置。 */
 data class MoveTargetLocation(
     val locationId: LocationNodeId,
+    val parentId: LocationNodeId?,
     val displayPath: String,
     val name: String,
     val type: LocationType,

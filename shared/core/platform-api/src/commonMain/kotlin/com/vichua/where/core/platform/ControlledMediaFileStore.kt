@@ -75,7 +75,7 @@ data class PickedImage(
 }
 
 /**
- * 打开系统照片选择器。取消选择时返回空，不能让录入主流程崩溃。
+ * 打开系统拍照或相册。取消选择时返回空，不能让录入主流程崩溃。
  */
 interface PhotoPickerGateway {
     /**
@@ -84,6 +84,13 @@ interface PhotoPickerGateway {
      * @return 用户确认的图片；取消或当前设备不支持时为空。
      */
     suspend fun pickImage(): PickedImage?
+
+    /**
+     * 用相机拍一张照片。
+     *
+     * @return 用户确认的照片；取消、拒绝权限或当前设备不支持时为空。
+     */
+    suspend fun captureImage(): PickedImage?
 }
 
 /**

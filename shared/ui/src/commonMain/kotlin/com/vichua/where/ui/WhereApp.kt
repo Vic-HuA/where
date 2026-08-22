@@ -60,13 +60,14 @@ import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportedItemPhoto
 import com.vichua.where.feature.item.photo.MoveItemPhotoUseCase
+import com.vichua.where.feature.item.photo.ReorderItemPhotosUseCase
 import com.vichua.where.feature.item.photo.PrepareAiPhotoRequestUseCase
 import com.vichua.where.feature.item.photo.SetItemPhotoCoverUseCase
 import com.vichua.where.feature.item.photo.UpdateItemPhotoRoleUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdRequest
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
-import com.vichua.where.feature.location.management.CreateLocationRequest
+import com.vichua.where.feature.location.management.CreateLocationPathUseCase
 import com.vichua.where.feature.location.management.CreateLocationUseCase
 import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
@@ -82,6 +83,8 @@ import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.LocalAppPreferences
 import com.vichua.where.core.platform.AiAssistanceGateway
 import com.vichua.where.core.platform.AiAssistanceOutcome
+import com.vichua.where.core.platform.AiConnectionTestOutcome
+import com.vichua.where.core.platform.PickedImage
 import com.vichua.where.core.platform.SpeechRecognitionGateway
 import com.vichua.where.core.platform.SpeechRecognitionOutcome
 import com.vichua.where.core.model.ConflictResolution
@@ -144,7 +147,8 @@ import kotlinx.coroutines.launch
  * @param loadMoveItemContextUseCase 加载更新位置上下文的用例。
  * @param moveItemUseCase 保存物品新位置的用例。
  * @param loadLocationTreeUseCase 加载位置管理树的用例。
- * @param createLocationUseCase 新增位置的用例。
+ * @param createLocationUseCase 新增单个位置的用例。
+ * @param createLocationPathUseCase 一次创建多层位置的用例。
  * @param renameLocationUseCase 重命名位置的用例。
  * @param deleteEmptyLocationUseCase 删除空位置的用例。
  * @param loadAccessibilityPreferencesUseCase 读取当前设备适老偏好的用例。
@@ -190,6 +194,7 @@ fun WhereApp(
     setItemPhotoCoverUseCase: SetItemPhotoCoverUseCase,
     updateItemPhotoRoleUseCase: UpdateItemPhotoRoleUseCase,
     moveItemPhotoUseCase: MoveItemPhotoUseCase,
+    reorderItemPhotosUseCase: ReorderItemPhotosUseCase,
     deleteItemPhotoUseCase: DeleteItemPhotoUseCase,
     deleteItemUseCase: DeleteItemUseCase,
     restoreDeletedItemUseCase: RestoreDeletedItemUseCase,
@@ -202,6 +207,7 @@ fun WhereApp(
     moveItemUseCase: MoveItemUseCase,
     loadLocationTreeUseCase: LoadLocationTreeUseCase,
     createLocationUseCase: CreateLocationUseCase,
+    createLocationPathUseCase: CreateLocationPathUseCase,
     renameLocationUseCase: RenameLocationUseCase,
     deleteEmptyLocationUseCase: DeleteEmptyLocationUseCase,
     loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
@@ -357,6 +363,9 @@ fun WhereApp(
     }
     var appPreferences by remember { mutableStateOf<LocalAppPreferences?>(null) }
     var aiProviderCredentials by remember { mutableStateOf<AiProviderCredentials?>(null) }
+    var aiConnectionTesting by remember { mutableStateOf(false) }
+    var aiConnectionTestMessage by remember { mutableStateOf<String?>(null) }
+    var pendingImageHandler by remember { mutableStateOf<((PickedImage) -> Unit)?>(null) }
     var voiceListening by remember { mutableStateOf(false) }
     var settingsLoading by remember { mutableStateOf(false) }
     var settingsSubmitting by remember { mutableStateOf(false) }
@@ -394,6 +403,89 @@ fun WhereApp(
                 }
             } catch (_: Exception) {
                 // Haptic failure must not block the current action.
+            }
+        }
+    }
+
+    /**
+     * 先让用户选拍照或相册，再把结果交给当前录入或照片管理流程。
+     */
+    fun requestImage(onPicked: (PickedImage) -> Unit) {
+        pendingImageHandler = onPicked
+    }
+
+    /**
+     * 先准备本机 Vosk 模型，再开始按住说话。
+     */
+    suspend fun listenWithOfflineEngine(): SpeechRecognitionOutcome {
+        if (!speechRecognitionGateway.ensureEngine()) {
+            return SpeechRecognitionOutcome.Unavailable
+        }
+        return speechRecognitionGateway.listen(allowNetwork = false)
+    }
+
+    suspend fun importPickedImage(
+        pickedImage: PickedImage,
+        role: PhotoRole,
+        onImported: (ImportedItemPhoto) -> Unit,
+        onError: (String) -> Unit,
+    ) {
+        try {
+            onImported(
+                importItemPhotoUseCase(
+                    bytes = pickedImage.bytes,
+                    sourceMimeType = pickedImage.mimeType,
+                    role = role,
+                ),
+            )
+        } catch (_: IllegalArgumentException) {
+            onError("无法使用所选照片，请换一张后重试。")
+        } catch (_: Exception) {
+            onError("照片导入失败，请稍后重试。")
+        }
+    }
+
+    /**
+     * 给已有物品追加照片：先选拍照或相册，再导入并写入档案。
+     */
+    fun requestExistingItemPhoto(role: PhotoRole) {
+        val itemId = selectedItemId
+        if (itemId == null || itemPhotoSubmitting) {
+            return
+        }
+        requestImage { pickedImage ->
+            coroutineScope.launch {
+                itemPhotoSubmitting = true
+                itemPhotoError = null
+                var importedPhoto: ImportedItemPhoto? = null
+                try {
+                    importedPhoto = importItemPhotoUseCase(
+                        bytes = pickedImage.bytes,
+                        sourceMimeType = pickedImage.mimeType,
+                        role = role,
+                    )
+                    addItemPhotoUseCase(itemId, importedPhoto)
+                    itemDetail = loadItemDetailUseCase(itemId)
+                    homeLoadAttempt += 1
+                } catch (_: IllegalArgumentException) {
+                    importedPhoto?.let { photo ->
+                        discardPendingPhotos(
+                            photos = listOf(photo),
+                            discardImportedPhotos = discardImportedPhotos,
+                        )
+                    }
+                    itemPhotoError = "无法使用所选照片，请换一张后重试。"
+                } catch (_: Exception) {
+                    importedPhoto?.let { photo ->
+                        discardPendingPhotos(
+                            photos = listOf(photo),
+                            discardImportedPhotos = discardImportedPhotos,
+                        )
+                    }
+                    itemPhotoError = "照片保存失败，请稍后重试。"
+                } finally {
+                    itemPhotoSubmitting = false
+                }
             }
         }
     }
@@ -789,9 +881,7 @@ fun WhereApp(
                                 try {
                                     val preferences = appPreferences ?: loadAppPreferencesUseCase()
                                     appPreferences = preferences
-                                    val outcome = speechRecognitionGateway.listen(
-                                        allowNetwork = preferences.canUseCloudSpeech,
-                                    )
+                                    val outcome = listenWithOfflineEngine()
                                     when (outcome) {
                                         is SpeechRecognitionOutcome.Success -> {
                                             navigateTo(AppDestination.SEARCH)
@@ -900,19 +990,19 @@ fun WhereApp(
                     },
                     onPickPhoto = { role ->
                         if (!itemCreationSubmitting) {
-                            coroutineScope.launch {
-                                itemCreationError = null
-                                try {
-                                    val pickedImage = photoPickerGateway.pickImage() ?: return@launch
-                                    pendingItemPhotos = pendingItemPhotos + importItemPhotoUseCase(
-                                        bytes = pickedImage.bytes,
-                                        sourceMimeType = pickedImage.mimeType,
+                            requestImage { pickedImage ->
+                                coroutineScope.launch {
+                                    itemCreationError = null
+                                    importPickedImage(
+                                        pickedImage = pickedImage,
                                         role = role,
+                                        onImported = { photo ->
+                                            pendingItemPhotos = pendingItemPhotos + photo
+                                        },
+                                        onError = { message ->
+                                            itemCreationError = message
+                                        },
                                     )
-                                } catch (_: IllegalArgumentException) {
-                                    itemCreationError = "无法使用所选照片，请换一张后重试。"
-                                } catch (_: Exception) {
-                                    itemCreationError = "照片导入失败，请稍后重试。"
                                 }
                             }
                         }
@@ -1002,9 +1092,7 @@ fun WhereApp(
                     onSpeakRequested = suspend {
                         val preferences = appPreferences ?: loadAppPreferencesUseCase()
                         appPreferences = preferences
-                        val outcome = speechRecognitionGateway.listen(
-                            allowNetwork = preferences.canUseCloudSpeech,
-                        )
+                        val outcome = listenWithOfflineEngine()
                         when (outcome) {
                             is SpeechRecognitionOutcome.Success -> outcome.text
                             SpeechRecognitionOutcome.Cancelled -> null
@@ -1082,7 +1170,7 @@ fun WhereApp(
                                 locationTreeSubmitting = true
                                 locationTreeError = null
                                 try {
-                                    createLocationUseCase(request)
+                                    createLocationPathUseCase(request)
                                     locationTree = loadLocationTreeUseCase()
                                     homeLoadAttempt += 1
                                 } catch (_: IllegalArgumentException) {
@@ -1165,6 +1253,7 @@ fun WhereApp(
                             coroutineScope.launch {
                                 settingsSubmitting = true
                                 settingsError = null
+                                aiConnectionTestMessage = null
                                 try {
                                     aiProviderCredentials = updateAiProviderCredentialsUseCase(
                                         vendor = vendor,
@@ -1182,6 +1271,37 @@ fun WhereApp(
                             }
                         }
                     },
+                    onTestAiConnection = { vendor, apiKey, baseUrl, model ->
+                        if (!aiConnectionTesting) {
+                            coroutineScope.launch {
+                                aiConnectionTesting = true
+                                aiConnectionTestMessage = null
+                                try {
+                                    val credentials = AiProviderCredentials.normalized(
+                                        vendor = vendor,
+                                        apiKey = apiKey,
+                                        baseUrl = baseUrl,
+                                        model = model,
+                                    )
+                                    aiConnectionTestMessage = when (
+                                        val outcome = aiAssistanceGateway.testConnection(credentials)
+                                    ) {
+                                        AiConnectionTestOutcome.Success -> "连接成功，可以保存。"
+                                        AiConnectionTestOutcome.Incomplete -> "请先填写 Key、地址和模型。"
+                                        is AiConnectionTestOutcome.Failed -> outcome.message
+                                    }
+                                } catch (_: IllegalArgumentException) {
+                                    aiConnectionTestMessage = "请填写 https 接口地址和模型名称。"
+                                } catch (_: Exception) {
+                                    aiConnectionTestMessage = "测试失败，请稍后重试。"
+                                } finally {
+                                    aiConnectionTesting = false
+                                }
+                            }
+                        }
+                    },
+                    aiConnectionTesting = aiConnectionTesting,
+                    aiConnectionTestMessage = aiConnectionTestMessage,
                     onAiAssistanceChange = { enabled ->
                         if (!settingsSubmitting) {
                             coroutineScope.launch {
@@ -1546,6 +1666,9 @@ fun WhereApp(
                     formattedUpdatedAt = itemDetail?.let { detail ->
                         buildItemLocationShareUseCase.formatUpdatedAt(detail)
                     }.orEmpty(),
+                    formatOccurredAt = { epochMilliseconds ->
+                        visibleDateTimeFormatter.format(epochMilliseconds)
+                    },
                     shareSubmitting = itemShareSubmitting,
                     shareErrorMessage = itemShareError,
                     onShareLocation = { includeUpdatedAt, selectedPhotoIds ->
@@ -1631,43 +1754,7 @@ fun WhereApp(
                         navigateTo(AppDestination.PHOTO_MANAGEMENT)
                     },
                     onAddPhoto = { role ->
-                        val itemId = selectedItemId
-                        if (itemId != null && !itemPhotoSubmitting) {
-                            coroutineScope.launch {
-                                itemPhotoSubmitting = true
-                                itemPhotoError = null
-                                var importedPhoto: ImportedItemPhoto? = null
-                                try {
-                                    val pickedImage = photoPickerGateway.pickImage() ?: return@launch
-                                    importedPhoto = importItemPhotoUseCase(
-                                        bytes = pickedImage.bytes,
-                                        sourceMimeType = pickedImage.mimeType,
-                                        role = role,
-                                    )
-                                    addItemPhotoUseCase(itemId, importedPhoto)
-                                    itemDetail = loadItemDetailUseCase(itemId)
-                                    homeLoadAttempt += 1
-                                } catch (_: IllegalArgumentException) {
-                                    importedPhoto?.let { photo ->
-                                        discardPendingPhotos(
-                                            photos = listOf(photo),
-                                            discardImportedPhotos = discardImportedPhotos,
-                                        )
-                                    }
-                                    itemPhotoError = "无法使用所选照片，请换一张后重试。"
-                                } catch (_: Exception) {
-                                    importedPhoto?.let { photo ->
-                                        discardPendingPhotos(
-                                            photos = listOf(photo),
-                                            discardImportedPhotos = discardImportedPhotos,
-                                        )
-                                    }
-                                    itemPhotoError = "照片保存失败，请稍后重试。"
-                                } finally {
-                                    itemPhotoSubmitting = false
-                                }
-                            }
-                        }
+                        requestExistingItemPhoto(role)
                     },
                     onSetPhotoCover = { photoId ->
                         runItemPhotoAction("设置封面失败，请稍后重试。") {
@@ -1730,43 +1817,7 @@ fun WhereApp(
                         popNavigation()
                     },
                     onAddPhoto = { role ->
-                        val itemId = selectedItemId
-                        if (itemId != null && !itemPhotoSubmitting) {
-                            coroutineScope.launch {
-                                itemPhotoSubmitting = true
-                                itemPhotoError = null
-                                var importedPhoto: ImportedItemPhoto? = null
-                                try {
-                                    val pickedImage = photoPickerGateway.pickImage() ?: return@launch
-                                    importedPhoto = importItemPhotoUseCase(
-                                        bytes = pickedImage.bytes,
-                                        sourceMimeType = pickedImage.mimeType,
-                                        role = role,
-                                    )
-                                    addItemPhotoUseCase(itemId, importedPhoto)
-                                    itemDetail = loadItemDetailUseCase(itemId)
-                                    homeLoadAttempt += 1
-                                } catch (_: IllegalArgumentException) {
-                                    importedPhoto?.let { photo ->
-                                        discardPendingPhotos(
-                                            photos = listOf(photo),
-                                            discardImportedPhotos = discardImportedPhotos,
-                                        )
-                                    }
-                                    itemPhotoError = "无法使用所选照片，请换一张后重试。"
-                                } catch (_: Exception) {
-                                    importedPhoto?.let { photo ->
-                                        discardPendingPhotos(
-                                            photos = listOf(photo),
-                                            discardImportedPhotos = discardImportedPhotos,
-                                        )
-                                    }
-                                    itemPhotoError = "照片保存失败，请稍后重试。"
-                                } finally {
-                                    itemPhotoSubmitting = false
-                                }
-                            }
-                        }
+                        requestExistingItemPhoto(role)
                     },
                     onSetPhotoCover = { photoId ->
                         runItemPhotoAction("设置封面失败，请稍后重试。") {
@@ -1781,6 +1832,11 @@ fun WhereApp(
                     onMovePhoto = { photoId, offset ->
                         runItemPhotoAction("调整顺序失败，请稍后重试。") {
                             moveItemPhotoUseCase(it, photoId, offset)
+                        }
+                    },
+                    onReorderPhotos = { photoId, fromIndex, toIndex ->
+                        runItemPhotoAction("调整顺序失败，请稍后重试。") {
+                            reorderItemPhotosUseCase(it, photoId, fromIndex, toIndex)
                         }
                     },
                     onDeletePhoto = { photoId ->
@@ -1809,9 +1865,7 @@ fun WhereApp(
                                 try {
                                     val preferences = appPreferences ?: loadAppPreferencesUseCase()
                                     appPreferences = preferences
-                                    val outcome = speechRecognitionGateway.listen(
-                                        allowNetwork = preferences.canUseCloudSpeech,
-                                    )
+                                    val outcome = listenWithOfflineEngine()
                                     when (outcome) {
                                         is SpeechRecognitionOutcome.Success -> {
                                             moveVoiceQuery = prepareVoiceSearchQueryUseCase(outcome.text)
@@ -1844,7 +1898,7 @@ fun WhereApp(
                                 locationTreeSubmitting = true
                                 moveItemError = null
                                 try {
-                                    createLocationUseCase(request)
+                                    createLocationPathUseCase(request)
                                     val itemId = selectedItemId
                                     if (itemId != null) {
                                         moveItemContext = loadMoveItemContextUseCase(itemId)
@@ -1882,6 +1936,34 @@ fun WhereApp(
                     },
                 )
             }
+            }
+            val imageHandler = pendingImageHandler
+            if (imageHandler != null) {
+                ImageSourceDialog(
+                    onDismiss = {
+                        pendingImageHandler = null
+                    },
+                    onCapture = {
+                        val handler = pendingImageHandler
+                        pendingImageHandler = null
+                        if (handler != null) {
+                            coroutineScope.launch {
+                                val pickedImage = photoPickerGateway.captureImage() ?: return@launch
+                                handler(pickedImage)
+                            }
+                        }
+                    },
+                    onPick = {
+                        val handler = pendingImageHandler
+                        pendingImageHandler = null
+                        if (handler != null) {
+                            coroutineScope.launch {
+                                val pickedImage = photoPickerGateway.pickImage() ?: return@launch
+                                handler(pickedImage)
+                            }
+                        }
+                    },
+                )
             }
         }
     }
@@ -1992,11 +2074,8 @@ private fun voiceRecognitionMessage(
     }
     SpeechRecognitionOutcome.PermissionDenied ->
         "未授予麦克风权限，请先使用键盘输入。"
-    SpeechRecognitionOutcome.Unavailable -> if (cloudSpeechEnabled) {
-        "当前设备无法语音识别，请先使用键盘输入。"
-    } else {
-        "这台手机没有可用的离线识别。可在设置中开启云端语音识别，或改用键盘。"
-    }
+    SpeechRecognitionOutcome.Unavailable ->
+        "离线语音还没准备好。首次使用需要下载中文模型，请连接网络后重试，或改用键盘。"
     SpeechRecognitionOutcome.NoMatch ->
         "没有听清，请再说一次或改用键盘。"
 }

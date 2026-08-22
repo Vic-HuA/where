@@ -74,8 +74,11 @@ import com.vichua.where.core.model.LocalAppPreferences
  * @param onHapticFeedbackChange 切换主要操作和危险确认是否震动。
  * @param aiProviderCredentials 本机 AI 接口凭证；未加载时为空。
  * @param onAiAssistanceChange 在确认披露后开启或关闭 AI 辅助。
- * @param onSaveAiProviderCredentials 保存本机供应商、Key、接口地址和模型。
- * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。
+ * @param onSaveAiProviderCredentials 保存本机协议、Key、接口地址和模型。
+ * @param onTestAiConnection 用当前填写测试接口连通，不写入本机。
+ * @param aiConnectionTesting 是否正在测试接口。
+ * @param aiConnectionTestMessage 最近一次测试的中文结果。
+ * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。当前语音走本机 Vosk，此开关不再展示。
  * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
  * @param onDiagnosticLoggingChange 切换是否写入不含敏感内容的本机诊断事件。
  * @param onCreateBackup 使用密码创建加密备份。
@@ -107,6 +110,9 @@ fun SettingsScreen(
     onHapticFeedbackChange: (Boolean) -> Unit,
     onAiAssistanceChange: (Boolean) -> Unit,
     onSaveAiProviderCredentials: (AiProviderVendor, String, String, String) -> Unit,
+    onTestAiConnection: (AiProviderVendor, String, String, String) -> Unit,
+    aiConnectionTesting: Boolean,
+    aiConnectionTestMessage: String?,
     onCloudSpeechChange: (Boolean) -> Unit,
     onBackupReminderChange: (Boolean) -> Unit,
     onDiagnosticLoggingChange: (Boolean) -> Unit,
@@ -217,19 +223,6 @@ fun SettingsScreen(
                 aiProviderDialogVisible = true
             },
         )
-        SettingsSwitchRow(
-            title = "云端语音识别",
-            description = "仅在你主动说话后才会把这次录音交给系统识别，不会后台持续听",
-            checked = appPreferences?.canUseCloudSpeech == true,
-            enabled = appPreferences != null,
-            onCheckedChange = { enabled ->
-                if (enabled) {
-                    cloudSpeechDisclosureVisible = true
-                } else {
-                    onCloudSpeechChange(false)
-                }
-            },
-        )
 
         SettingsSectionTitle("辅助能力")
         SettingsSwitchRow(
@@ -335,12 +328,15 @@ fun SettingsScreen(
     if (aiProviderDialogVisible) {
         AiProviderCredentialsDialog(
             initialCredentials = aiProviderCredentials,
-            enabled = !submitting,
+            enabled = !submitting && !aiConnectionTesting,
+            testing = aiConnectionTesting,
+            testMessage = aiConnectionTestMessage,
             onDismiss = {
-                if (!submitting) {
+                if (!submitting && !aiConnectionTesting) {
                     aiProviderDialogVisible = false
                 }
             },
+            onTest = onTestAiConnection,
             onSave = { vendor, apiKey, baseUrl, model ->
                 aiProviderDialogVisible = false
                 onSaveAiProviderCredentials(vendor, apiKey, baseUrl, model)
@@ -367,20 +363,15 @@ fun SettingsScreen(
             },
             dismissEnabled = !submitting,
         ) {
-                    Text("数据类型：${AiAssistanceDisclosure.DATA_TYPE}")
-                    Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = "服务供应商：${AiAssistanceDisclosure.VENDOR}",
-                    )
-                    Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = "处理用途：${AiAssistanceDisclosure.PURPOSE}",
-                    )
-                    Text(
-                        modifier = Modifier.padding(top = 10.dp),
-                        text = "不会后台自动上传。没有 Key、没有建议或你不采用时，本地手填、查找和备份不受影响。",
-                        color = WhereSecondaryTextColor,
-                    )
+            DisclosureField(label = "数据类型", value = AiAssistanceDisclosure.DATA_TYPE)
+            DisclosureField(label = "服务方式", value = AiAssistanceDisclosure.VENDOR)
+            DisclosureField(label = "处理用途", value = AiAssistanceDisclosure.PURPOSE)
+            Text(
+                modifier = Modifier.padding(top = 14.dp),
+                text = "不会后台自动上传。没有 Key、没有建议或你不采用时，本地手填、查找和备份不受影响。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
     if (cloudSpeechDisclosureVisible) {
@@ -403,20 +394,15 @@ fun SettingsScreen(
             },
             dismissEnabled = !submitting,
         ) {
-                    Text("数据类型：${CloudSpeechDisclosure.DATA_TYPE}")
-                    Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = "服务供应商：${CloudSpeechDisclosure.VENDOR}",
-                    )
-                    Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = "处理用途：${CloudSpeechDisclosure.PURPOSE}",
-                    )
-                    Text(
-                        modifier = Modifier.padding(top = 10.dp),
-                        text = "不会后台持续听，也不会保存原始录音。关闭后本地查找和手填不受影响。",
-                        color = WhereSecondaryTextColor,
-                    )
+            DisclosureField(label = "数据类型", value = CloudSpeechDisclosure.DATA_TYPE)
+            DisclosureField(label = "服务方式", value = CloudSpeechDisclosure.VENDOR)
+            DisclosureField(label = "处理用途", value = CloudSpeechDisclosure.PURPOSE)
+            Text(
+                modifier = Modifier.padding(top = 14.dp),
+                text = "不会后台持续听，也不会保存原始录音。关闭后本地查找和手填不受影响。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
     if (createPasswordDialogVisible) {
@@ -520,15 +506,24 @@ fun SettingsScreen(
             onDismiss = { clearFirstConfirmVisible = false },
             dismissEnabled = !submitting,
         ) {
-                    Text("将删除当前家庭的物品、位置、照片和变更记录。")
-                    Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = lastVerifiedBackupText ?: "尚未成功备份。清除后无法从本机恢复。",
-                    )
-                    householdSummary?.let { summary ->
-                        Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
-                    }
-                    Text("适老设置、最近查找和草稿文字会保留。")
+            DisclosureField(
+                label = "将删除",
+                value = "当前家庭的物品、位置、照片和变更记录。",
+            )
+            DisclosureField(
+                label = "备份情况",
+                value = lastVerifiedBackupText ?: "尚未成功备份。清除后无法从本机恢复。",
+            )
+            householdSummary?.let { summary ->
+                DisclosureField(
+                    label = "当前家庭",
+                    value = "物品 ${summary.itemCount} 件，位置 ${summary.locationCount} 个，照片 ${summary.photoCount} 张。",
+                )
+            }
+            DisclosureField(
+                label = "会保留",
+                value = "适老设置、最近查找和草稿文字。",
+            )
         }
     }
     if (clearSecondConfirmVisible) {
@@ -714,17 +709,24 @@ private fun SettingsActionRow(
 }
 
 /**
- * 在弹窗里填写 Key，避免设置首页露出密钥输入框。
+ * 在弹窗里填写协议、Key、地址和模型，并允许先测试再保存。
  */
 @Composable
 private fun AiProviderCredentialsDialog(
     initialCredentials: AiProviderCredentials?,
     enabled: Boolean,
+    testing: Boolean,
+    testMessage: String?,
     onDismiss: () -> Unit,
+    onTest: (AiProviderVendor, String, String, String) -> Unit,
     onSave: (AiProviderVendor, String, String, String) -> Unit,
 ) {
     var vendor by remember {
-        mutableStateOf(initialCredentials?.vendor ?: AiProviderVendor.OPENAI)
+        mutableStateOf(
+            AiProviderVendor.displayProtocol(
+                initialCredentials?.vendor ?: AiProviderVendor.OPENAI,
+            ),
+        )
     }
     var apiKey by remember {
         mutableStateOf(initialCredentials?.apiKey.orEmpty())
@@ -735,7 +737,8 @@ private fun AiProviderCredentialsDialog(
     var model by remember {
         mutableStateOf(initialCredentials?.model ?: AiProviderCredentials.OPENAI_DEFAULT_MODEL)
     }
-    val canSave = enabled &&
+    val canSubmit = enabled &&
+        !testing &&
         baseUrl.trim().startsWith("https://") &&
         ' ' !in baseUrl.trim() &&
         model.trim().isNotEmpty() &&
@@ -747,13 +750,18 @@ private fun AiProviderCredentialsDialog(
         onConfirm = {
             onSave(vendor, apiKey, baseUrl, model)
         },
-        confirmEnabled = canSave,
+        confirmEnabled = canSubmit,
         dismissText = "取消",
         onDismiss = onDismiss,
-        dismissEnabled = enabled,
+        dismissEnabled = enabled && !testing,
+        neutralText = if (testing) "测试中…" else "测试连接",
+        onNeutral = {
+            onTest(vendor, apiKey, baseUrl, model)
+        },
+        neutralEnabled = canSubmit && apiKey.trim().isNotEmpty(),
     ) {
         Text(
-            text = "选择供应商会带入官方地址和默认模型。地址和模型都必填，Key 只存在本机。",
+            text = "选择兼容协议后会带入常用官方地址和模型，你也可以改成自己的中转地址。Key 只存在本机。",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodySmall,
         )
@@ -761,11 +769,12 @@ private fun AiProviderCredentialsDialog(
             modifier = Modifier.padding(top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            AiProviderVendor.entries.forEach { option ->
+            AiProviderVendor.protocolChoices().forEach { option ->
                 val selected = option == vendor
                 Surface(
                     modifier = Modifier.selectable(
                         selected = selected,
+                        enabled = enabled && !testing,
                         role = Role.RadioButton,
                         onClick = {
                             vendor = option
@@ -784,9 +793,10 @@ private fun AiProviderCredentialsDialog(
                     Text(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         text = when (option) {
-                            AiProviderVendor.OPENAI -> "OpenAI"
-                            AiProviderVendor.ANTHROPIC -> "Anthropic"
-                            AiProviderVendor.CUSTOM -> "自定义"
+                            AiProviderVendor.ANTHROPIC -> "Anthropic 兼容"
+                            AiProviderVendor.OPENAI,
+                            AiProviderVendor.CUSTOM,
+                            -> "OpenAI 兼容"
                         },
                         color = if (selected) WherePrimaryColor else WherePrimaryTextColor,
                         style = MaterialTheme.typography.bodyMedium,
@@ -802,7 +812,7 @@ private fun AiProviderCredentialsDialog(
             onValueChange = { value ->
                 apiKey = value
             },
-            enabled = enabled,
+            enabled = enabled && !testing,
             label = { Text("接口 Key") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
@@ -815,7 +825,7 @@ private fun AiProviderCredentialsDialog(
             onValueChange = { value ->
                 baseUrl = value
             },
-            enabled = enabled,
+            enabled = enabled && !testing,
             label = { Text("接口地址") },
             singleLine = true,
         )
@@ -827,11 +837,46 @@ private fun AiProviderCredentialsDialog(
             onValueChange = { value ->
                 model = value
             },
-            enabled = enabled,
+            enabled = enabled && !testing,
             label = { Text("模型") },
             singleLine = true,
         )
+        if (testMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 10.dp),
+                text = testMessage,
+                color = if (testMessage.contains("成功")) {
+                    WherePrimaryColor
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
+}
+
+/**
+ * 披露和危险确认共用的标签+正文，避免几段说明挤成一堆。
+ */
+@Composable
+private fun DisclosureField(
+    label: String,
+    value: String,
+) {
+    Text(
+        modifier = Modifier.padding(top = 12.dp),
+        text = label,
+        color = WhereSecondaryTextColor,
+        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Text(
+        modifier = Modifier.padding(top = 4.dp),
+        text = value,
+        color = WherePrimaryTextColor,
+        style = MaterialTheme.typography.bodyMedium,
+    )
 }
 
 @Composable
@@ -953,9 +998,21 @@ private fun BackupVerificationDialog(
         onConfirm = onDismiss,
         dismissText = null,
     ) {
-                Text("格式 v${result.manifest.formatVersion} · 加密数据包")
-                Text("物品 ${result.itemCount} 件，位置 ${result.locationCount} 个")
-                Text("物品照片 ${result.itemPhotoCount} 张，已打包原图 ${result.includedMediaCount} 张")
-                Text("文件大小 ${result.packageSizeBytes} 字节")
+                DisclosureField(
+                    label = "数据包",
+                    value = "格式 v${result.manifest.formatVersion} · 加密备份",
+                )
+                DisclosureField(
+                    label = "内容",
+                    value = "物品 ${result.itemCount} 件，位置 ${result.locationCount} 个",
+                )
+                DisclosureField(
+                    label = "照片",
+                    value = "物品照片 ${result.itemPhotoCount} 张，已打包原图 ${result.includedMediaCount} 张",
+                )
+                DisclosureField(
+                    label = "文件大小",
+                    value = visiblePackageSize(result.packageSizeBytes),
+                )
     }
 }

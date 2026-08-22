@@ -17,6 +17,7 @@ import com.vichua.where.core.model.ItemLocationEventId
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.MediaIntegrityStatus
 import com.vichua.where.core.model.PhotoAsset
 import com.vichua.where.core.model.PhotoAssetId
@@ -31,11 +32,19 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * 新增物品页面可选择的位置。
  *
  * @property locationId 位置节点 ID。
+ * @property parentId 父节点 ID，家庭根节点下的房间为空以外的值。
  * @property displayPath 不包含家庭根节点的完整显示路径。
+ * @property name 当前位置节点名称。
+ * @property type 位置语义类型。
+ * @property iconKey 受控图标键。
  */
 data class ItemCreationLocation(
     val locationId: LocationNodeId,
+    val parentId: LocationNodeId?,
     val displayPath: String,
+    val name: String,
+    val type: LocationType,
+    val iconKey: String?,
 )
 
 /**

@@ -2,6 +2,7 @@ package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,15 +31,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
@@ -59,6 +67,7 @@ fun PhotoManagementScreen(
     onSetPhotoCover: (PhotoAssetId) -> Unit,
     onSetPhotoRole: (PhotoAssetId, PhotoRole) -> Unit,
     onMovePhoto: (PhotoAssetId, Int) -> Unit,
+    onReorderPhotos: (PhotoAssetId, Int, Int) -> Unit,
     onDeletePhoto: (PhotoAssetId) -> Unit,
 ) {
     var addRoleDialogVisible by remember { mutableStateOf(false) }
@@ -110,26 +119,23 @@ fun PhotoManagementScreen(
             )
             if (detail.photos.size > 1) {
                 Text(
-                    text = "点箭头调整顺序",
+                    text = "按住右侧拖条调换顺序",
                     color = WhereSecondaryTextColor,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
 
-        detail.photos.forEachIndexed { index, photo ->
-            PhotoManagementRow(
-                photo = photo,
-                locationPath = visibleLocationPath(detail.locationPath),
-                resolveMediaPath = resolveMediaPath,
-                canMovePrevious = index > 0,
-                canMoveNext = index < detail.photos.lastIndex,
-                submitting = submitting,
-                onOpen = { editedPhotoId = photo.photoId },
-                onMove = { offset -> onMovePhoto(photo.photoId, offset) },
-                onDelete = { deletePhotoId = photo.photoId },
-            )
-        }
+        PhotoManagementReorderList(
+            photos = detail.photos,
+            locationPath = visibleLocationPath(detail.locationPath),
+            resolveMediaPath = resolveMediaPath,
+            submitting = submitting,
+            onOpen = { photoId -> editedPhotoId = photoId },
+            onMove = { photoId, offset -> onMovePhoto(photoId, offset) },
+            onReorder = onReorderPhotos,
+            onDelete = { photoId -> deletePhotoId = photoId },
+        )
 
         if (detail.photos.size >= MvpLimits.ITEM_PHOTO_WARNING_THRESHOLD) {
             Text(
@@ -229,20 +235,90 @@ fun PhotoManagementScreen(
     }
 }
 
+/**
+ * 长按拖条后按行高换位，松手再写入新顺序。
+ */
+@Composable
+private fun PhotoManagementReorderList(
+    photos: List<ItemDetailPhoto>,
+    locationPath: String,
+    resolveMediaPath: (String) -> String?,
+    submitting: Boolean,
+    onOpen: (PhotoAssetId) -> Unit,
+    onMove: (PhotoAssetId, Int) -> Unit,
+    onReorder: (PhotoAssetId, Int, Int) -> Unit,
+    onDelete: (PhotoAssetId) -> Unit,
+) {
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var rowHeight by remember { mutableIntStateOf(0) }
+
+    photos.forEachIndexed { index, photo ->
+        val dragging = draggingIndex == index
+        val visualOffset = if (dragging) dragOffset else 0f
+        PhotoManagementRow(
+            modifier = Modifier
+                .zIndex(if (dragging) 1f else 0f)
+                .graphicsLayer { translationY = visualOffset }
+                .onSizeChanged { size ->
+                    if (size.height > 0) {
+                        rowHeight = size.height
+                    }
+                },
+            photo = photo,
+            locationPath = locationPath,
+            resolveMediaPath = resolveMediaPath,
+            canMovePrevious = index > 0,
+            canMoveNext = index < photos.lastIndex,
+            submitting = submitting,
+            dragEnabled = photos.size > 1 && !submitting,
+            onOpen = { onOpen(photo.photoId) },
+            onMove = { offset -> onMove(photo.photoId, offset) },
+            onDelete = { onDelete(photo.photoId) },
+            onDrag = { amount ->
+                if (draggingIndex == null) {
+                    draggingIndex = index
+                    dragOffset = 0f
+                }
+                if (draggingIndex == index) {
+                    dragOffset += amount
+                }
+            },
+            onDragEnd = {
+                val fromIndex = draggingIndex
+                val height = rowHeight
+                if (fromIndex != null && height > 0) {
+                    val delta = (dragOffset / height).roundToInt()
+                    val toIndex = (fromIndex + delta).coerceIn(0, photos.lastIndex)
+                    if (toIndex != fromIndex) {
+                        onReorder(photos[fromIndex].photoId, fromIndex, toIndex)
+                    }
+                }
+                draggingIndex = null
+                dragOffset = 0f
+            },
+        )
+    }
+}
+
 @Composable
 private fun PhotoManagementRow(
+    modifier: Modifier = Modifier,
     photo: ItemDetailPhoto,
     locationPath: String,
     resolveMediaPath: (String) -> String?,
     canMovePrevious: Boolean,
     canMoveNext: Boolean,
     submitting: Boolean,
+    dragEnabled: Boolean = false,
     onOpen: () -> Unit,
     onMove: (Int) -> Unit,
     onDelete: () -> Unit,
+    onDrag: (Float) -> Unit = {},
+    onDragEnd: () -> Unit = {},
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(top = 10.dp)
             .clickable(enabled = !submitting, role = Role.Button, onClick = onOpen),
@@ -311,9 +387,23 @@ private fun PhotoManagementRow(
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier
+                        .size(28.dp)
+                        .pointerInput(dragEnabled, photo.photoId) {
+                            if (!dragEnabled) {
+                                return@pointerInput
+                            }
+                            detectDragGesturesAfterLongPress(
+                                onDragEnd = onDragEnd,
+                                onDragCancel = onDragEnd,
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    onDrag(dragAmount.y)
+                                },
+                            )
+                        },
                     imageVector = Icons.Outlined.DragHandle,
-                    contentDescription = null,
+                    contentDescription = "拖动调整顺序",
                     tint = WhereSecondaryTextColor,
                 )
                 Row {
@@ -476,7 +566,7 @@ private fun PhotoManagementEditDialog(
         if (canMovePrevious || canMoveNext) {
             Text(
                 modifier = Modifier.padding(top = 12.dp),
-                text = "顺序可在列表里用箭头调整。",
+                text = "顺序可在列表里按住拖条调整。",
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodySmall,
             )

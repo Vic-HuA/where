@@ -24,7 +24,11 @@ class RoomManualItemCreationRepository(
             availableLocations = context.availableLocations.map { location ->
                 ItemCreationLocation(
                     locationId = location.locationId,
+                    parentId = location.parentId,
                     displayPath = location.displayPath,
+                    name = location.name,
+                    type = location.type,
+                    iconKey = location.iconKey,
                 )
             },
         )

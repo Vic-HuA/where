@@ -86,19 +86,34 @@ object AiAssistanceDisclosure {
     const val DATA_TYPE = "你为当前这次记录主动选择的照片（最多 6 张）以及你主动提交的文字"
 
     /** 服务供应商说明。 */
-    const val VENDOR = "你选择的 OpenAI 或 Anthropic 视觉接口"
+    const val VENDOR = "你选择的 OpenAI 兼容或 Anthropic 兼容视觉接口"
 
     /** 处理用途。 */
     const val PURPOSE = "根据选中内容建议物品名称、分类和位置描述，经你确认后才写入"
 }
 
 /**
- * 本机 AI 接口协议。自定义走 OpenAI 兼容请求，方便代理和中转。
+ * 本机 AI 接口协议。
+ *
+ * 只区分请求格式，不绑定某一家官方账号。旧的 CUSTOM 按 OpenAI 兼容处理。
  */
 enum class AiProviderVendor {
     OPENAI,
     ANTHROPIC,
     CUSTOM,
+    ;
+
+    companion object {
+        /** 界面只提供两种兼容协议；旧的自定义按 OpenAI 兼容展示。 */
+        fun protocolChoices(): List<AiProviderVendor> = listOf(OPENAI, ANTHROPIC)
+
+        fun displayProtocol(vendor: AiProviderVendor): AiProviderVendor = when (vendor) {
+            ANTHROPIC -> ANTHROPIC
+            OPENAI,
+            CUSTOM,
+            -> OPENAI
+        }
+    }
 }
 
 /**
@@ -106,7 +121,7 @@ enum class AiProviderVendor {
  *
  * 只存在当前设备，不进入家庭备份、导出或诊断日志。
  *
- * @property vendor 决定请求格式和默认地址。
+ * @property vendor 决定请求格式；自定义中转归入 OpenAI 兼容。
  * @property apiKey 用户填写的接口密钥；为空表示尚未配置。
  * @property baseUrl 必填 HTTPS 接口根地址。
  * @property model 必填模型名。
@@ -140,11 +155,12 @@ data class AiProviderCredentials(
         const val ANTHROPIC_DEFAULT_MODEL = "claude-sonnet-4-0"
         const val DEFAULT_MODEL = OPENAI_DEFAULT_MODEL
 
-        /** 选择供应商后带入的官方地址和常用视觉模型。 */
+        /** 选择协议后带入的常用官方地址和视觉模型，用户仍可改成自己的中转地址。 */
         fun presetsFor(vendor: AiProviderVendor): Pair<String, String> = when (vendor) {
-            AiProviderVendor.OPENAI -> OPENAI_BASE_URL to OPENAI_DEFAULT_MODEL
+            AiProviderVendor.OPENAI,
+            AiProviderVendor.CUSTOM,
+            -> OPENAI_BASE_URL to OPENAI_DEFAULT_MODEL
             AiProviderVendor.ANTHROPIC -> ANTHROPIC_BASE_URL to ANTHROPIC_DEFAULT_MODEL
-            AiProviderVendor.CUSTOM -> OPENAI_BASE_URL to OPENAI_DEFAULT_MODEL
         }
 
         /**

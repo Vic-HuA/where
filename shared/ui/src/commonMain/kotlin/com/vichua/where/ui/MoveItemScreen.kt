@@ -46,8 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
-import com.vichua.where.feature.location.management.CreateLocationRequest
-import com.vichua.where.feature.location.management.allowedChildTypes
+import com.vichua.where.feature.location.management.CreateLocationPathRequest
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveTargetLocation
 
@@ -64,7 +63,7 @@ fun MoveItemScreen(
     creatingLocation: Boolean,
     onBack: () -> Unit,
     onSave: (LocationNodeId) -> Unit,
-    onCreateLocation: (CreateLocationRequest) -> Unit,
+    onCreateLocation: (CreateLocationPathRequest) -> Unit,
     onVoiceRequested: () -> Unit,
     onVoiceReleased: () -> Unit,
     onVoiceQueryConsumed: () -> Unit,
@@ -113,6 +112,13 @@ fun MoveItemScreen(
         }
 
         MoveItemSummaryCard(context = context)
+        MoveLevelSelector(
+            context = context,
+            selectedLocationId = selectedLocationId,
+            onSelect = { locationId ->
+                selectedLocationId = locationId
+            },
+        )
 
         if (context.recentLocations.isNotEmpty()) {
             SectionTitle(text = "最近使用")
@@ -363,22 +369,129 @@ fun MoveItemScreen(
         }
         val parentId = selectedParent?.locationId ?: context.rootLocationId
         val parentType = selectedParent?.type ?: LocationType.HOME
-        MoveLocationCreateDialog(
-            allowedTypes = allowedChildTypes(parentType),
+        LocationPathCreateDialog(
+            parentLabel = selectedParent?.name ?: "家庭",
+            parentType = parentType,
             submitting = creatingLocation,
             onDismiss = { createDialogVisible = false },
-            onConfirm = { type, name ->
+            onConfirm = { segments ->
                 onCreateLocation(
-                    CreateLocationRequest(
+                    CreateLocationPathRequest(
                         parentId = parentId,
-                        type = type,
-                        name = name,
+                        segments = segments,
                     ),
                 )
                 createDialogVisible = false
             },
         )
     }
+}
+
+/**
+ * 把当前位置拆成可点的层级，方便只换抽屉格子这一层。
+ */
+@Composable
+private fun MoveLevelSelector(
+    context: MoveItemContext,
+    selectedLocationId: LocationNodeId?,
+    onSelect: (LocationNodeId) -> Unit,
+) {
+    val currentChain = remember(context.item.currentLocationId, context.availableLocations) {
+        locationAncestry(
+            locationId = context.item.currentLocationId,
+            locations = context.availableLocations,
+        )
+    }
+    if (currentChain.isEmpty()) {
+        return
+    }
+    var editingLevelIndex by remember { mutableStateOf<Int?>(null) }
+    SectionTitle(text = "按层级更换")
+    Text(
+        text = "点其中一层，只换这一层的同级位置。例如把第二格换成第一格。",
+        color = WhereSecondaryTextColor,
+        style = MaterialTheme.typography.bodySmall,
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        currentChain.forEachIndexed { index, location ->
+            if (index > 0) {
+                Text(
+                    text = "›",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            val selected = selectedLocationId == location.locationId || editingLevelIndex == index
+            Surface(
+                modifier = Modifier.clickable(role = Role.Button) {
+                    editingLevelIndex = if (editingLevelIndex == index) null else index
+                },
+                shape = RoundedCornerShape(13.dp),
+                color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
+                border = BorderStroke(1.dp, if (selected) WherePrimaryColor else WhereOutlineColor),
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    text = location.name,
+                    color = if (selected) WherePrimaryColor else WherePrimaryTextColor,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
+    val editingIndex = editingLevelIndex
+    if (editingIndex != null) {
+        val currentNode = currentChain[editingIndex]
+        val siblings = context.availableLocations.filter { location ->
+            location.parentId == currentNode.parentId &&
+                location.locationId != context.item.currentLocationId
+        }
+        if (siblings.isEmpty()) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "这一层没有其他同级位置。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            siblings.forEach { location ->
+                LocationOptionCard(
+                    location = location,
+                    selected = selectedLocationId == location.locationId,
+                    elderFriendlyMode = false,
+                    onClick = {
+                        onSelect(location.locationId)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 从当前位置沿父链还原可点的层级，根节点不展示。
+ */
+private fun locationAncestry(
+    locationId: LocationNodeId,
+    locations: List<MoveTargetLocation>,
+): List<MoveTargetLocation> {
+    val locationsById = locations.associateBy { location -> location.locationId }
+    val chain = mutableListOf<MoveTargetLocation>()
+    val visited = mutableSetOf<LocationNodeId>()
+    var current = locationsById[locationId]
+    while (current != null && visited.add(current.locationId)) {
+        chain += current
+        current = current.parentId?.let(locationsById::get)
+    }
+    return chain.asReversed()
 }
 
 @Composable
@@ -549,79 +662,4 @@ private fun LocationOptionCard(
             )
         }
     }
-}
-
-@Composable
-private fun MoveLocationCreateDialog(
-    allowedTypes: List<LocationType>,
-    submitting: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: (LocationType, String) -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(allowedTypes.first()) }
-    val trimmedName = name.trim()
-
-    WhereDialog(
-        onDismissRequest = onDismiss,
-        title = "新建位置",
-        confirmText = "添加",
-        onConfirm = { onConfirm(selectedType, trimmedName) },
-        confirmEnabled = trimmedName.isNotEmpty() && !submitting,
-        dismissText = "取消",
-        onDismiss = onDismiss,
-        dismissEnabled = !submitting,
-    ) {
-        if (allowedTypes.size > 1) {
-            Text(
-                text = "位置类型",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Row(
-                modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                allowedTypes.forEach { type ->
-                    val selected = type == selectedType
-                    Surface(
-                        modifier = Modifier.selectable(
-                            selected = selected,
-                            role = Role.RadioButton,
-                            onClick = { selectedType = type },
-                        ),
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
-                        border = BorderStroke(
-                            1.dp,
-                            if (selected) WherePrimaryColor else WhereOutlineColor,
-                        ),
-                    ) {
-                        Text(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            text = moveLocationTypeLabel(type),
-                            color = if (selected) WherePrimaryColor else WherePrimaryTextColor,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
-            }
-        }
-        OutlinedTextField(
-            modifier = Modifier.fillMaxWidth(),
-            value = name,
-            onValueChange = { value -> name = value },
-            enabled = !submitting,
-            label = { Text("名称") },
-            singleLine = true,
-        )
-    }
-}
-
-private fun moveLocationTypeLabel(type: LocationType): String = when (type) {
-    LocationType.HOME -> "家庭"
-    LocationType.ROOM -> "房间"
-    LocationType.AREA -> "区域"
-    LocationType.FURNITURE -> "家具"
-    LocationType.CONTAINER -> "容器"
-    LocationType.SLOT -> "具体位置"
 }
