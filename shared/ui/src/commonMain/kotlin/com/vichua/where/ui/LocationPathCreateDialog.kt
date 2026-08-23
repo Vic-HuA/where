@@ -62,7 +62,7 @@ fun LocationPathCreateDialog(
         dismissEnabled = !submitting,
     ) {
         Text(
-            text = "在“$parentLabel”下一次填好多层。已有同名同类型的层会直接沿用，只新建后面没有的层。例如已有书房时，再填书房、课桌即可加上课桌。",
+            text = locationPathCreateHint(parentLabel, parentType),
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -193,8 +193,38 @@ private fun LocationPathDraftRow(
         onValueChange = onNameChange,
         enabled = enabled,
         label = { Text(locationTypeLabel(draft.type) + "名称") },
+        placeholder = { Text(locationNamePlaceholder(draft.type)) },
         singleLine = true,
     )
+}
+
+/**
+ * 按当前父位置给出沿用说明，举例统一用卧室。
+ */
+private fun locationPathCreateHint(
+    parentLabel: String,
+    parentType: LocationType,
+): String {
+    val reuseHint = "已有同名同类型的层会直接沿用，只新建后面没有的层。"
+    val example = when (parentType) {
+        LocationType.HOME -> "例如已有卧室时，再填卧室、衣柜即可加上衣柜。"
+        LocationType.ROOM -> "例如再填衣柜、第二层。"
+        LocationType.AREA, LocationType.FURNITURE -> "例如再填抽屉、左边格子。"
+        LocationType.CONTAINER, LocationType.SLOT -> "例如再填第二层、左边格子。"
+    }
+    return "在“$parentLabel”下一次填好多层。$reuseHint$example"
+}
+
+/**
+ * 输入框内提示这一层通常写什么，减少用户不知道从何填起。
+ */
+private fun locationNamePlaceholder(type: LocationType): String = when (type) {
+    LocationType.HOME -> "例如我的家"
+    LocationType.ROOM -> "例如卧室"
+    LocationType.AREA -> "例如床边"
+    LocationType.FURNITURE -> "例如衣柜"
+    LocationType.CONTAINER -> "例如抽屉"
+    LocationType.SLOT -> "例如第二层"
 }
 
 private data class LocationPathDraft(
