@@ -389,6 +389,7 @@ fun WhereApp(
     var latestBackupStatus by remember { mutableStateOf<LatestBackupStatus?>(null) }
     var backupSubmitting by remember { mutableStateOf(false) }
     var backupProgressText by remember { mutableStateOf<String?>(null) }
+    var restoreCompletedText by remember { mutableStateOf<String?>(null) }
     var managedBackups by remember { mutableStateOf<List<ManagedBackupFile>>(emptyList()) }
     var managedBackupsLoading by remember { mutableStateOf(false) }
     var allItems by remember { mutableStateOf<List<HomeItemSummary>>(emptyList()) }
@@ -599,7 +600,8 @@ fun WhereApp(
                 householdSummary = clearHouseholdDataUseCase.loadSummary()
                 latestBackupStatus = loadLatestBackupStatusUseCase()
                 homeLoadAttempt += 1
-                backupProgressText = if (mode == RestoreMode.REPLACE) {
+                backupProgressText = null
+                restoreCompletedText = if (mode == RestoreMode.REPLACE) {
                     "已用备份替换当前家庭。"
                 } else {
                     "已合并备份到当前家庭。"
@@ -2179,6 +2181,22 @@ fun WhereApp(
                         }
                     },
                 )
+            }
+            val completedRestoreText = restoreCompletedText
+            if (completedRestoreText != null) {
+                WhereDialog(
+                    onDismissRequest = { restoreCompletedText = null },
+                    title = "恢复完成",
+                    confirmText = "好",
+                    onConfirm = { restoreCompletedText = null },
+                    dismissText = null,
+                ) {
+                    Text(
+                        text = completedRestoreText,
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
     }
