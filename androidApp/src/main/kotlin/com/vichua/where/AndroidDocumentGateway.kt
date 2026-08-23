@@ -22,27 +22,33 @@ import kotlinx.coroutines.withContext
 /**
  * 日常备份写入应用专属目录；导出和导入旧文件才打开系统选择器。
  *
- * 必须在 Activity 进入 STARTED 之前注册启动器。读写大文件都放到 IO 线程，
- * 避免系统选完文件后主线程卡几秒、进度圈看起来像停住。
+ * 选文件的等待对象放在进程级，避免恢复后内存紧张导致 Activity 重建时
+ * 丢掉系统选择器的结果。从系统目录导入成功后立刻拷进固定备份目录，
+ * 下次就可以在应用内列表里打开，不必再依赖系统授权。
  */
 class AndroidDocumentGateway(
     private val activity: ComponentActivity,
 ) : DocumentGateway {
-    private val pendingCreate = AtomicReference<CreateRequest?>(null)
-    private val pendingOpen = AtomicReference<CompletableDeferred<Uri?>?>(null)
-
     private val createLauncher = activity.registerForActivityResult(
         ActivityResultContracts.CreateDocument(DEFAULT_MIME_TYPE),
     ) { uri ->
-        val request = pendingCreate.getAndSet(null) ?: return@registerForActivityResult
-        request.deferred.complete(uri)
+        val request = pendingCreate.getAndSet(null)
+        if (request != null) {
+            request.deferred.complete(uri)
+        } else if (uri != null) {
+            leftoverCreateUri.set(uri)
+        }
     }
 
     private val openLauncher = activity.registerForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        val deferred = pendingOpen.getAndSet(null) ?: return@registerForActivityResult
-        deferred.complete(uri)
+        val deferred = pendingOpen.getAndSet(null)
+        if (deferred != null) {
+            deferred.complete(uri)
+        } else if (uri != null) {
+            leftoverOpenUri.set(uri)
+        }
     }
 
     /**
@@ -85,17 +91,11 @@ class AndroidDocumentGateway(
         withContext(Dispatchers.IO) {
             require(bytes.isNotEmpty()) { "Managed backup bytes must not be empty." }
             val file = newBackupFile(backupsDirectory())
-            FileOutputStream(file).use { output ->
-                output.write(bytes)
-                output.flush()
-                output.fd.sync()
-            }
-            val written = file.readBytes()
-            require(written.contentEquals(bytes)) { "Managed backup write did not match source bytes." }
+            writeBytesToFile(file, bytes)
             SelectedDocument(
                 displayName = file.name,
                 opaqueDocumentUri = file.canonicalPath,
-                bytes = written,
+                bytes = bytes,
             )
         }
 
@@ -107,9 +107,10 @@ class AndroidDocumentGateway(
             val file = resolveManagedFile(opaqueDocumentUri)
             val bytes = file.readBytes()
             require(bytes.isNotEmpty()) { "Managed backup must not be empty." }
+            require(looksLikeBackupPackage(bytes)) { "Managed backup magic is invalid." }
             SelectedDocument(
                 displayName = file.name,
-                opaqueDocumentUri = file.absolutePath,
+                opaqueDocumentUri = file.canonicalPath,
                 bytes = bytes,
             )
         }
@@ -123,6 +124,11 @@ class AndroidDocumentGateway(
         bytes: ByteArray,
     ): SelectedDocument? {
         require(bytes.isNotEmpty()) { "Backup document bytes must not be empty." }
+        leftoverCreateUri.getAndSet(null)?.let { uri ->
+            return withContext(Dispatchers.IO) {
+                writeDocument(uri, bytes)
+            }
+        }
         val deferred = CompletableDeferred<Uri?>()
         val request = CreateRequest(bytes = bytes, deferred = deferred)
         check(pendingCreate.compareAndSet(null, request)) {
@@ -133,17 +139,21 @@ class AndroidDocumentGateway(
             val uri = deferred.await() ?: return null
             withContext(Dispatchers.IO) {
                 writeDocument(uri, request.bytes)
+                    ?: error("Unable to write the selected backup document.")
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             pendingCreate.compareAndSet(request, null)
-            null
+            throw error
         }
     }
 
     /**
-     * 让用户选择已有备份并读取完整字节。
+     * 让用户选择已有备份并读取完整字节；有效包会拷进固定目录。
      */
     override suspend fun openDocument(): SelectedDocument? {
+        leftoverOpenUri.getAndSet(null)?.let { uri ->
+            return readImportedDocument(uri)
+        }
         val deferred = CompletableDeferred<Uri?>()
         check(pendingOpen.compareAndSet(null, deferred)) {
             "Document open picker is already active."
@@ -151,12 +161,10 @@ class AndroidDocumentGateway(
         return try {
             openLauncher.launch(arrayOf(DEFAULT_MIME_TYPE, "*/*"))
             val uri = deferred.await() ?: return null
-            withContext(Dispatchers.IO) {
-                readDocument(uri)
-            }
-        } catch (_: Exception) {
+            readImportedDocument(uri)
+        } catch (error: Exception) {
             pendingOpen.compareAndSet(deferred, null)
-            null
+            throw error
         }
     }
 
@@ -194,6 +202,18 @@ class AndroidDocumentGateway(
         )
     }
 
+    /**
+     * 先读字节再尝试持久化授权，避免部分机型第二次 takePersistable 后反而打不开流。
+     */
+    private suspend fun readImportedDocument(uri: Uri): SelectedDocument {
+        val opened = withContext(Dispatchers.IO) {
+            readDocument(uri) ?: error("Unable to read the selected backup document.")
+        }
+        return withContext(Dispatchers.IO) {
+            copyImportedBackupIfNeeded(opened)
+        }
+    }
+
     private fun writeDocument(
         uri: Uri,
         bytes: ByteArray,
@@ -210,27 +230,60 @@ class AndroidDocumentGateway(
         )
     }.getOrNull()
 
-    private fun readDocument(uri: Uri): SelectedDocument? = runCatching {
-        persistReadPermission(uri)
-        val bytes = activity.contentResolver.openInputStream(uri)?.use { input ->
-            input.readBytes()
-        } ?: return@runCatching null
-        if (bytes.isEmpty()) {
-            return@runCatching null
+    private fun readDocument(uri: Uri): SelectedDocument? {
+        val bytes = runCatching {
+            activity.contentResolver.openInputStream(uri)?.use { input ->
+                input.readBytes()
+            }
+        }.onFailure { error ->
+            println("Backup document stream failed: ${error.message}")
+        }.getOrNull()
+        if (bytes == null || bytes.isEmpty()) {
+            println("Backup document stream was empty or unreadable.")
+            return null
         }
-        SelectedDocument(
+        persistReadPermission(uri)
+        return SelectedDocument(
             displayName = displayNameOf(uri),
             opaqueDocumentUri = uri.toString(),
             bytes = bytes,
         )
-    }.getOrNull()
+    }
+
+    /**
+     * 系统目录里的有效备份拷进固定目录，避免第二次恢复还要向系统要授权。
+     */
+    private fun copyImportedBackupIfNeeded(opened: SelectedDocument): SelectedDocument {
+        if (!looksLikeBackupPackage(opened.bytes)) {
+            return opened
+        }
+        return runCatching {
+            val directory = backupsDirectory()
+            val file = uniqueImportedFile(directory, opened.displayName, opened.bytes)
+            if (!file.exists() || file.length() != opened.bytes.size.toLong()) {
+                writeBytesToFile(file, opened.bytes)
+            }
+            SelectedDocument(
+                displayName = file.name,
+                opaqueDocumentUri = file.canonicalPath,
+                bytes = opened.bytes,
+            )
+        }.getOrElse { error ->
+            println("Imported backup copy skipped: ${error.message}")
+            opened
+        }
+    }
 
     private fun persistReadPermission(uri: Uri) {
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        val alreadyPersisted = activity.contentResolver.persistedUriPermissions.any { permission ->
+            permission.uri == uri && permission.isReadPermission
+        }
+        if (alreadyPersisted) {
+            return
+        }
         runCatching {
-            activity.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION,
-            )
+            activity.contentResolver.takePersistableUriPermission(uri, flags)
         }
     }
 
@@ -252,10 +305,7 @@ class AndroidDocumentGateway(
             error("Unable to create export cache directory.")
         }
         val file = File(directory, safeName)
-        file.outputStream().use { output ->
-            output.write(bytes)
-            output.flush()
-        }
+        writeBytesToFile(file, bytes)
         file
     }.getOrNull()
 
@@ -286,6 +336,48 @@ class AndroidDocumentGateway(
     }
 
     /**
+     * 同内容复用已有文件；否则按原名或序号写入，避免重复导入堆很多份。
+     */
+    private fun uniqueImportedFile(
+        directory: File,
+        displayName: String,
+        bytes: ByteArray,
+    ): File {
+        val rawName = displayName.substringAfterLast('/').ifBlank { DEFAULT_DISPLAY_NAME }
+        require(!rawName.contains("..")) { "Imported backup name must not contain parent segments." }
+        val baseName = if (rawName.endsWith(BACKUP_FILE_EXTENSION, ignoreCase = true)) {
+            rawName
+        } else {
+            rawName + BACKUP_FILE_EXTENSION
+        }
+        directory.listFiles()?.firstOrNull { file ->
+            file.isFile &&
+                file.length() == bytes.size.toLong() &&
+                file.readBytes().contentEquals(bytes)
+        }?.let { existing ->
+            return existing
+        }
+        var file = File(directory, baseName)
+        var index = 2
+        while (file.exists()) {
+            val stem = baseName.removeSuffix(BACKUP_FILE_EXTENSION)
+            file = File(directory, "$stem-$index$BACKUP_FILE_EXTENSION")
+            index += 1
+        }
+        return file
+    }
+
+    private fun writeBytesToFile(file: File, bytes: ByteArray) {
+        FileOutputStream(file).use { output ->
+            output.write(bytes)
+            output.flush()
+            output.fd.sync()
+        }
+        val written = file.readBytes()
+        require(written.contentEquals(bytes)) { "Managed backup write did not match source bytes." }
+    }
+
+    /**
      * 先看魔术字再进列表，避免把测试残文件或空文件当成可恢复备份。
      */
     private fun isReadableBackupPackage(file: File): Boolean {
@@ -300,21 +392,34 @@ class AndroidDocumentGateway(
         }.getOrDefault(false)
     }
 
+    private fun looksLikeBackupPackage(bytes: ByteArray): Boolean {
+        if (bytes.size < MIN_BACKUP_PACKAGE_BYTES) {
+            return false
+        }
+        return bytes.copyOfRange(0, BACKUP_MAGIC.size).contentEquals(BACKUP_MAGIC)
+    }
+
     /**
-     * 规范化后再比对父目录，避免 ../ 逃出固定备份文件夹。
+     * 规范化后再比对父目录；路径写法不一致时退回按文件名打开。
      */
     private fun resolveManagedFile(opaqueDocumentUri: String): File {
-        val file = File(opaqueDocumentUri)
         val directory = backupsDirectory().canonicalFile
-        val canonical = file.canonicalFile
-        require(canonical.parentFile?.canonicalFile == directory) {
-            "Backup file is outside the managed directory."
+        val requested = File(opaqueDocumentUri)
+        val canonical = runCatching { requested.canonicalFile }.getOrNull()
+        if (canonical != null &&
+            canonical.isFile &&
+            canonical.name.endsWith(BACKUP_FILE_EXTENSION, ignoreCase = true)
+        ) {
+            val parent = canonical.parentFile?.canonicalFile
+            if (parent == directory) {
+                return canonical
+            }
         }
-        require(canonical.name.endsWith(BACKUP_FILE_EXTENSION, ignoreCase = true)) {
-            "Backup file extension is not accepted."
+        val byName = File(directory, requested.name)
+        require(byName.isFile && byName.name.endsWith(BACKUP_FILE_EXTENSION, ignoreCase = true)) {
+            "Managed backup does not exist."
         }
-        require(canonical.isFile) { "Managed backup does not exist." }
-        return canonical
+        return byName.canonicalFile
     }
 
     private data class CreateRequest(
@@ -337,5 +442,10 @@ class AndroidDocumentGateway(
         const val FILE_PROVIDER_AUTHORITY = "com.vichua.where.fileprovider"
         const val SHARE_CLIP_LABEL = "where-exported-household"
         const val SHARE_CHOOSER_TITLE = "导出完整家庭数据"
+
+        val pendingCreate = AtomicReference<CreateRequest?>(null)
+        val pendingOpen = AtomicReference<CompletableDeferred<Uri?>?>(null)
+        val leftoverOpenUri = AtomicReference<Uri?>(null)
+        val leftoverCreateUri = AtomicReference<Uri?>(null)
     }
 }

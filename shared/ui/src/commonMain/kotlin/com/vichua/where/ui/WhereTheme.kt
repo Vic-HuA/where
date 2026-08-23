@@ -48,19 +48,19 @@ val StandardWherePalette = WherePalette(
 )
 
 /**
- * 高对比度配色：黑字、粗黑边、近黑主色，和默认浅灰绿明显分开。
+ * 高对比度配色：仍用绿色系，只加深文字和描边，避免粗黑边和纯黑白。
  */
 val HighContrastWherePalette = WherePalette(
-    background = Color(0xFFFFFFFF),
-    primary = Color(0xFF001C16),
-    selectedContainer = Color(0xFF7ED0C0),
-    primaryText = Color(0xFF000000),
-    secondaryText = Color(0xFF000000),
-    surface = Color(0xFFFFFFFF),
-    outline = Color(0xFF000000),
-    softBorder = Color(0xFF000000),
-    switchUncheckedTrack = Color(0xFF1A1A1A),
-    strokeWidth = 2.5.dp,
+    background = Color(0xFFF3F7F4),
+    primary = Color(0xFF15564C),
+    selectedContainer = Color(0xFFC5E4DC),
+    primaryText = Color(0xFF16332E),
+    secondaryText = Color(0xFF2F4A44),
+    surface = Color(0xFFFAFCFB),
+    outline = Color(0xFF2A6B5F),
+    softBorder = Color(0xFF2A6B5F),
+    switchUncheckedTrack = Color(0xFF7E8F8B),
+    strokeWidth = 1.5.dp,
     emphasizedBorders = true,
 )
 
@@ -114,7 +114,7 @@ val WhereSwitchUncheckedTrackColor: Color
     @ReadOnlyComposable
     get() = LocalWherePalette.current.switchUncheckedTrack
 
-/** 搜索框等浅描边；高对比度改成实黑，避免 35% 透明绿几乎看不见。 */
+/** 搜索框等浅描边；高对比度改成实心绿边，避免半透明绿几乎看不见。 */
 val WhereSoftBorderColor: Color
     @Composable
     @ReadOnlyComposable

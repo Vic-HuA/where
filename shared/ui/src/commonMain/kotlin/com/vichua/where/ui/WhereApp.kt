@@ -2389,6 +2389,7 @@ private fun restorePreviewErrorMessage(error: Throwable): String {
     val message = error.message.orEmpty()
     return when {
         "truncated" in message || "magic" in message -> "这个文件不是有效的加密备份。"
+        "Unable to read" in message || "unreadable" in message -> "没能读取选中的文件，请再选一次。"
         "hash" in message -> "备份内容校验失败，文件可能不完整。"
         "outside" in message || "does not exist" in message || "extension" in message ->
             "无法读取这个备份文件。"

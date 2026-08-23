@@ -254,7 +254,7 @@ fun SettingsScreen(
         )
         SettingsSwitchRow(
             title = "高对比度",
-            description = "改为黑字、粗黑边和更深主色，卡片轮廓会明显加粗；启用适老模式时默认开启，可单独关闭",
+            description = "加深绿色文字和描边，方便在强光下看清；沿用应用绿色，不会变成黑白；启用适老模式时默认开启，可单独关闭",
             checked = preferences?.highContrastEnabled == true,
             enabled = preferences != null,
             onCheckedChange = onHighContrastChange,

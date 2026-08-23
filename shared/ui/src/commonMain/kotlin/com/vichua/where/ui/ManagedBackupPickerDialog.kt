@@ -66,7 +66,7 @@ fun ColumnScope.ManagedBackupList(
     onSelect: (ManagedBackupFile) -> Unit,
 ) {
     Text(
-        text = "点选下面的备份即可。从其他位置导入只用于旧文件。",
+        text = "点选下面的备份即可。从其他位置导入成功后，也会出现在这个列表里。",
         color = WhereSecondaryTextColor,
         style = MaterialTheme.typography.bodySmall,
     )
