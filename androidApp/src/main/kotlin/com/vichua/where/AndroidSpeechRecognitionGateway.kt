@@ -129,7 +129,11 @@ class AndroidSpeechRecognitionGateway(
         deferred: CompletableDeferred<SpeechRecognitionOutcome>,
     ): Boolean {
         return runCatching {
-            val recognizer = Recognizer(model, SAMPLE_RATE)
+            val recognizer = Recognizer(model, SAMPLE_RATE).apply {
+                // 小模型单条结果常跑偏，多留几个候选再取置信度最高的。
+                setMaxAlternatives(MAX_ALTERNATIVES)
+                setWords(true)
+            }
             val service = SpeechService(recognizer, SAMPLE_RATE)
             check(activeService.compareAndSet(null, service)) {
                 "Speech service is already active."
@@ -235,12 +239,33 @@ class AndroidSpeechRecognitionGateway(
             return null
         }
         return runCatching {
-            JSONObject(raw).optString(field).trim().ifBlank { null }
+            val json = JSONObject(raw)
+            val primary = json.optString(field).trim().ifBlank { null }
+            if (!primary.isNullOrBlank()) {
+                return@runCatching primary
+            }
+            val alternatives = json.optJSONArray("alternatives") ?: return@runCatching null
+            var bestText: String? = null
+            var bestConfidence = Double.NEGATIVE_INFINITY
+            for (index in 0 until alternatives.length()) {
+                val alternative = alternatives.optJSONObject(index) ?: continue
+                val text = alternative.optString("text").trim()
+                if (text.isBlank()) {
+                    continue
+                }
+                val confidence = alternative.optDouble("confidence", 0.0)
+                if (bestText == null || confidence > bestConfidence) {
+                    bestText = text
+                    bestConfidence = confidence
+                }
+            }
+            bestText
         }.getOrNull()
     }
 
     private companion object {
         const val TAG = "WhereSpeech"
         const val SAMPLE_RATE = 16_000.0f
+        const val MAX_ALTERNATIVES = 5
     }
 }

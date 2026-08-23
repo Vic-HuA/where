@@ -189,12 +189,20 @@ fun SettingsScreen(
             )
         }
         if (backupProgressText != null) {
-            Text(
-                modifier = Modifier.padding(top = 12.dp),
-                text = backupProgressText,
-                color = WherePrimaryColor,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (submitting) {
+                WorkingProgressCard(
+                    modifier = Modifier.padding(top = 12.dp),
+                    title = backupProgressText,
+                    message = "加密和读写文件需要一些时间，请不要锁定屏幕。",
+                )
+            } else {
+                Text(
+                    modifier = Modifier.padding(top = 12.dp),
+                    text = backupProgressText,
+                    color = WherePrimaryColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
 
         SettingsSectionTitle("常用设置")
@@ -547,6 +555,12 @@ fun SettingsScreen(
         ) {
             Text("此操作不能仅靠一次误触完成。确认后将返回家庭初始化页。")
         }
+    }
+    if (submitting && backupProgressText != null) {
+        WorkingProgressDialog(
+            title = backupProgressText,
+            message = "加密和读写文件需要一些时间，请不要锁定屏幕。",
+        )
     }
     }
 }

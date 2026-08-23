@@ -66,10 +66,12 @@ class ItemTextSearchStore(
             ftsQuery = ftsQuery,
             limit = MAX_SEARCH_RESULTS,
         )
-        val containsDocuments = database.itemSearchDao().searchContaining(
-            containsQuery = containsQuery,
-            limit = MAX_SEARCH_RESULTS,
-        )
+        val containsDocuments = buildContainsQueries(containsQuery).flatMap { query ->
+            database.itemSearchDao().searchContaining(
+                containsQuery = query,
+                limit = MAX_SEARCH_RESULTS,
+            )
+        }
         val documents = mergeSearchDocuments(ftsDocuments, containsDocuments)
         val activeLocations = database.householdDao().findFirstActive()?.let { household ->
             database.locationNodeDao().findActiveTree(household.id)
@@ -124,6 +126,39 @@ class ItemTextSearchStore(
     }
 
     /**
+     * 从整句和二字窗口生成子串，兼容语音转写带空格或没剥干净问句。
+     *
+     * 只对含汉字的查询切二字，避免英文短词被拆碎后误伤太多结果。
+     */
+    private fun buildContainsQueries(containsQuery: String): List<String> {
+        val queries = LinkedHashSet<String>()
+        queries += containsQuery
+        containsQuery.split(' ').map(String::trim).filter { token ->
+            token.length >= 2
+        }.forEach { token ->
+            queries += token
+        }
+        val compactQuery = containsQuery.replace(" ", "")
+        if (compactQuery.length >= 2) {
+            queries += compactQuery
+        }
+        if (compactQuery.any { character -> character in CJK_UNIFIED_IDEOGRAPHS } &&
+            compactQuery.length > 2
+        ) {
+            val windows = (0..compactQuery.length - 2).map { index ->
+                compactQuery.substring(index, index + 2)
+            }
+            // 问句关键词多在句尾，先收尾部二字，避免长句把额度占满后丢掉“电脑”。
+            (windows.takeLast(4).asReversed() + windows).forEach { window ->
+                if (queries.size < MAX_CONTAINS_QUERIES) {
+                    queries += window
+                }
+            }
+        }
+        return queries.take(MAX_CONTAINS_QUERIES)
+    }
+
+    /**
      * 从当前位置向上构建不包含家庭根节点的路径。
      */
     private fun buildLocationPath(
@@ -146,6 +181,8 @@ class ItemTextSearchStore(
     private companion object {
         const val MAX_SEARCH_RESULTS = 50
         const val MAX_RECENT_SEARCHES = 5
+        const val MAX_CONTAINS_QUERIES = 8
+        val CJK_UNIFIED_IDEOGRAPHS = '\u4E00'..'\u9FFF'
         const val PATH_SEPARATOR = " · "
         const val UNKNOWN_LOCATION_TEXT = "位置待确认"
     }

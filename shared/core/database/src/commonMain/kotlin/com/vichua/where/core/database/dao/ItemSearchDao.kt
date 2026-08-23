@@ -39,6 +39,7 @@ interface ItemSearchDao {
      * 按子串补全 FTS 前缀匹配，让“电脑”也能命中“笔记本电脑”。
      *
      * 查询必须先标准化为小写；instr 对中文按字符比较，不依赖分词。
+     * 反向 instr 用于语音转写仍带着“我要找…”时，物品名被包在整句里。
      */
     @Query(
         """
@@ -49,6 +50,7 @@ interface ItemSearchDao {
            OR instr(lower(category_text), :containsQuery) > 0
            OR instr(lower(note_text), :containsQuery) > 0
            OR instr(lower(location_path_text), :containsQuery) > 0
+           OR (length(name) >= 2 AND instr(:containsQuery, lower(name)) > 0)
         LIMIT :limit
         """,
     )

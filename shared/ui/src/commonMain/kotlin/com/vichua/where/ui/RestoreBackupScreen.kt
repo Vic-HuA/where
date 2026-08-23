@@ -152,13 +152,21 @@ fun RestoreBackupScreen(
             ) {
                 Text("选择备份并预览")
             }
-            progressText?.let { text ->
-                Text(
+            if (submitting && progressText != null) {
+                WorkingProgressCard(
                     modifier = Modifier.padding(top = 12.dp),
-                    text = text,
-                    color = WhereSecondaryTextColor,
-                    style = MaterialTheme.typography.bodySmall,
+                    title = progressText,
+                    message = "解密、核对和写入需要一些时间，请不要锁定屏幕。",
                 )
+            } else {
+                progressText?.let { text ->
+                    Text(
+                        modifier = Modifier.padding(top = 12.dp),
+                        text = text,
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
             errorMessage?.let { text ->
                 Text(
@@ -430,7 +438,13 @@ fun RestoreBackupScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        if (progressText != null) {
+        if (submitting && progressText != null) {
+            WorkingProgressCard(
+                modifier = Modifier.padding(top = 12.dp),
+                title = progressText,
+                message = "解密、核对和写入需要一些时间，请不要锁定屏幕。",
+            )
+        } else if (progressText != null) {
             Text(
                 modifier = Modifier.padding(top = 12.dp),
                 text = progressText,
@@ -485,6 +499,12 @@ fun RestoreBackupScreen(
                 Text("当前家庭：物品 ${summary.itemCount}，位置 ${summary.locationCount}，照片 ${summary.photoCount}。")
             }
         }
+    }
+    if (submitting && progressText != null) {
+        WorkingProgressDialog(
+            title = progressText,
+            message = "解密、核对和写入需要一些时间，请不要锁定屏幕。",
+        )
     }
 }
 

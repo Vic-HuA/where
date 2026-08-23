@@ -12,18 +12,25 @@ class PrepareVoiceSearchQueryUseCase {
     operator fun invoke(transcript: String): String {
         val trimmed = transcript.trim()
         require(trimmed.isNotEmpty()) { "Voice search transcript must not be blank." }
-        var prepared = trimmed
+        // 小模型常在汉字之间插入空格，先去掉再剥问句，否则“我 要 找”对不上“我要找”。
+        var prepared = trimmed.replace(" ", "")
         QUESTION_PREFIXES.forEach { prefix ->
             if (prepared.startsWith(prefix)) {
-                prepared = prepared.removePrefix(prefix).trim()
+                prepared = prepared.removePrefix(prefix)
             }
         }
         QUESTION_SUFFIXES.forEach { suffix ->
             if (prepared.endsWith(suffix)) {
-                prepared = prepared.removeSuffix(suffix).trim()
+                prepared = prepared.removeSuffix(suffix)
             }
         }
-        return prepared.ifBlank { trimmed }
+        val leftoverParticles = listOf("一下", "一下下", "呢", "啊", "呀", "吧")
+        leftoverParticles.forEach { particle ->
+            if (prepared.endsWith(particle)) {
+                prepared = prepared.removeSuffix(particle)
+            }
+        }
+        return prepared.ifBlank { trimmed.replace(" ", "").ifBlank { trimmed } }
     }
 
     private companion object {

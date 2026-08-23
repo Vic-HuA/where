@@ -11,14 +11,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -111,6 +115,105 @@ fun WhereDialog(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * 备份进行中的页内提示。
+ *
+ * 系统选文件会盖住独立弹窗，页内卡片仍留在按钮旁边，避免只剩一行灰字。
+ */
+@Composable
+fun WorkingProgressCard(
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = WhereSelectedContainerColor,
+        border = BorderStroke(1.dp, WherePrimaryColor),
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(28.dp),
+                color = WherePrimaryColor,
+                strokeWidth = 3.dp,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 4.dp),
+                    text = message,
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 备份、验证和恢复进行中的挡板。
+ *
+ * 加密和读写文件会停几秒，进度如果只写在长页面顶部，用户会以为卡住。
+ * 遮罩不可点掉，避免中途再点一次造成重复提交。
+ */
+@Composable
+fun WorkingProgressDialog(
+    title: String,
+    message: String,
+) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+        ),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp),
+            shape = RoundedCornerShape(22.dp),
+            color = WhereSurfaceColor,
+            border = BorderStroke(1.dp, WhereOutlineColor),
+            shadowElevation = 10.dp,
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(36.dp),
+                    color = WherePrimaryColor,
+                    strokeWidth = 3.dp,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 16.dp),
+                    text = title,
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text(
+                    modifier = Modifier.padding(top = 8.dp),
+                    text = message,
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
     }
