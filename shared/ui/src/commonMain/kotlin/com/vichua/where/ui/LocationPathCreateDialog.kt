@@ -73,6 +73,8 @@ fun LocationPathCreateDialog(
                 index = index,
                 draft = draft,
                 allowedTypes = allowedTypes,
+                parentLabel = parentLabel,
+                ancestorDrafts = drafts.take(index),
                 enabled = !submitting,
                 onTypeChange = { type ->
                     drafts[index] = draft.copy(type = type)
@@ -125,6 +127,8 @@ private fun LocationPathDraftRow(
     index: Int,
     draft: LocationPathDraft,
     allowedTypes: List<LocationType>,
+    parentLabel: String,
+    ancestorDrafts: List<LocationPathDraft>,
     enabled: Boolean,
     onTypeChange: (LocationType) -> Unit,
     onNameChange: (String) -> Unit,
@@ -137,7 +141,7 @@ private fun LocationPathDraftRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = "第 ${index + 1} 层",
+            text = "第 ${index + 1} 层 · ${locationTypeLabel(draft.type)}",
             fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -192,23 +196,39 @@ private fun LocationPathDraftRow(
         value = draft.name,
         onValueChange = onNameChange,
         enabled = enabled,
-        label = { Text(locationTypeLabel(draft.type) + "名称") },
-        placeholder = { Text(locationNamePlaceholder(draft.type)) },
+        // 不用浮动标签占住输入框，否则第三、四层没点进去时看不到“例如…”。
+        placeholder = {
+            Text(
+                locationNamePlaceholder(
+                    type = draft.type,
+                    parentLabel = parentLabel,
+                    ancestorDrafts = ancestorDrafts,
+                ),
+            )
+        },
         singleLine = true,
     )
 }
 
 /**
- * 按当前父位置给出沿用说明，举例统一用卧室。
+ * 按当前父位置和已识别场景给出沿用说明。
  */
 private fun locationPathCreateHint(
     parentLabel: String,
     parentType: LocationType,
 ): String {
+    val scene = inferLocationHintScene(listOf(parentLabel))
     val reuseHint = "已有同名同类型的层会直接沿用，只新建后面没有的层。"
     val example = when (parentType) {
-        LocationType.HOME -> "例如已有卧室时，再填卧室、衣柜即可加上衣柜。"
-        LocationType.ROOM -> "例如再填衣柜、第二层。"
+        LocationType.HOME -> when (scene) {
+            LocationHintScene.LIVING -> "例如已有客厅时，再填客厅、茶几即可加上茶几。"
+            LocationHintScene.KITCHEN -> "例如已有厨房时，再填厨房、橱柜即可加上橱柜。"
+            LocationHintScene.STUDY -> "例如已有书房时，再填书房、书柜即可加上书柜。"
+            LocationHintScene.BATHROOM -> "例如已有卫生间时，再填卫生间、镜柜即可加上镜柜。"
+            LocationHintScene.BEDROOM, LocationHintScene.GENERIC ->
+                "例如已有卧室时，再填卧室、衣柜即可加上衣柜。"
+        }
+        LocationType.ROOM -> "例如再填${sceneFurnitureName(scene)}、第二层。"
         LocationType.AREA, LocationType.FURNITURE -> "例如再填抽屉、左边格子。"
         LocationType.CONTAINER, LocationType.SLOT -> "例如再填第二层、左边格子。"
     }
@@ -216,15 +236,90 @@ private fun locationPathCreateHint(
 }
 
 /**
- * 输入框内提示这一层通常写什么，减少用户不知道从何填起。
+ * 根据前面已填名称推断这一层更合理的填写提示。
  */
-private fun locationNamePlaceholder(type: LocationType): String = when (type) {
-    LocationType.HOME -> "例如我的家"
-    LocationType.ROOM -> "例如卧室"
-    LocationType.AREA -> "例如床边"
-    LocationType.FURNITURE -> "例如衣柜"
-    LocationType.CONTAINER -> "例如抽屉"
-    LocationType.SLOT -> "例如第二层"
+private fun locationNamePlaceholder(
+    type: LocationType,
+    parentLabel: String,
+    ancestorDrafts: List<LocationPathDraft>,
+): String {
+    val ancestorNames = listOf(parentLabel) + ancestorDrafts.map { draft -> draft.name }
+    val scene = inferLocationHintScene(ancestorNames)
+    val previousDraft = ancestorDrafts.lastOrNull()
+    val previousName = previousDraft?.name.orEmpty().trim()
+    val previousType = previousDraft?.type
+    if (type == LocationType.CONTAINER &&
+        (previousName.contains("柜") || previousType == LocationType.FURNITURE)
+    ) {
+        return "例如抽屉"
+    }
+    if (type == LocationType.SLOT) {
+        return if (previousName.contains("抽屉") || previousName.contains("盒")) {
+            "例如左边格子"
+        } else {
+            "例如第二层"
+        }
+    }
+    return when (type) {
+        LocationType.HOME -> "例如我的家"
+        LocationType.ROOM -> "例如${sceneRoomName(scene)}"
+        LocationType.AREA -> "例如${sceneAreaName(scene)}"
+        LocationType.FURNITURE -> "例如${sceneFurnitureName(scene)}"
+        LocationType.CONTAINER -> "例如抽屉"
+        LocationType.SLOT -> "例如第二层"
+    }
+}
+
+/**
+ * 从已有位置名称里识别常见房间场景，识别不到时回退到卧室。
+ */
+private fun inferLocationHintScene(texts: List<String>): LocationHintScene {
+    val joined = texts.joinToString(" ")
+    return when {
+        listOf("卧室", "主卧", "次卧", "儿童房").any { keyword -> joined.contains(keyword) } ->
+            LocationHintScene.BEDROOM
+        listOf("客厅", "大厅", "起居").any { keyword -> joined.contains(keyword) } ->
+            LocationHintScene.LIVING
+        joined.contains("厨房") -> LocationHintScene.KITCHEN
+        listOf("书房", "Study", "study").any { keyword -> joined.contains(keyword) } ->
+            LocationHintScene.STUDY
+        listOf("卫生", "浴室", "厕所").any { keyword -> joined.contains(keyword) } ->
+            LocationHintScene.BATHROOM
+        else -> LocationHintScene.GENERIC
+    }
+}
+
+private fun sceneRoomName(scene: LocationHintScene): String = when (scene) {
+    LocationHintScene.LIVING -> "客厅"
+    LocationHintScene.KITCHEN -> "厨房"
+    LocationHintScene.STUDY -> "书房"
+    LocationHintScene.BATHROOM -> "卫生间"
+    LocationHintScene.BEDROOM, LocationHintScene.GENERIC -> "卧室"
+}
+
+private fun sceneAreaName(scene: LocationHintScene): String = when (scene) {
+    LocationHintScene.LIVING -> "沙发旁"
+    LocationHintScene.KITCHEN -> "灶台旁"
+    LocationHintScene.STUDY -> "窗边"
+    LocationHintScene.BATHROOM -> "洗手台"
+    LocationHintScene.BEDROOM, LocationHintScene.GENERIC -> "床边"
+}
+
+private fun sceneFurnitureName(scene: LocationHintScene): String = when (scene) {
+    LocationHintScene.LIVING -> "茶几"
+    LocationHintScene.KITCHEN -> "橱柜"
+    LocationHintScene.STUDY -> "书柜"
+    LocationHintScene.BATHROOM -> "镜柜"
+    LocationHintScene.BEDROOM, LocationHintScene.GENERIC -> "衣柜"
+}
+
+private enum class LocationHintScene {
+    BEDROOM,
+    LIVING,
+    KITCHEN,
+    STUDY,
+    BATHROOM,
+    GENERIC,
 }
 
 private data class LocationPathDraft(

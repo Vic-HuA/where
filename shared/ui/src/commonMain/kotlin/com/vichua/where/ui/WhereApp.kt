@@ -1,6 +1,8 @@
 package com.vichua.where.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -703,15 +705,22 @@ fun WhereApp(
     LaunchedEffect(destination, selectedItemId) {
         val itemId = selectedItemId
         if ((destination == AppDestination.ITEM_DETAIL || destination == AppDestination.PHOTO_MANAGEMENT) && itemId != null) {
+            val alreadyShowingItem = itemDetail?.itemId == itemId
+            if (destination == AppDestination.ITEM_DETAIL) {
+                itemProfileEditorVisible = false
+                itemProfileError = null
+                itemPhotoError = null
+                itemSpeechError = null
+                itemSpeechCanRepeat = false
+                itemShareError = null
+                textToSpeechGateway.stop()
+            }
+            // 详情已经在内存里时不再重拉，避免进出管理照片时照片闪一下。
+            if (alreadyShowingItem) {
+                return@LaunchedEffect
+            }
             itemDetailLoading = true
             itemDetailError = null
-            itemProfileEditorVisible = false
-            itemProfileError = null
-            itemPhotoError = null
-            itemSpeechError = null
-            itemSpeechCanRepeat = false
-            itemShareError = null
-            textToSpeechGateway.stop()
             try {
                 itemDetail = loadItemDetailUseCase(itemId)
             } catch (_: Exception) {
@@ -902,8 +911,17 @@ fun WhereApp(
             AnimatedContent(
                 targetState = destination,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(180)) togetherWith
-                        fadeOut(animationSpec = tween(120))
+                    val switchingPhotoManagement =
+                        (initialState == AppDestination.ITEM_DETAIL &&
+                            targetState == AppDestination.PHOTO_MANAGEMENT) ||
+                            (initialState == AppDestination.PHOTO_MANAGEMENT &&
+                                targetState == AppDestination.ITEM_DETAIL)
+                    if (switchingPhotoManagement) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        fadeIn(animationSpec = tween(180)) togetherWith
+                            fadeOut(animationSpec = tween(120))
+                    }
                 },
                 label = "destination",
             ) { currentDestination ->
