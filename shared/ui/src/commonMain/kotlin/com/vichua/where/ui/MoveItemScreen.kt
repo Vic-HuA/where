@@ -117,7 +117,8 @@ fun MoveItemScreen(
             )
             Text(
                 text = "更新位置",
-                style = MaterialTheme.typography.headlineMedium,
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.titleLarge,
             )
         }
 

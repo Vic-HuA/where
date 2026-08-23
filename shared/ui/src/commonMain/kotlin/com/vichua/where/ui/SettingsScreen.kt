@@ -168,7 +168,7 @@ fun SettingsScreen(
         Text(
             text = "设置与数据",
             color = WherePrimaryTextColor,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineMedium,
         )
 
         if (loading && preferences == null) {

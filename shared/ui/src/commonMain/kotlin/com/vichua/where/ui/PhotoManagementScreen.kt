@@ -91,7 +91,8 @@ fun PhotoManagementScreen(
             )
             Text(
                 text = "管理照片",
-                style = MaterialTheme.typography.headlineMedium,
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.titleLarge,
             )
         }
 
