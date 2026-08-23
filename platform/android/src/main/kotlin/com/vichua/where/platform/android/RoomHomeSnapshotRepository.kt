@@ -1,6 +1,7 @@
 package com.vichua.where.platform.android
 
 import com.vichua.where.core.database.query.HomeSnapshotStore
+import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.feature.search.home.FavoriteLocationSummary
 import com.vichua.where.feature.search.home.HomeItemSummary
 import com.vichua.where.feature.search.home.HomeSnapshot
@@ -52,6 +53,20 @@ class RoomHomeSnapshotRepository(
      */
     override suspend fun loadAllItems(): List<HomeItemSummary> =
         store.loadAllItems().map { storedItem ->
+            HomeItemSummary(
+                itemId = storedItem.item.id,
+                name = storedItem.item.name,
+                locationPath = storedItem.locationPath,
+                updatedAt = storedItem.item.updatedAt,
+                thumbnailStorageKey = storedItem.thumbnailStorageKey,
+            )
+        }
+
+    /**
+     * 把指定位置树下的物品收成与首页相同的只读摘要。
+     */
+    override suspend fun loadItemsAtLocation(locationId: LocationNodeId): List<HomeItemSummary> =
+        store.loadItemsAtLocation(locationId).map { storedItem ->
             HomeItemSummary(
                 itemId = storedItem.item.id,
                 name = storedItem.item.name,

@@ -67,6 +67,7 @@ fun LocationManagementScreen(
     onCreate: (CreateLocationPathRequest) -> Unit,
     onRename: (LocationTreeNode, String) -> Unit,
     onDelete: (LocationTreeNode) -> Unit,
+    onViewItems: (LocationTreeNode) -> Unit,
 ) {
     var expandedLocationIds by remember(snapshot?.rootLocationId) {
         mutableStateOf(
@@ -170,6 +171,9 @@ fun LocationManagementScreen(
                                 },
                                 onDelete = {
                                     editorState = LocationEditorState.Delete(node)
+                                },
+                                onViewItems = {
+                                    onViewItems(node)
                                 },
                             )
                         }
@@ -347,10 +351,11 @@ private fun LocationTreeRow(
     onAdd: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onViewItems: () -> Unit,
 ) {
     var menuExpanded by remember(node.locationId) { mutableStateOf(false) }
     val canAdd = node.allowedChildTypes.isNotEmpty()
-    val hasMenuActions = canAdd || node.canRename || node.canDelete
+    val hasMenuActions = true
 
     Surface(
         modifier = Modifier
@@ -386,25 +391,32 @@ private fun LocationTreeRow(
             } else {
                 Spacer(modifier = Modifier.size(16.dp))
             }
-            Icon(
-                modifier = Modifier.size(16.dp),
-                imageVector = WhereIcons.location(node.iconKey, node.type),
-                contentDescription = locationTypeLabel(node.type),
-                tint = WherePrimaryColor,
-            )
-            Text(
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 6.dp, end = 8.dp),
-                text = node.name,
-                fontWeight = if (node.depth == 1) FontWeight.Bold else FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = "${node.itemCount} 件",
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+                    .clickable(role = Role.Button, onClick = onViewItems),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    modifier = Modifier.size(16.dp),
+                    imageVector = WhereIcons.location(node.iconKey, node.type),
+                    contentDescription = locationTypeLabel(node.type),
+                    tint = WherePrimaryColor,
+                )
+                Text(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 6.dp, end = 8.dp),
+                    text = node.name,
+                    fontWeight = if (node.depth == 1) FontWeight.Bold else FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "${node.itemCount} 件",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
             if (hasMenuActions) {
                 Box {
                     Icon(
@@ -436,6 +448,14 @@ private fun LocationTreeRow(
                                 shadowElevation = 8.dp,
                             ) {
                                 Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                    LocationNodeMenuRow(
+                                        icon = WhereIcons.Search,
+                                        label = "查看物品",
+                                        onClick = {
+                                            menuExpanded = false
+                                            onViewItems()
+                                        },
+                                    )
                                     if (canAdd) {
                                         LocationNodeMenuRow(
                                             icon = WhereIcons.Add,

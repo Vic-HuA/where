@@ -106,6 +106,7 @@ import com.vichua.where.feature.search.home.HomeItemSummary
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadAllItemsUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
+import com.vichua.where.feature.search.home.LoadItemsAtLocationUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
 import com.vichua.where.feature.search.text.SearchItemsUseCase
 import com.vichua.where.feature.search.text.PrepareVoiceSearchQueryUseCase
@@ -127,6 +128,7 @@ import kotlinx.coroutines.yield
  * @param initializeHouseholdUseCase 保存首个家庭的用例。
  * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
  * @param loadAllItemsUseCase 加载全部物品列表的用例。
+ * @param loadItemsAtLocationUseCase 加载某个位置及其下级物品的用例。
  * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
  * @param loadLatestItemDraftUseCase 加载当前设备未过期草稿的用例。
  * @param saveItemDraftUseCase 保存新增物品未完成输入的用例。
@@ -187,6 +189,7 @@ fun WhereApp(
     initializeHouseholdUseCase: InitializeHouseholdUseCase,
     loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
     loadAllItemsUseCase: LoadAllItemsUseCase,
+    loadItemsAtLocationUseCase: LoadItemsAtLocationUseCase,
     loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
     loadLatestItemDraftUseCase: LoadLatestItemDraftUseCase,
     saveItemDraftUseCase: SaveItemDraftUseCase,
@@ -392,6 +395,12 @@ fun WhereApp(
     var allItemsLoading by remember { mutableStateOf(false) }
     var allItemsError by remember { mutableStateOf<String?>(null) }
     var allItemsLoadAttempt by remember { mutableIntStateOf(0) }
+    var selectedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
+    var selectedLocationTitle by remember { mutableStateOf<String?>(null) }
+    var locationItems by remember { mutableStateOf<List<HomeItemSummary>>(emptyList()) }
+    var locationItemsLoading by remember { mutableStateOf(false) }
+    var locationItemsError by remember { mutableStateOf<String?>(null) }
+    var locationItemsLoadAttempt by remember { mutableIntStateOf(0) }
     var backupVerificationResult by remember { mutableStateOf<BackupVerificationResult?>(null) }
     var householdSummary by remember { mutableStateOf<HouseholdDataSummary?>(null) }
     var restoreSession by remember { mutableStateOf<RestoreSession?>(null) }
@@ -410,10 +419,6 @@ fun WhereApp(
     var confirmationSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
-    val managedBackupDirectoryLabel = remember {
-        listManagedBackupsUseCase.directoryLabel()
-    }
-
     /**
      * 备份重活前先刷新进度文案，让转圈有一帧可画。
      */
@@ -432,11 +437,27 @@ fun WhereApp(
                 managedBackups = listManagedBackupsUseCase()
             } catch (_: Exception) {
                 managedBackups = emptyList()
-                settingsError = "暂时无法读取应用备份文件夹。"
+                settingsError = "暂时无法读取已保存的备份。"
             } finally {
                 managedBackupsLoading = false
             }
         }
+    }
+
+    /**
+     * 从位置树或常用位置进入该处物品列表。
+     */
+    fun navigateToLocationItems(locationId: LocationNodeId, title: String) {
+        if (destination == AppDestination.LOCATION_ITEMS && selectedLocationId == locationId) {
+            return
+        }
+        if (destination.canEnterBackStack()) {
+            navigationBackStack.add(NavigationFrame(destination, selectedItemId))
+        }
+        selectedLocationId = locationId
+        selectedLocationTitle = title
+        locationItems = emptyList()
+        destination = AppDestination.LOCATION_ITEMS
     }
     /**
      * 开关打开且设备支持时给一次短反馈；不可用时忽略，避免打断当前操作。
@@ -785,6 +806,23 @@ fun WhereApp(
         }
     }
 
+    LaunchedEffect(destination, selectedLocationId, locationItemsLoadAttempt) {
+        val locationId = selectedLocationId
+        if (destination == AppDestination.LOCATION_ITEMS && locationId != null) {
+            if (locationItems.isEmpty()) {
+                locationItemsLoading = true
+            }
+            locationItemsError = null
+            try {
+                locationItems = loadItemsAtLocationUseCase(locationId)
+            } catch (_: Exception) {
+                locationItemsError = "暂时无法读取该位置的物品。"
+            } finally {
+                locationItemsLoading = false
+            }
+        }
+    }
+
     LaunchedEffect(destination) {
         if (destination == AppDestination.RESTORE_BACKUP) {
             managedBackupsLoading = true
@@ -792,7 +830,7 @@ fun WhereApp(
                 managedBackups = listManagedBackupsUseCase()
             } catch (_: Exception) {
                 managedBackups = emptyList()
-                settingsError = "暂时无法读取应用备份文件夹。"
+                settingsError = "暂时无法读取已保存的备份。"
             } finally {
                 managedBackupsLoading = false
             }
@@ -808,7 +846,8 @@ fun WhereApp(
             destination == AppDestination.PHOTO_MANAGEMENT ||
             destination == AppDestination.MOVE_ITEM ||
             destination == AppDestination.RESTORE_BACKUP ||
-            destination == AppDestination.ALL_ITEMS
+            destination == AppDestination.ALL_ITEMS ||
+            destination == AppDestination.LOCATION_ITEMS
         if (shouldLoadPreferences && accessibilityPreferences == null) {
             settingsLoading = true
             settingsError = null
@@ -1012,8 +1051,7 @@ fun WhereApp(
                         performSearch(query)
                     },
                     onFavoriteLocationClick = { favorite ->
-                        navigateTo(AppDestination.SEARCH)
-                        performSearch(favorite.name)
+                        navigateToLocationItems(favorite.locationNodeId, favorite.name)
                     },
                     onRecordItemClick = {
                         performHaptic(HapticFeedbackKind.CONFIRM)
@@ -1040,6 +1078,24 @@ fun WhereApp(
                     },
                     onRetry = {
                         allItemsLoadAttempt += 1
+                    },
+                    onItemClick = { item ->
+                        navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
+                    },
+                )
+                AppDestination.LOCATION_ITEMS -> AllItemsScreen(
+                    title = selectedLocationTitle ?: "位置物品",
+                    subtitle = "该位置及下级共 ${locationItems.size} 件，按最近更新排列。",
+                    emptyText = "这个位置下还没有物品",
+                    items = locationItems,
+                    resolveMediaPath = resolveMediaPath,
+                    loading = locationItemsLoading,
+                    errorMessage = locationItemsError,
+                    onBack = {
+                        popNavigation()
+                    },
+                    onRetry = {
+                        locationItemsLoadAttempt += 1
                     },
                     onItemClick = { item ->
                         navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
@@ -1332,6 +1388,9 @@ fun WhereApp(
                             }
                         }
                     },
+                    onViewItems = { node ->
+                        navigateToLocationItems(node.locationId, node.name)
+                    },
                 )
                 AppDestination.SETTINGS -> SettingsScreen(
                     preferences = accessibilityPreferences,
@@ -1557,7 +1616,6 @@ fun WhereApp(
                             }
                         }
                     },
-                    managedBackupDirectoryLabel = managedBackupDirectoryLabel,
                     managedBackups = managedBackups,
                     managedBackupsLoading = managedBackupsLoading,
                     onLoadManagedBackups = {
@@ -1660,11 +1718,15 @@ fun WhereApp(
                                     latestBackupStatus = loadLatestBackupStatusUseCase()
                                     backupVerificationResult = result
                                     backupProgressText = null
-                                } catch (_: IllegalArgumentException) {
-                                    settingsError = "密码错误、格式不兼容或备份已损坏。"
+                                } catch (error: IllegalArgumentException) {
+                                    println("Backup verify rejected: ${error.message}")
+                                    settingsError = restorePreviewErrorMessage(error)
                                     backupProgressText = null
-                                } catch (_: Exception) {
-                                    settingsError = "验证备份失败，请稍后重试。"
+                                } catch (error: Exception) {
+                                    println("Backup verify failed: ${error.message}")
+                                    settingsError = restorePreviewErrorMessage(error).takeIf { text ->
+                                        text != "密码错误、格式不兼容或备份已损坏。"
+                                    } ?: "验证备份失败，请稍后重试。"
                                     backupProgressText = null
                                 } finally {
                                     backupSubmitting = false
@@ -1722,7 +1784,6 @@ fun WhereApp(
                     onBack = {
                         leaveRestoreAndPop()
                     },
-                    managedBackupDirectoryLabel = managedBackupDirectoryLabel,
                     managedBackups = managedBackups,
                     managedBackupsLoading = managedBackupsLoading,
                     formatBackupTime = { epochMilliseconds ->
@@ -1751,11 +1812,15 @@ fun WhereApp(
                                     restoreSession = session
                                     householdSummary = session.preview.currentSummary
                                     backupProgressText = null
-                                } catch (_: IllegalArgumentException) {
-                                    settingsError = "密码错误、格式不兼容或备份已损坏。"
+                                } catch (error: IllegalArgumentException) {
+                                    println("Restore preview rejected: ${error.message}")
+                                    settingsError = restorePreviewErrorMessage(error)
                                     backupProgressText = null
-                                } catch (_: Exception) {
-                                    settingsError = "恢复预览失败，请稍后重试。"
+                                } catch (error: Exception) {
+                                    println("Restore preview failed: ${error.message}")
+                                    settingsError = restorePreviewErrorMessage(error).takeIf { text ->
+                                        text != "密码错误、格式不兼容或备份已损坏。"
+                                    } ?: "恢复预览失败，请稍后重试。"
                                     backupProgressText = null
                                 } finally {
                                     backupSubmitting = false
@@ -2272,6 +2337,7 @@ private enum class AppDestination {
     INITIALIZATION,
     HOME,
     ALL_ITEMS,
+    LOCATION_ITEMS,
     SEARCH,
     ADD_ITEM,
     LOCATION,
@@ -2292,6 +2358,7 @@ private fun AppDestination.isRootTab(): Boolean = this == AppDestination.HOME ||
 private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
     AppDestination.HOME,
     AppDestination.ALL_ITEMS,
+    AppDestination.LOCATION_ITEMS,
     AppDestination.SEARCH,
     AppDestination.ADD_ITEM,
     AppDestination.LOCATION,
@@ -2314,3 +2381,18 @@ private data class NavigationFrame(
     val destination: AppDestination,
     val selectedItemId: ItemId?,
 )
+
+/**
+ * 把备份校验失败收成用户能区分的原因，避免截断文件和密码错误共用一句。
+ */
+private fun restorePreviewErrorMessage(error: Throwable): String {
+    val message = error.message.orEmpty()
+    return when {
+        "truncated" in message || "magic" in message -> "这个文件不是有效的加密备份。"
+        "hash" in message -> "备份内容校验失败，文件可能不完整。"
+        "outside" in message || "does not exist" in message || "extension" in message ->
+            "无法读取这个备份文件。"
+        "incorrect" in message || "password" in message.lowercase() -> "密码不正确，或备份已损坏。"
+        else -> "密码错误、格式不兼容或备份已损坏。"
+    }
+}

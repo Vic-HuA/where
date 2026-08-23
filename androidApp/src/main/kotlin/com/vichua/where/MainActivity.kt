@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                 initializeHouseholdUseCase = container.initializeHouseholdUseCase,
                 loadHomeSnapshotUseCase = container.loadHomeSnapshotUseCase,
                 loadAllItemsUseCase = container.loadAllItemsUseCase,
+                loadItemsAtLocationUseCase = container.loadItemsAtLocationUseCase,
                 loadItemCreationContextUseCase = container.loadItemCreationContextUseCase,
                 loadLatestItemDraftUseCase = container.loadLatestItemDraftUseCase,
                 saveItemDraftUseCase = container.saveItemDraftUseCase,

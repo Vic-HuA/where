@@ -41,7 +41,7 @@ data class RecentSearchSummary(
  * @property locationNodeId 对应位置节点 ID。
  * @property name 位置名称。
  * @property iconKey 受控位置图标键。
- * @property itemCount 该位置直接包含的未删除物品数量。
+ * @property itemCount 该位置及其下级上的未删除物品数量。
  */
 data class FavoriteLocationSummary(
     val favoriteId: FavoriteLocationId,
@@ -79,6 +79,11 @@ interface HomeSnapshotRepository {
      * 加载当前家庭全部未删除物品，不截成首页三件。
      */
     suspend fun loadAllItems(): List<HomeItemSummary>
+
+    /**
+     * 加载指定位置及其下级上的未删除物品。
+     */
+    suspend fun loadItemsAtLocation(locationId: LocationNodeId): List<HomeItemSummary>
 }
 
 /**
@@ -103,4 +108,17 @@ class LoadAllItemsUseCase(
      * 按最近更新时间返回当前家庭全部未删除物品。
      */
     suspend operator fun invoke(): List<HomeItemSummary> = repository.loadAllItems()
+}
+
+/**
+ * 查看某个位置及其下级里的物品。
+ */
+class LoadItemsAtLocationUseCase(
+    private val repository: HomeSnapshotRepository,
+) {
+    /**
+     * 按最近更新时间返回该位置树下的未删除物品。
+     */
+    suspend operator fun invoke(locationId: LocationNodeId): List<HomeItemSummary> =
+        repository.loadItemsAtLocation(locationId)
 }

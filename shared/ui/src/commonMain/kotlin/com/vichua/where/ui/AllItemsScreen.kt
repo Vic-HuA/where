@@ -29,6 +29,9 @@ import com.vichua.where.feature.search.home.HomeItemSummary
  */
 @Composable
 fun AllItemsScreen(
+    title: String = "全部物品",
+    subtitle: String? = null,
+    emptyText: String = "还没有记录物品",
     items: List<HomeItemSummary>,
     resolveMediaPath: (String) -> String?,
     loading: Boolean,
@@ -52,7 +55,7 @@ fun AllItemsScreen(
                 imageVector = WhereIcons.Back,
                 contentDescription = "返回",
             )
-            Text("全部物品", style = MaterialTheme.typography.titleLarge)
+            Text(title, style = MaterialTheme.typography.titleLarge)
         }
         if (loading && items.isEmpty()) {
             CircularProgressIndicator(
@@ -86,13 +89,13 @@ fun AllItemsScreen(
         if (items.isEmpty()) {
             EmptyHomeCard(
                 modifier = Modifier.padding(top = 16.dp),
-                text = "还没有记录物品",
+                text = emptyText,
             )
             return@Column
         }
         Text(
             modifier = Modifier.padding(top = 8.dp),
-            text = "共 ${items.size} 件，按最近更新排列。",
+            text = subtitle ?: "共 ${items.size} 件，按最近更新排列。",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )

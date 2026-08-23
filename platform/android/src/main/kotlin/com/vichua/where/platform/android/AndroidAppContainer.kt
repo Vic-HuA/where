@@ -53,6 +53,7 @@ import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.search.home.LoadAllItemsUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
+import com.vichua.where.feature.search.home.LoadItemsAtLocationUseCase
 import com.vichua.where.feature.search.text.SearchItemsUseCase
 import com.vichua.where.core.platform.DocumentGateway
 import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
@@ -148,6 +149,9 @@ class AndroidAppContainer(
 
     /** 加载当前家庭全部未删除物品的用例。 */
     val loadAllItemsUseCase = LoadAllItemsUseCase(homeSnapshotRepository)
+
+    /** 加载某个位置及其下级物品的用例。 */
+    val loadItemsAtLocationUseCase = LoadItemsAtLocationUseCase(homeSnapshotRepository)
 
     /** 加载新增物品页面可选位置的用例。 */
     val loadItemCreationContextUseCase =

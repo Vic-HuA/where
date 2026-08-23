@@ -28,7 +28,7 @@ data class StoredHomeItem(
  *
  * @property favorite 常用位置领域模型。
  * @property location 对应的未删除位置节点。
- * @property itemCount 直接关联该位置的未删除物品数量。
+ * @property itemCount 该位置及其下级上的未删除物品数量。
  */
 data class StoredFavoriteLocation(
     val favorite: FavoriteLocation,
@@ -89,15 +89,24 @@ class HomeSnapshotStore(
                 .map { entity -> entity.toDomain() }
         }
 
+        val childrenByParent = activeLocations.groupBy(LocationNode::parentId)
+        val itemsByLocationId = database.itemDao()
+            .findActiveByHousehold(household.id)
+            .groupBy { entity -> entity.currentLocationId }
         val favoriteLocations = database.homeSupportDao()
             .findActiveFavoriteLocations(household.id, MAX_FAVORITE_LOCATIONS)
             .mapNotNull { favoriteEntity ->
                 val favorite = favoriteEntity.toDomain()
                 val location = locationsById[favorite.locationNodeId] ?: return@mapNotNull null
+                val locationIds = descendantLocationIds(location.id, childrenByParent)
+                    .map(LocationNodeId::value)
+                    .toSet()
                 StoredFavoriteLocation(
                     favorite = favorite,
                     location = location,
-                    itemCount = database.itemDao().countActiveAtLocation(location.id.value),
+                    itemCount = locationIds.sumOf { locationId ->
+                        itemsByLocationId[locationId]?.size ?: 0
+                    }.toLong(),
                 )
             }
 
@@ -108,6 +117,49 @@ class HomeSnapshotStore(
             locationUnconfirmedCount = database.itemDao()
                 .countLocationUnconfirmed(household.id),
         )
+    }
+
+    /**
+     * 加载指定位置及其下级上的未删除物品，供从位置树或常用位置点进去查看。
+     */
+    suspend fun loadItemsAtLocation(locationId: LocationNodeId): List<StoredHomeItem> {
+        val household = database.householdDao().findFirstActive() ?: return emptyList()
+        val activeLocations = database.locationNodeDao()
+            .findActiveTree(household.id)
+            .map { entity -> entity.toDomain() }
+        val locationsById = activeLocations.associateBy(LocationNode::id)
+        require(locationId in locationsById) { "Location is not in the active tree." }
+        val childrenByParent = activeLocations.groupBy(LocationNode::parentId)
+        val locationIds = descendantLocationIds(locationId, childrenByParent)
+            .map(LocationNodeId::value)
+            .toSet()
+        val itemEntities = database.itemDao()
+            .findActiveByHousehold(household.id)
+            .filter { entity -> entity.currentLocationId in locationIds }
+        return mapStoredItems(
+            itemEntities = itemEntities,
+            locationsById = locationsById,
+        )
+    }
+
+    /**
+     * 收集节点自身和全部未删除后代，和位置管理页的物品计数保持一致。
+     */
+    private fun descendantLocationIds(
+        rootId: LocationNodeId,
+        childrenByParent: Map<LocationNodeId?, List<LocationNode>>,
+    ): Set<LocationNodeId> {
+        val collectedIds = mutableSetOf(rootId)
+        val pendingIds = ArrayDeque(listOf(rootId))
+        while (pendingIds.isNotEmpty()) {
+            val currentId = pendingIds.removeFirst()
+            childrenByParent[currentId].orEmpty().forEach { child ->
+                if (collectedIds.add(child.id)) {
+                    pendingIds.addLast(child.id)
+                }
+            }
+        }
+        return collectedIds
     }
 
     /**

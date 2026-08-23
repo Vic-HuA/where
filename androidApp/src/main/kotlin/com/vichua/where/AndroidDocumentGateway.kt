@@ -10,6 +10,7 @@ import com.vichua.where.core.platform.DocumentGateway
 import com.vichua.where.core.platform.ManagedBackupFile
 import com.vichua.where.core.platform.SelectedDocument
 import java.io.File
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,13 +62,15 @@ class AndroidDocumentGateway(
         withContext(Dispatchers.IO) {
             val directory = backupsDirectory()
             directory.listFiles { file ->
-                file.isFile && file.name.endsWith(BACKUP_FILE_EXTENSION, ignoreCase = true)
+                file.isFile &&
+                    file.name.endsWith(BACKUP_FILE_EXTENSION, ignoreCase = true) &&
+                    isReadableBackupPackage(file)
             }
                 ?.sortedByDescending { file -> file.lastModified() }
                 ?.map { file ->
                     ManagedBackupFile(
                         displayName = file.name,
-                        opaqueDocumentUri = file.absolutePath,
+                        opaqueDocumentUri = file.canonicalPath,
                         sizeBytes = file.length(),
                         lastModifiedMillis = file.lastModified(),
                     )
@@ -82,14 +85,17 @@ class AndroidDocumentGateway(
         withContext(Dispatchers.IO) {
             require(bytes.isNotEmpty()) { "Managed backup bytes must not be empty." }
             val file = newBackupFile(backupsDirectory())
-            file.outputStream().use { output ->
+            FileOutputStream(file).use { output ->
                 output.write(bytes)
                 output.flush()
+                output.fd.sync()
             }
+            val written = file.readBytes()
+            require(written.contentEquals(bytes)) { "Managed backup write did not match source bytes." }
             SelectedDocument(
                 displayName = file.name,
-                opaqueDocumentUri = file.absolutePath,
-                bytes = bytes,
+                opaqueDocumentUri = file.canonicalPath,
+                bytes = written,
             )
         }
 
@@ -280,6 +286,21 @@ class AndroidDocumentGateway(
     }
 
     /**
+     * 先看魔术字再进列表，避免把测试残文件或空文件当成可恢复备份。
+     */
+    private fun isReadableBackupPackage(file: File): Boolean {
+        if (file.length() < MIN_BACKUP_PACKAGE_BYTES) {
+            return false
+        }
+        return runCatching {
+            file.inputStream().use { input ->
+                val magic = ByteArray(BACKUP_MAGIC.size)
+                input.read(magic) == BACKUP_MAGIC.size && magic.contentEquals(BACKUP_MAGIC)
+            }
+        }.getOrDefault(false)
+    }
+
+    /**
      * 规范化后再比对父目录，避免 ../ 逃出固定备份文件夹。
      */
     private fun resolveManagedFile(opaqueDocumentUri: String): File {
@@ -310,6 +331,8 @@ class AndroidDocumentGateway(
         const val BACKUP_FILE_PREFIX = "where-backup-"
         const val BACKUP_FILE_STAMP_PATTERN = "yyyyMMdd-HHmmss"
         const val BACKUP_FILE_EXTENSION = ".wherebak"
+        val BACKUP_MAGIC = "WHEREBAK".encodeToByteArray()
+        const val MIN_BACKUP_PACKAGE_BYTES = 45L
         const val MANAGED_DIRECTORY_LABEL = "Android/data/com.vichua.where/files/backups"
         const val FILE_PROVIDER_AUTHORITY = "com.vichua.where.fileprovider"
         const val SHARE_CLIP_LABEL = "where-exported-household"

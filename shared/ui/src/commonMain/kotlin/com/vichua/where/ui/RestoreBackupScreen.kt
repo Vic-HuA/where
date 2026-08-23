@@ -71,7 +71,6 @@ fun RestoreBackupScreen(
     submitting: Boolean,
     progressText: String?,
     errorMessage: String?,
-    managedBackupDirectoryLabel: String,
     managedBackups: List<ManagedBackupFile>,
     managedBackupsLoading: Boolean,
     formatBackupTime: (Long) -> String,
@@ -129,12 +128,11 @@ fun RestoreBackupScreen(
         if (preview == null) {
             Text(
                 modifier = Modifier.padding(top = 8.dp),
-                text = "先在下面选出备份，再输入密码。密码对错要打开文件后才能判断。",
+                text = "先选出备份，再输入密码。密码对错要打开文件后才能判断。",
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodyMedium,
             )
             ManagedBackupList(
-                directoryLabel = managedBackupDirectoryLabel,
                 backups = managedBackups,
                 loading = managedBackupsLoading,
                 selectedUri = if (importFromElsewhere) null else selectedBackupUri,

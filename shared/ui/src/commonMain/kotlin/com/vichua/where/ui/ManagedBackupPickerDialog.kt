@@ -28,7 +28,6 @@ import com.vichua.where.core.platform.ManagedBackupFile
  */
 @Composable
 fun ManagedBackupPickerDialog(
-    directoryLabel: String,
     backups: List<ManagedBackupFile>,
     loading: Boolean,
     formatTime: (Long) -> String,
@@ -46,7 +45,6 @@ fun ManagedBackupPickerDialog(
         onNeutral = onImportFromElsewhere,
     ) {
         ManagedBackupList(
-            directoryLabel = directoryLabel,
             backups = backups,
             loading = loading,
             selectedUri = null,
@@ -61,7 +59,6 @@ fun ManagedBackupPickerDialog(
  */
 @Composable
 fun ColumnScope.ManagedBackupList(
-    directoryLabel: String,
     backups: List<ManagedBackupFile>,
     loading: Boolean,
     selectedUri: String?,
@@ -69,7 +66,7 @@ fun ColumnScope.ManagedBackupList(
     onSelect: (ManagedBackupFile) -> Unit,
 ) {
     Text(
-        text = "备份保存在 $directoryLabel。点选下面的文件即可，不用再打开系统文件界面。",
+        text = "点选下面的备份即可。从其他位置导入只用于旧文件。",
         color = WhereSecondaryTextColor,
         style = MaterialTheme.typography.bodySmall,
     )
@@ -85,7 +82,7 @@ fun ColumnScope.ManagedBackupList(
     if (backups.isEmpty()) {
         Text(
             modifier = Modifier.padding(top = 16.dp),
-            text = "还没有应用内备份。先到设置里创建加密备份，或从其他位置导入旧文件。",
+            text = "还没有备份。先到设置里创建加密备份，或从其他位置导入旧文件。",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -106,7 +103,7 @@ fun ColumnScope.ManagedBackupList(
             color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(
-                width = 1.dp,
+                width = WhereStrokeWidth,
                 color = if (selected) WherePrimaryColor else WhereOutlineColor,
             ),
         ) {

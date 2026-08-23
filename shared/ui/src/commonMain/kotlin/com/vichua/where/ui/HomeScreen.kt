@@ -458,7 +458,7 @@ private fun HomeSearchSurface(
                 .heightIn(min = 56.dp),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, WherePrimaryColor.copy(alpha = 0.35f)),
+            border = BorderStroke(WhereStrokeWidth, WhereSoftBorderColor),
         ) {
             Row(
                 modifier = Modifier.padding(end = 6.dp),
@@ -566,6 +566,11 @@ internal fun ItemSummaryCard(
             .semantics(mergeDescendants = true) {},
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
+        border = if (WhereEmphasizedBorders) {
+            BorderStroke(WhereStrokeWidth, WhereOutlineColor)
+        } else {
+            null
+        },
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -636,6 +641,11 @@ internal fun EmptyHomeCard(
             .heightIn(min = 76.dp),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(18.dp),
+        border = if (WhereEmphasizedBorders) {
+            BorderStroke(WhereStrokeWidth, WhereOutlineColor)
+        } else {
+            null
+        },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -662,7 +672,7 @@ private fun HomeChip(
     Surface(
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, WhereOutlineColor),
+        border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
     ) {
         Row(
             modifier = Modifier

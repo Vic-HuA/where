@@ -60,7 +60,7 @@ fun WhereDialog(
                 .padding(horizontal = 22.dp),
             shape = RoundedCornerShape(22.dp),
             color = WhereSurfaceColor,
-            border = BorderStroke(1.dp, WhereOutlineColor),
+            border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
             shadowElevation = 10.dp,
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
@@ -135,7 +135,7 @@ fun WorkingProgressCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
         color = WhereSelectedContainerColor,
-        border = BorderStroke(1.dp, WherePrimaryColor),
+        border = BorderStroke(WhereStrokeWidth, WherePrimaryColor),
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -190,7 +190,7 @@ fun WorkingProgressDialog(
                 .padding(horizontal = 22.dp),
             shape = RoundedCornerShape(22.dp),
             color = WhereSurfaceColor,
-            border = BorderStroke(1.dp, WhereOutlineColor),
+            border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
             shadowElevation = 10.dp,
         ) {
             Column(
@@ -242,7 +242,7 @@ private fun WhereDialogButton(
         else -> WhereSurfaceColor
     }
     val border = if (outlined) {
-        BorderStroke(1.dp, WhereOutlineColor)
+        BorderStroke(WhereStrokeWidth, WhereOutlineColor)
     } else {
         null
     }

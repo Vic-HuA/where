@@ -82,7 +82,6 @@ import com.vichua.where.core.platform.ManagedBackupFile
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。当前语音走本机 Vosk，此开关不再展示。
  * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
  * @param onDiagnosticLoggingChange 切换是否写入不含敏感内容的本机诊断事件。
- * @param managedBackupDirectoryLabel 固定备份目录的用户可见说明。
  * @param managedBackups 固定目录中已有的加密备份。
  * @param managedBackupsLoading 是否正在读取备份列表。
  * @param onLoadManagedBackups 打开选择界面前刷新备份列表。
@@ -122,7 +121,6 @@ fun SettingsScreen(
     onCloudSpeechChange: (Boolean) -> Unit,
     onBackupReminderChange: (Boolean) -> Unit,
     onDiagnosticLoggingChange: (Boolean) -> Unit,
-    managedBackupDirectoryLabel: String,
     managedBackups: List<ManagedBackupFile>,
     managedBackupsLoading: Boolean,
     onLoadManagedBackups: () -> Unit,
@@ -256,7 +254,7 @@ fun SettingsScreen(
         )
         SettingsSwitchRow(
             title = "高对比度",
-            description = "独立设备偏好；启用适老模式时默认开启，可单独关闭",
+            description = "改为黑字、粗黑边和更深主色，卡片轮廓会明显加粗；启用适老模式时默认开启，可单独关闭",
             checked = preferences?.highContrastEnabled == true,
             enabled = preferences != null,
             onCheckedChange = onHighContrastChange,
@@ -303,15 +301,9 @@ fun SettingsScreen(
             },
             style = MaterialTheme.typography.bodySmall,
         )
-        Text(
-            modifier = Modifier.padding(bottom = 10.dp),
-            text = "日常备份保存在 $managedBackupDirectoryLabel，不用再选文件夹。",
-            color = WhereSecondaryTextColor,
-            style = MaterialTheme.typography.bodySmall,
-        )
         SettingsActionRow(
             title = "创建加密备份",
-            description = "直接写入应用备份文件夹，包含过滤后的家庭数据和物品原图",
+            description = "导出过滤后的家庭数据和物品原图，不包含草稿和本机设置",
             enabled = !submitting,
             onClick = {
                 createPasswordDialogVisible = true
@@ -441,7 +433,6 @@ fun SettingsScreen(
             title = "创建加密备份",
             confirmLabel = "创建",
             requireConfirmation = true,
-            extraHint = "备份会直接保存到应用备份文件夹，不用再选位置。",
             enabled = !submitting,
             onDismiss = {
                 if (!submitting) {
@@ -497,7 +488,6 @@ fun SettingsScreen(
     }
     if (verifyPickerVisible) {
         ManagedBackupPickerDialog(
-            directoryLabel = managedBackupDirectoryLabel,
             backups = managedBackups,
             loading = managedBackupsLoading,
             formatTime = formatBackupTime,
@@ -528,7 +518,7 @@ fun SettingsScreen(
             confirmLabel = "验证",
             requireConfirmation = false,
             extraHint = if (verifyImportFromElsewhere) {
-                "下一步会打开系统文件界面，用于导入不在应用备份文件夹里的旧文件。"
+                "下一步会打开系统文件界面，用于导入旧备份。"
             } else {
                 "密码要和刚才选中的备份一起校验。"
             },
@@ -651,7 +641,7 @@ private fun SettingsSwitchRow(
             .padding(bottom = 10.dp),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, WhereOutlineColor),
+        border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -764,7 +754,7 @@ private fun SettingsActionRow(
             ),
         color = WhereSurfaceColor,
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, WhereOutlineColor),
+        border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(
