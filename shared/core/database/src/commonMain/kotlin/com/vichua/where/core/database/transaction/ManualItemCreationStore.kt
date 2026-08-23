@@ -37,11 +37,13 @@ data class StoredItemCreationLocation(
  *
  * @property householdId 当前家庭 ID。
  * @property sourceDeviceId 当前有效设备 ID。
+ * @property rootLocationId 家庭根位置，录入页新建房间时作为父节点。
  * @property availableLocations 未删除非根位置。
  */
 data class StoredItemCreationContext(
     val householdId: HouseholdId,
     val sourceDeviceId: DeviceId,
+    val rootLocationId: LocationNodeId,
     val availableLocations: List<StoredItemCreationLocation>,
 )
 
@@ -69,6 +71,13 @@ class ManualItemCreationStore(
             .findActiveTree(household.id)
             .map { entity -> entity.toDomain() }
         val locationsById = activeLocations.associateBy(LocationNode::id)
+        val rootLocationId = requireNotNull(
+            activeLocations.singleOrNull { location ->
+                location.type == LocationType.HOME
+            }?.id,
+        ) {
+            "Cannot create an item without a household root location."
+        }
         val availableLocations = activeLocations
             .filter { location -> location.type != LocationType.HOME }
             .map { location ->
@@ -86,6 +95,7 @@ class ManualItemCreationStore(
         return StoredItemCreationContext(
             householdId = HouseholdId(household.id),
             sourceDeviceId = DeviceId(device.id),
+            rootLocationId = rootLocationId,
             availableLocations = availableLocations,
         )
     }

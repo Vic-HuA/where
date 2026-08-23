@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.feature.item.creation.CreateManualItemRequest
@@ -53,6 +55,7 @@ import com.vichua.where.feature.item.creation.ItemCreationLocation
 import com.vichua.where.feature.item.draft.ItemDraftContent
 import com.vichua.where.core.platform.AiFieldSuggestions
 import com.vichua.where.feature.item.photo.ImportedItemPhoto
+import com.vichua.where.feature.location.management.CreateLocationPathRequest
 
 /**
  * 按 Pencil 原型展示新增物品基础页面，并支持不依赖相机、语音或 AI 的手动保存路径。
@@ -75,6 +78,10 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * @param onSpeakReleased 松开语音区域后结束本轮收听。
  * @param voicePreparing 首次使用时是否正在下载离线语音模型。
  * @param onAiRecognizeRequested 用户主动选择识别后返回建议；取消或失败时为空，不得自动保存。
+ * @param creatingLocation 是否正在从录入页新建位置。
+ * @param pendingCreatedLocationId 刚新建完成、需要自动选中的位置。
+ * @param onPendingCreatedLocationConsumed 界面已经选中新建位置后清空待选 ID。
+ * @param onCreateLocation 在录入页一次补齐多层位置。
  */
 @Composable
 fun AddItemScreen(
@@ -96,6 +103,10 @@ fun AddItemScreen(
     onSpeakRequested: suspend () -> String? = { null },
     onSpeakReleased: () -> Unit = {},
     onAiRecognizeRequested: suspend () -> AiFieldSuggestions? = { null },
+    creatingLocation: Boolean = false,
+    pendingCreatedLocationId: LocationNodeId? = null,
+    onPendingCreatedLocationConsumed: () -> Unit = {},
+    onCreateLocation: (CreateLocationPathRequest) -> Unit = {},
 ) {
     val speakScope = rememberCoroutineScope()
     var speechSubmitting by remember { mutableStateOf(false) }
@@ -113,8 +124,19 @@ fun AddItemScreen(
         )
     }
     var locationDialogVisible by remember { mutableStateOf(false) }
+    var createLocationDialogVisible by remember { mutableStateOf(false) }
     var confirmationDialogVisible by remember { mutableStateOf(false) }
     var leaveDialogVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingCreatedLocationId, context) {
+        val createdLocationId = pendingCreatedLocationId ?: return@LaunchedEffect
+        val createdLocationExists = context?.availableLocations?.any { location ->
+            location.locationId == createdLocationId
+        } == true
+        if (createdLocationExists) {
+            selectedLocationId = createdLocationId
+            onPendingCreatedLocationConsumed()
+        }
+    }
     val selectedLocation = context?.availableLocations?.singleOrNull { location ->
         location.locationId == selectedLocationId
     }
@@ -491,12 +513,36 @@ fun AddItemScreen(
     if (locationDialogVisible && context != null) {
         LocationSelectionDialog(
             locations = context.availableLocations,
+            creatingLocation = creatingLocation,
             onDismiss = {
                 locationDialogVisible = false
             },
             onSelect = { location ->
                 selectedLocationId = location.locationId
                 locationDialogVisible = false
+            },
+            onCreateRequested = {
+                locationDialogVisible = false
+                createLocationDialogVisible = true
+            },
+        )
+    }
+    if (createLocationDialogVisible && context != null) {
+        LocationPathCreateDialog(
+            parentLabel = "家庭",
+            parentType = LocationType.HOME,
+            submitting = creatingLocation,
+            onDismiss = {
+                createLocationDialogVisible = false
+            },
+            onConfirm = { segments ->
+                onCreateLocation(
+                    CreateLocationPathRequest(
+                        parentId = context.rootLocationId,
+                        segments = segments,
+                    ),
+                )
+                createLocationDialogVisible = false
             },
         )
     }
@@ -1100,8 +1146,10 @@ private fun LocationSelectionField(
 @Composable
 private fun LocationSelectionDialog(
     locations: List<ItemCreationLocation>,
+    creatingLocation: Boolean,
     onDismiss: () -> Unit,
     onSelect: (ItemCreationLocation) -> Unit,
+    onCreateRequested: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val trimmedQuery = query.trim()
@@ -1129,9 +1177,9 @@ private fun LocationSelectionDialog(
             Text(
                 modifier = Modifier.padding(top = 16.dp),
                 text = if (trimmedQuery.isEmpty()) {
-                    "还没有可选择的位置，请先到位置管理里新增。"
+                    "还没有可选择的位置，可以直接新建。"
                 } else {
-                    "没有匹配“$trimmedQuery”的位置。"
+                    "没有匹配“$trimmedQuery”的位置，也可以直接新建。"
                 },
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodyMedium,
@@ -1174,6 +1222,37 @@ private fun LocationSelectionDialog(
                         )
                     }
                 }
+            }
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 14.dp)
+                .clickable(
+                    enabled = !creatingLocation,
+                    role = Role.Button,
+                    onClick = onCreateRequested,
+                ),
+            shape = RoundedCornerShape(14.dp),
+            color = WhereSelectedContainerColor,
+            border = BorderStroke(1.dp, WherePrimaryColor),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = WhereIcons.Add,
+                    contentDescription = null,
+                    tint = WherePrimaryColor,
+                )
+                Text(
+                    text = "新建位置",
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
     }

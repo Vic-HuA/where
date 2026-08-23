@@ -182,6 +182,7 @@ class CreateManualItemUseCaseTest {
         override suspend fun loadContext(): ItemCreationContext = ItemCreationContext(
             householdId = HouseholdId("household"),
             sourceDeviceId = DeviceId("device"),
+            rootLocationId = LocationNodeId("home"),
             availableLocations = listOf(
                 ItemCreationLocation(
                     locationId = TEST_LOCATION_ID,

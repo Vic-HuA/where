@@ -1149,6 +1149,31 @@ fun WhereApp(
                     loading = itemCreationLoading,
                     submitting = itemCreationSubmitting,
                     errorMessage = itemCreationError,
+                    creatingLocation = locationTreeSubmitting,
+                    pendingCreatedLocationId = pendingCreatedLocationId,
+                    onPendingCreatedLocationConsumed = {
+                        pendingCreatedLocationId = null
+                    },
+                    onCreateLocation = { request ->
+                        if (!locationTreeSubmitting && !itemCreationSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                itemCreationError = null
+                                try {
+                                    pendingCreatedLocationId = createLocationPathUseCase(request)
+                                    itemCreationContext = loadItemCreationContextUseCase()
+                                    homeLoadAttempt += 1
+                                    locationTreeAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    itemCreationError = "请检查位置名称和类型。"
+                                } catch (_: Exception) {
+                                    itemCreationError = "新建位置失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onRetry = {
                         itemCreationAttempt += 1
                     },

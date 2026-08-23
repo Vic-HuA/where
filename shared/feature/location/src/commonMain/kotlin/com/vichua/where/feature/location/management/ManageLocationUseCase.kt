@@ -268,28 +268,43 @@ class CreateLocationUseCase(
 }
 
 /**
- * 按填写顺序连续创建多层位置，后一层挂在刚创建的前一层下面。
+ * 按填写顺序补齐一条位置链：已有同名同类型节点直接沿用，只新建缺失的层。
+ *
+ * 这样「书房」已经存在时，再填书房、课桌不会因为重名失败，只会在书房下补上课桌。
  */
 class CreateLocationPathUseCase(
+    private val repository: LocationManagementRepository,
     private val createLocationUseCase: CreateLocationUseCase,
+    private val textNormalizer: TextNormalizer,
 ) {
     /**
      * 返回最后一层的位置 ID，方便录入后直接选中。
      */
     suspend operator fun invoke(request: CreateLocationPathRequest): LocationNodeId {
         var parentId = request.parentId
-        var lastCreatedId = request.parentId
+        var lastResolvedId = request.parentId
         request.segments.forEach { segment ->
-            lastCreatedId = createLocationUseCase(
+            val snapshot = repository.loadTree()
+            val normalizedName = textNormalizer.normalize(segment.name.trim())
+            require(normalizedName.isNotEmpty()) {
+                "Normalized location name must not be blank."
+            }
+            val existingLocation = snapshot.locations.singleOrNull { sibling ->
+                sibling.deletedAt == null &&
+                    sibling.parentId == parentId &&
+                    sibling.type == segment.type &&
+                    sibling.normalizedName == normalizedName
+            }
+            lastResolvedId = existingLocation?.id ?: createLocationUseCase(
                 CreateLocationRequest(
                     parentId = parentId,
                     type = segment.type,
                     name = segment.name,
                 ),
             )
-            parentId = lastCreatedId
+            parentId = lastResolvedId
         }
-        return lastCreatedId
+        return lastResolvedId
     }
 }
 

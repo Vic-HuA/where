@@ -156,6 +156,53 @@ class ManageLocationUseCaseTest {
         assertNull(repository.savedDeletion)
     }
 
+    /** 验证已有书房时再填书房、课桌只会新建课桌。 */
+    @Test
+    fun `已有书房时补齐课桌只新建课桌`() = runTest {
+        val repository = FakeLocationManagementRepository()
+        val useCase = createLocationPathUseCase(repository)
+
+        val deskId = useCase(
+            CreateLocationPathRequest(
+                parentId = HOME_ID,
+                segments = listOf(
+                    CreateLocationPathSegment(type = LocationType.ROOM, name = "书房"),
+                    CreateLocationPathSegment(type = LocationType.FURNITURE, name = "课桌"),
+                ),
+            ),
+        )
+
+        val creation = assertNotNull(repository.savedCreation)
+        assertEquals(deskId, creation.location.id)
+        assertEquals(STUDY_ID, creation.location.parentId)
+        assertEquals(LocationType.FURNITURE, creation.location.type)
+        assertEquals("课桌", creation.location.name)
+        assertEquals(1, repository.createdCount)
+    }
+
+    /** 验证整条路径都已存在时不会再写入新位置。 */
+    @Test
+    fun `整条路径都已存在时不新建`() = runTest {
+        val repository = FakeLocationManagementRepository(
+            extraLocations = listOf(DESK_LOCATION),
+        )
+        val useCase = createLocationPathUseCase(repository)
+
+        val resolvedId = useCase(
+            CreateLocationPathRequest(
+                parentId = HOME_ID,
+                segments = listOf(
+                    CreateLocationPathSegment(type = LocationType.ROOM, name = "书房"),
+                    CreateLocationPathSegment(type = LocationType.FURNITURE, name = "课桌"),
+                ),
+            ),
+        )
+
+        assertEquals(DESK_ID, resolvedId)
+        assertNull(repository.savedCreation)
+        assertEquals(0, repository.createdCount)
+    }
+
     /**
      * 使用固定时间和可预测 ID 创建新增用例。
      */
@@ -193,6 +240,17 @@ class ManageLocationUseCaseTest {
     }
 
     /**
+     * 使用固定时间和可预测 ID 创建路径补齐用例。
+     */
+    private fun createLocationPathUseCase(
+        repository: LocationManagementRepository,
+    ): CreateLocationPathUseCase = CreateLocationPathUseCase(
+        repository = repository,
+        createLocationUseCase = createLocationUseCase(repository),
+        textNormalizer = DefaultTextNormalizer,
+    )
+
+    /**
      * 使用固定时间和可预测 ID 创建删除用例。
      */
     private fun deleteLocationUseCase(
@@ -210,20 +268,29 @@ class ManageLocationUseCaseTest {
     }
 
     /**
-     * 记录位置写入聚合的内存仓储。
+     * 记录位置写入聚合的内存仓储，并把新建节点写回树，方便验证多层路径补齐。
      */
-    private class FakeLocationManagementRepository : LocationManagementRepository {
+    private class FakeLocationManagementRepository(
+        extraLocations: List<LocationNode> = emptyList(),
+    ) : LocationManagementRepository {
         var savedCreation: LocationCreation? = null
             private set
         var savedRename: LocationRename? = null
             private set
         var savedDeletion: LocationDeletion? = null
             private set
+        var createdCount: Int = 0
+            private set
+        private val locations = (SAMPLE_SNAPSHOT.locations + extraLocations).toMutableList()
 
-        override suspend fun loadTree(): LocationTreeSnapshot = SAMPLE_SNAPSHOT
+        override suspend fun loadTree(): LocationTreeSnapshot = SAMPLE_SNAPSHOT.copy(
+            locations = locations.toList(),
+        )
 
         override suspend fun create(creation: LocationCreation) {
             savedCreation = creation
+            createdCount += 1
+            locations += creation.location
         }
 
         override suspend fun rename(rename: LocationRename) {
@@ -240,6 +307,7 @@ class ManageLocationUseCaseTest {
         val DEVICE_ID = DeviceId("device")
         val HOME_ID = LocationNodeId("home")
         val STUDY_ID = LocationNodeId("study")
+        val DESK_ID = LocationNodeId("desk")
         val EMPTY_ROOM_ID = LocationNodeId("empty-room")
         const val TEST_TIME = 30_000L
 
@@ -262,6 +330,13 @@ class ManageLocationUseCaseTest {
             type = LocationType.ROOM,
             name = "客房",
             sortOrder = 1,
+        )
+        val DESK_LOCATION = location(
+            id = DESK_ID,
+            parentId = STUDY_ID,
+            type = LocationType.FURNITURE,
+            name = "课桌",
+            sortOrder = 0,
         )
         val SAMPLE_SNAPSHOT = LocationTreeSnapshot(
             householdId = HOUSEHOLD_ID,

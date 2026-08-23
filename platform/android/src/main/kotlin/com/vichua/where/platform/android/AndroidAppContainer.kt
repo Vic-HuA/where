@@ -301,7 +301,9 @@ class AndroidAppContainer(
 
     /** 一次创建多层位置的用例。 */
     val createLocationPathUseCase = CreateLocationPathUseCase(
+        repository = locationManagementRepository,
         createLocationUseCase = createLocationUseCase,
+        textNormalizer = DefaultTextNormalizer,
     )
 
     /** 重命名非根位置的用例。 */

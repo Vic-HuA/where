@@ -52,11 +52,13 @@ data class ItemCreationLocation(
  *
  * @property householdId 当前未删除家庭 ID。
  * @property sourceDeviceId 当前有效设备 ID。
+ * @property rootLocationId 家庭根位置，录入页新建房间时作为父节点。
  * @property availableLocations 可供物品选择的未删除非根位置。
  */
 data class ItemCreationContext(
     val householdId: HouseholdId,
     val sourceDeviceId: DeviceId,
+    val rootLocationId: LocationNodeId,
     val availableLocations: List<ItemCreationLocation>,
 )
 

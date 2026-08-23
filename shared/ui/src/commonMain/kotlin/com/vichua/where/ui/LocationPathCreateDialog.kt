@@ -62,7 +62,7 @@ fun LocationPathCreateDialog(
         dismissEnabled = !submitting,
     ) {
         Text(
-            text = "在“$parentLabel”下一次填好多层，例如书房、抽屉、第二格。",
+            text = "在“$parentLabel”下一次填好多层。已有同名同类型的层会直接沿用，只新建后面没有的层。例如已有书房时，再填书房、课桌即可加上课桌。",
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyMedium,
         )

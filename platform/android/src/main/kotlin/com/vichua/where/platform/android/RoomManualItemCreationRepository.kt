@@ -21,6 +21,7 @@ class RoomManualItemCreationRepository(
         return ItemCreationContext(
             householdId = context.householdId,
             sourceDeviceId = context.sourceDeviceId,
+            rootLocationId = context.rootLocationId,
             availableLocations = context.availableLocations.map { location ->
                 ItemCreationLocation(
                     locationId = location.locationId,
