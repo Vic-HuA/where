@@ -75,6 +75,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onSettingsClick 打开设置与数据。
  * @param elderFriendlyMode 是否使用适老首页：两大入口替代搜索框和拍照记录按钮。
  * @param voiceListening 是否正在听用户主动说的查找内容。
+ * @param voicePreparing 首次使用时是否正在下载离线语音模型。
  */
 @Composable
 fun HomeScreen(
@@ -101,6 +102,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit,
     elderFriendlyMode: Boolean = false,
     voiceListening: Boolean = false,
+    voicePreparing: Boolean = false,
 ) {
     Scaffold(
         containerColor = WhereBackgroundColor,
@@ -203,10 +205,10 @@ fun HomeScreen(
                     modifier = Modifier.padding(top = 18.dp),
                     icon = WhereIcons.Search,
                     title = "我要找东西",
-                    description = if (voiceListening) {
-                        "正在听，请说话…"
-                    } else {
-                        "先说要找什么，也可以改用键盘"
+                    description = when {
+                        voicePreparing -> "正在下载语音模型，请稍候…"
+                        voiceListening -> "正在听，请说话…"
+                        else -> "先说要找什么，也可以改用键盘"
                     },
                     primary = true,
                     onClick = onVoiceSearchRequested,
@@ -226,6 +228,7 @@ fun HomeScreen(
                     onVoiceSearchRequested = onVoiceSearchRequested,
                     onVoiceSearchReleased = onVoiceSearchReleased,
                     voiceListening = voiceListening,
+                    voicePreparing = voicePreparing,
                 )
                 Button(
                     modifier = Modifier
@@ -372,62 +375,78 @@ private fun HomeSearchSurface(
     onVoiceSearchRequested: () -> Unit,
     onVoiceSearchReleased: () -> Unit,
     voiceListening: Boolean,
+    voicePreparing: Boolean,
 ) {
     var textModeEnabled by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
 
+    val submitTextSearch: () -> Unit = {
+        if (query.isNotBlank()) {
+            keyboardController?.hide()
+            onTextSearch(query)
+        }
+    }
+
     if (textModeEnabled) {
-        OutlinedTextField(
-            modifier = modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp),
-            value = query,
-            onValueChange = { value ->
-                query = value
-            },
-            placeholder = {
-                Text("输入物品名称、别名或位置")
-            },
-            leadingIcon = {
-                Icon(
-                    imageVector = WhereIcons.Search,
-                    contentDescription = null,
-                    tint = WherePrimaryColor,
-                )
-            },
-            trailingIcon = {
-                IconButton(
-                    onClick = {
-                        textModeEnabled = false
-                        keyboardController?.hide()
-                    },
-                ) {
+        Row(
+            modifier = modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp),
+                value = query,
+                onValueChange = { value ->
+                    query = value
+                },
+                placeholder = {
+                    Text("输入物品名称、别名或位置")
+                },
+                leadingIcon = {
                     Icon(
-                        imageVector = WhereIcons.Microphone,
-                        contentDescription = "切换到语音查找",
+                        imageVector = WhereIcons.Search,
+                        contentDescription = null,
                         tint = WherePrimaryColor,
                     )
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = WhereSelectedContainerColor,
-                unfocusedContainerColor = WhereSelectedContainerColor,
-                focusedBorderColor = WherePrimaryColor,
-                unfocusedBorderColor = WherePrimaryColor.copy(alpha = 0.35f),
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = {
-                    if (query.isNotBlank()) {
-                        keyboardController?.hide()
-                        onTextSearch(query)
+                },
+                trailingIcon = {
+                    IconButton(
+                        onClick = {
+                            textModeEnabled = false
+                            keyboardController?.hide()
+                        },
+                    ) {
+                        Icon(
+                            imageVector = WhereIcons.Microphone,
+                            contentDescription = "切换到语音查找",
+                            tint = WherePrimaryColor,
+                        )
                     }
                 },
-            ),
-        )
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = WhereSelectedContainerColor,
+                    unfocusedContainerColor = WhereSelectedContainerColor,
+                    focusedBorderColor = WherePrimaryColor,
+                    unfocusedBorderColor = WherePrimaryColor.copy(alpha = 0.35f),
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { submitTextSearch() },
+                ),
+            )
+            Button(
+                modifier = Modifier.heightIn(min = 56.dp),
+                enabled = query.isNotBlank(),
+                onClick = submitTextSearch,
+            ) {
+                Text("查找")
+            }
+        }
     } else {
         Surface(
             modifier = modifier
@@ -462,7 +481,11 @@ private fun HomeSearchSurface(
                         tint = WherePrimaryColor,
                     )
                     Text(
-                        text = if (voiceListening) "正在听，请说话…" else "按住说话查找物品",
+                        text = when {
+                            voicePreparing -> "正在下载语音模型，请稍候…"
+                            voiceListening -> "正在听，请说话…"
+                            else -> "按住说话查找物品"
+                        },
                         color = WhereSecondaryTextColor,
                         style = MaterialTheme.typography.bodyLarge,
                     )

@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.DevicePlatform
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
@@ -367,6 +368,8 @@ fun WhereApp(
     var aiConnectionTestMessage by remember { mutableStateOf<String?>(null) }
     var pendingImageHandler by remember { mutableStateOf<((PickedImage) -> Unit)?>(null) }
     var voiceListening by remember { mutableStateOf(false) }
+    var voicePreparing by remember { mutableStateOf(false) }
+    var pendingCreatedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
     var settingsLoading by remember { mutableStateOf(false) }
     var settingsSubmitting by remember { mutableStateOf(false) }
     var settingsError by remember { mutableStateOf<String?>(null) }
@@ -416,10 +419,22 @@ fun WhereApp(
 
     /**
      * 先准备本机 Vosk 模型，再开始按住说话。
+     *
+     * 首次使用需要下载模型，这时先把准备状态交给界面，避免一直显示“正在听”。
      */
     suspend fun listenWithOfflineEngine(): SpeechRecognitionOutcome {
-        if (!speechRecognitionGateway.ensureEngine()) {
-            return SpeechRecognitionOutcome.Unavailable
+        val engineWasReady = speechRecognitionGateway.isEngineReady()
+        if (!engineWasReady) {
+            voicePreparing = true
+        }
+        try {
+            if (!speechRecognitionGateway.ensureEngine()) {
+                return SpeechRecognitionOutcome.Unavailable
+            }
+        } finally {
+            if (!engineWasReady) {
+                voicePreparing = false
+            }
         }
         return speechRecognitionGateway.listen(allowNetwork = false)
     }
@@ -936,6 +951,7 @@ fun WhereApp(
                     },
                     elderFriendlyMode = elderFriendlyMode,
                     voiceListening = voiceListening,
+                    voicePreparing = voicePreparing,
                 )
                 AppDestination.SEARCH -> SearchScreen(
                     initialQuery = searchQuery,
@@ -946,6 +962,7 @@ fun WhereApp(
                         popNavigation()
                     },
                     onSearch = performSearch,
+                    resolveMediaPath = resolveMediaPath,
                     onResultClick = { result ->
                         navigateTo(AppDestination.ITEM_DETAIL, result.itemId)
                     },
@@ -1058,6 +1075,7 @@ fun WhereApp(
                         }
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    voicePreparing = voicePreparing,
                     onAiRecognizeRequested = suspend {
                         val preferences = appPreferences ?: loadAppPreferencesUseCase()
                         appPreferences = preferences
@@ -1851,7 +1869,12 @@ fun WhereApp(
                     errorMessage = moveItemError,
                     voiceQuery = moveVoiceQuery,
                     voiceListening = voiceListening,
+                    voicePreparing = voicePreparing,
                     creatingLocation = locationTreeSubmitting,
+                    pendingCreatedLocationId = pendingCreatedLocationId,
+                    onPendingCreatedLocationConsumed = {
+                        pendingCreatedLocationId = null
+                    },
                     onBack = {
                         popNavigation()
                     },
@@ -1898,7 +1921,7 @@ fun WhereApp(
                                 locationTreeSubmitting = true
                                 moveItemError = null
                                 try {
-                                    createLocationPathUseCase(request)
+                                    pendingCreatedLocationId = createLocationPathUseCase(request)
                                     val itemId = selectedItemId
                                     if (itemId != null) {
                                         moveItemContext = loadMoveItemContextUseCase(itemId)

@@ -35,6 +35,28 @@ interface ItemSearchDao {
         limit: Int,
     ): List<ItemSearchFtsEntity>
 
+    /**
+     * 按子串补全 FTS 前缀匹配，让“电脑”也能命中“笔记本电脑”。
+     *
+     * 查询必须先标准化为小写；instr 对中文按字符比较，不依赖分词。
+     */
+    @Query(
+        """
+        SELECT rowid, item_id, name, aliases_text, category_text, note_text, location_path_text
+        FROM item_search_fts
+        WHERE instr(lower(name), :containsQuery) > 0
+           OR instr(lower(aliases_text), :containsQuery) > 0
+           OR instr(lower(category_text), :containsQuery) > 0
+           OR instr(lower(note_text), :containsQuery) > 0
+           OR instr(lower(location_path_text), :containsQuery) > 0
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchContaining(
+        containsQuery: String,
+        limit: Int,
+    ): List<ItemSearchFtsEntity>
+
     /** 清空可重建索引，正式物品数据不受影响。 */
     @Query("DELETE FROM item_search_fts")
     suspend fun clear(): Int

@@ -47,11 +47,16 @@ import androidx.compose.ui.unit.dp
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.feature.location.management.CreateLocationPathRequest
+import com.vichua.where.feature.location.management.CreateLocationPathSegment
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveTargetLocation
 
 /**
  * 选择并保存物品新位置。
+ *
+ * @param voicePreparing 首次使用时是否正在下载离线语音模型。
+ * @param pendingCreatedLocationId 刚新建完成、需要自动选中的位置。
+ * @param onPendingCreatedLocationConsumed 界面已经选中新建位置后清空待选 ID。
  */
 @Composable
 fun MoveItemScreen(
@@ -68,6 +73,9 @@ fun MoveItemScreen(
     onVoiceReleased: () -> Unit,
     onVoiceQueryConsumed: () -> Unit,
     elderFriendlyMode: Boolean = false,
+    voicePreparing: Boolean = false,
+    pendingCreatedLocationId: LocationNodeId? = null,
+    onPendingCreatedLocationConsumed: () -> Unit = {},
 ) {
     var selectedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
     var locationQuery by remember { mutableStateOf("") }
@@ -79,6 +87,17 @@ fun MoveItemScreen(
         locationQuery = query
         browseAllVisible = true
         onVoiceQueryConsumed()
+    }
+
+    LaunchedEffect(pendingCreatedLocationId, context) {
+        val createdLocationId = pendingCreatedLocationId ?: return@LaunchedEffect
+        val createdLocationExists = context?.availableLocations?.any { location ->
+            location.locationId == createdLocationId
+        } == true
+        if (createdLocationExists) {
+            selectedLocationId = createdLocationId
+            onPendingCreatedLocationConsumed()
+        }
     }
 
     Column(
@@ -115,9 +134,11 @@ fun MoveItemScreen(
         MoveLevelSelector(
             context = context,
             selectedLocationId = selectedLocationId,
+            creatingLocation = creatingLocation,
             onSelect = { locationId ->
                 selectedLocationId = locationId
             },
+            onCreateLocation = onCreateLocation,
         )
 
         if (context.recentLocations.isNotEmpty()) {
@@ -300,7 +321,11 @@ fun MoveItemScreen(
                     )
                     Text(
                         modifier = Modifier.padding(start = 7.dp),
-                        text = if (voiceListening) "正在听…" else "语音描述",
+                        text = when {
+                            voicePreparing -> "正在下载语音模型，请稍候…"
+                            voiceListening -> "正在听…"
+                            else -> "语音描述"
+                        },
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -389,12 +414,18 @@ fun MoveItemScreen(
 
 /**
  * 把当前位置拆成可点的层级，方便只换抽屉格子这一层。
+ *
+ * 选中一层后，既可以点同级已有位置，也可以直接改名称：
+ * 同名同级就选中，没有就在该层父节点下新建一层。
+ * 家庭根没有父节点，不能用改名方式新建同级。
  */
 @Composable
 private fun MoveLevelSelector(
     context: MoveItemContext,
     selectedLocationId: LocationNodeId?,
+    creatingLocation: Boolean,
     onSelect: (LocationNodeId) -> Unit,
+    onCreateLocation: (CreateLocationPathRequest) -> Unit,
 ) {
     val currentChain = remember(context.item.currentLocationId, context.availableLocations) {
         locationAncestry(
@@ -406,9 +437,10 @@ private fun MoveLevelSelector(
         return
     }
     var editingLevelIndex by remember { mutableStateOf<Int?>(null) }
+    var levelName by remember(editingLevelIndex) { mutableStateOf("") }
     SectionTitle(text = "按层级更换")
     Text(
-        text = "点其中一层，只换这一层的同级位置。例如把第二格换成第一格。",
+        text = "点其中一层后，可选择同级位置，或直接改成新名称。已有同名就选中，没有就在这一层新建。",
         color = WhereSecondaryTextColor,
         style = MaterialTheme.typography.bodySmall,
     )
@@ -452,7 +484,80 @@ private fun MoveLevelSelector(
         val currentNode = currentChain[editingIndex]
         val siblings = context.availableLocations.filter { location ->
             location.parentId == currentNode.parentId &&
-                location.locationId != context.item.currentLocationId
+                location.locationId != currentNode.locationId
+        }
+        val canCreateAtThisLevel = currentNode.parentId != null
+        val applyLevelName: () -> Unit = {
+            val trimmedName = levelName.trim()
+            if (trimmedName.isNotEmpty() && !creatingLocation) {
+                val existingLocation = context.availableLocations.firstOrNull { location ->
+                    location.parentId == currentNode.parentId &&
+                        location.name.equals(trimmedName, ignoreCase = true)
+                }
+                val parentId = currentNode.parentId
+                when {
+                    existingLocation != null -> onSelect(existingLocation.locationId)
+                    parentId != null -> onCreateLocation(
+                        CreateLocationPathRequest(
+                            parentId = parentId,
+                            segments = listOf(
+                                CreateLocationPathSegment(
+                                    type = currentNode.type,
+                                    name = trimmedName,
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+        OutlinedTextField(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            value = levelName,
+            onValueChange = { value ->
+                levelName = value
+            },
+            enabled = !creatingLocation && canCreateAtThisLevel,
+            singleLine = true,
+            placeholder = {
+                Text(
+                    if (canCreateAtThisLevel) {
+                        "把“${currentNode.name}”改成…"
+                    } else {
+                        "家庭这一层不能直接改名"
+                    },
+                )
+            },
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = WhereSurfaceColor,
+                unfocusedContainerColor = WhereSurfaceColor,
+                focusedBorderColor = WherePrimaryColor,
+                unfocusedBorderColor = WhereOutlineColor,
+            ),
+        )
+        if (canCreateAtThisLevel) {
+            Button(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .height(48.dp),
+                enabled = levelName.isNotBlank() && !creatingLocation,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = WherePrimaryColor),
+                onClick = applyLevelName,
+            ) {
+                Text("改成这个名称")
+            }
+        } else {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = "家庭根位置不能直接改名，请选择已有位置，或用底部新建位置。",
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
         if (siblings.isEmpty()) {
             Text(

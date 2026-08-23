@@ -20,11 +20,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +51,7 @@ import com.vichua.where.feature.search.text.ItemTextSearchResult
  * @param errorMessage 可展示的中文错误。
  * @param onBack 返回首页。
  * @param onSearch 提交查询。
+ * @param resolveMediaPath 把封面缩略图标识解析为本地绝对路径。
  * @param onResultClick 打开物品详情。
  * @param elderFriendlyMode 是否使用更大卡片，并为每条结果提供朗读位置。
  * @param speechErrorMessage 可展示的中文朗读错误。
@@ -60,12 +65,20 @@ fun SearchScreen(
     errorMessage: String?,
     onBack: () -> Unit,
     onSearch: (String) -> Unit,
+    resolveMediaPath: (String) -> String?,
     onResultClick: (ItemTextSearchResult) -> Unit,
     elderFriendlyMode: Boolean = false,
     speechErrorMessage: String? = null,
     onReadLocation: (ItemTextSearchResult) -> Unit = {},
 ) {
     var query by remember(initialQuery) { mutableStateOf(initialQuery) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val submitSearch: () -> Unit = {
+        if (query.isNotBlank() && !searching) {
+            keyboardController?.hide()
+            onSearch(query)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -96,42 +109,44 @@ fun SearchScreen(
             )
         }
 
-        OutlinedTextField(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 12.dp),
-            value = query,
-            onValueChange = { value ->
-                query = value
-            },
-            enabled = !searching,
-            placeholder = {
-                Text("输入物品名称、别名或位置")
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = WhereSelectedContainerColor,
-                unfocusedContainerColor = WhereSelectedContainerColor,
-                focusedBorderColor = WherePrimaryColor,
-                unfocusedBorderColor = WhereOutlineColor,
-            ),
-            trailingIcon = {
-                Icon(
-                    modifier = Modifier
-                        .clickable(
-                            enabled = !searching,
-                            onClick = {
-                                onSearch(query)
-                            },
-                        )
-                        .padding(10.dp),
-                    imageVector = WhereIcons.Search,
-                    contentDescription = "查找",
-                    tint = WherePrimaryColor,
-                )
-            },
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedTextField(
+                modifier = Modifier.weight(1f),
+                value = query,
+                onValueChange = { value ->
+                    query = value
+                },
+                enabled = !searching,
+                placeholder = {
+                    Text("输入物品名称、别名或位置")
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = WhereSelectedContainerColor,
+                    unfocusedContainerColor = WhereSelectedContainerColor,
+                    focusedBorderColor = WherePrimaryColor,
+                    unfocusedBorderColor = WhereOutlineColor,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { submitSearch() },
+                ),
+            )
+            Button(
+                modifier = Modifier.heightIn(min = 52.dp),
+                enabled = query.isNotBlank() && !searching,
+                onClick = submitSearch,
+            ) {
+                Text("查找")
+            }
+        }
 
         if (searching) {
             Row(
@@ -192,6 +207,7 @@ fun SearchScreen(
                     SearchResultCard(
                         modifier = Modifier.padding(top = 12.dp),
                         result = result,
+                        thumbnailPath = result.thumbnailStorageKey?.let(resolveMediaPath),
                         elderFriendlyMode = elderFriendlyMode,
                         onClick = {
                             onResultClick(result)
@@ -204,17 +220,6 @@ fun SearchScreen(
             }
         }
 
-        Button(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 18.dp),
-            enabled = query.isNotBlank() && !searching,
-            onClick = {
-                onSearch(query)
-            },
-        ) {
-            Text("查找")
-        }
     }
 }
 
@@ -225,6 +230,7 @@ fun SearchScreen(
 private fun SearchResultCard(
     modifier: Modifier,
     result: ItemTextSearchResult,
+    thumbnailPath: String?,
     elderFriendlyMode: Boolean,
     onClick: () -> Unit,
     onReadLocation: () -> Unit,
@@ -252,16 +258,22 @@ private fun SearchResultCard(
                     color = WhereSelectedContainerColor,
                     shape = RoundedCornerShape(12.dp),
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
+                    LocalStorageImage(
+                        absolutePath = thumbnailPath,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
                     ) {
-                        Icon(
-                            modifier = Modifier.size(if (elderFriendlyMode) 36.dp else 30.dp),
-                            imageVector = WhereIcons.Image,
-                            contentDescription = null,
-                            tint = WherePrimaryColor,
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(
+                                modifier = Modifier.size(if (elderFriendlyMode) 36.dp else 30.dp),
+                                imageVector = WhereIcons.Image,
+                                contentDescription = null,
+                                tint = WherePrimaryColor,
+                            )
+                        }
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {

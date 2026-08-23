@@ -94,20 +94,28 @@ fun LocationPathCreateDialog(
         }
         val lastType = drafts.last().type
         if (allowedChildTypes(lastType).isNotEmpty() && drafts.size < MAX_LOCATION_PATH_SEGMENTS) {
-            Text(
+            Surface(
                 modifier = Modifier
-                    .padding(top = 12.dp)
+                    .fillMaxWidth()
+                    .padding(top = 16.dp)
                     .clickable(
                         enabled = !submitting,
                         role = Role.Button,
                     ) {
                         drafts += LocationPathDraft(allowedChildTypes(lastType).first())
                     },
-                text = "再加一层",
-                color = WherePrimaryColor,
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+                shape = RoundedCornerShape(14.dp),
+                color = WhereSelectedContainerColor,
+                border = BorderStroke(1.dp, WherePrimaryColor),
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    text = "再加一层",
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
@@ -122,12 +130,30 @@ private fun LocationPathDraftRow(
     onNameChange: (String) -> Unit,
     onRemove: (() -> Unit)?,
 ) {
-    Text(
-        modifier = Modifier.padding(top = 14.dp),
-        text = "第 ${index + 1} 层",
-        fontWeight = FontWeight.SemiBold,
-        style = MaterialTheme.typography.bodyMedium,
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = "第 ${index + 1} 层",
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (onRemove != null) {
+            Text(
+                modifier = Modifier.clickable(
+                    enabled = enabled,
+                    role = Role.Button,
+                    onClick = onRemove,
+                ),
+                text = "删除这一层",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
     if (allowedTypes.size > 1) {
         Row(
             modifier = Modifier.padding(top = 8.dp),
@@ -169,16 +195,6 @@ private fun LocationPathDraftRow(
         label = { Text(locationTypeLabel(draft.type) + "名称") },
         singleLine = true,
     )
-    if (onRemove != null) {
-        Text(
-            modifier = Modifier
-                .padding(top = 6.dp)
-                .clickable(enabled = enabled, role = Role.Button, onClick = onRemove),
-            text = "删除这一层",
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
 }
 
 private data class LocationPathDraft(

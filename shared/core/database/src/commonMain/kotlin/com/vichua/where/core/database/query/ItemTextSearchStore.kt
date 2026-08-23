@@ -1,6 +1,7 @@
 package com.vichua.where.core.database.query
 
 import com.vichua.where.core.database.WhereDatabase
+import com.vichua.where.core.database.entity.ItemSearchFtsEntity
 import com.vichua.where.core.database.mapper.toDomain
 import com.vichua.where.core.database.mapper.toEntity
 import com.vichua.where.core.database.transaction.DatabaseTransactionRunner
@@ -48,21 +49,28 @@ class ItemTextSearchStore(
     }
 
     /**
-     * 执行安全 FTS 查询，并保存去重后的最近查找。
+     * 执行安全 FTS 查询，再用子串补全中文包含匹配，并保存去重后的最近查找。
      */
     suspend fun search(
         ftsQuery: String,
+        containsQuery: String,
         history: LocalSearchHistory,
     ): List<StoredItemTextSearchResult> {
         require(ftsQuery.isNotBlank()) { "FTS query must not be blank." }
+        require(containsQuery.isNotBlank()) { "Contains query must not be blank." }
         require(history.deviceId == currentDeviceId()) {
             "Search history belongs to another device."
         }
 
-        val documents = database.itemSearchDao().search(
+        val ftsDocuments = database.itemSearchDao().search(
             ftsQuery = ftsQuery,
             limit = MAX_SEARCH_RESULTS,
         )
+        val containsDocuments = database.itemSearchDao().searchContaining(
+            containsQuery = containsQuery,
+            limit = MAX_SEARCH_RESULTS,
+        )
+        val documents = mergeSearchDocuments(ftsDocuments, containsDocuments)
         val activeLocations = database.householdDao().findFirstActive()?.let { household ->
             database.locationNodeDao().findActiveTree(household.id)
         }.orEmpty().map { entity -> entity.toDomain() }
@@ -99,6 +107,20 @@ class ItemTextSearchStore(
             )
         }
         return results
+    }
+
+    /**
+     * FTS 命中优先，再用子串结果补上“电脑”对“笔记本电脑”这类包含关系。
+     */
+    private fun mergeSearchDocuments(
+        ftsDocuments: List<ItemSearchFtsEntity>,
+        containsDocuments: List<ItemSearchFtsEntity>,
+    ): List<ItemSearchFtsEntity> {
+        val merged = LinkedHashMap<String, ItemSearchFtsEntity>()
+        (ftsDocuments + containsDocuments).forEach { document ->
+            merged.putIfAbsent(document.itemId, document)
+        }
+        return merged.values.take(MAX_SEARCH_RESULTS)
     }
 
     /**

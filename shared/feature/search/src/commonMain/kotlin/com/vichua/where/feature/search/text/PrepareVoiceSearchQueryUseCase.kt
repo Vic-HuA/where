@@ -13,6 +13,11 @@ class PrepareVoiceSearchQueryUseCase {
         val trimmed = transcript.trim()
         require(trimmed.isNotEmpty()) { "Voice search transcript must not be blank." }
         var prepared = trimmed
+        QUESTION_PREFIXES.forEach { prefix ->
+            if (prepared.startsWith(prefix)) {
+                prepared = prepared.removePrefix(prefix).trim()
+            }
+        }
         QUESTION_SUFFIXES.forEach { suffix ->
             if (prepared.endsWith(suffix)) {
                 prepared = prepared.removeSuffix(suffix).trim()
@@ -22,6 +27,21 @@ class PrepareVoiceSearchQueryUseCase {
     }
 
     private companion object {
+        val QUESTION_PREFIXES = listOf(
+            "请帮我找一下",
+            "帮我找一下",
+            "我想找一下",
+            "我要找一下",
+            "帮我找",
+            "我想找",
+            "我要找",
+            "找一下",
+            "请找",
+            "查找",
+            "搜索",
+            "找找",
+            "找",
+        )
         val QUESTION_SUFFIXES = listOf(
             "放哪里了",
             "放哪儿了",

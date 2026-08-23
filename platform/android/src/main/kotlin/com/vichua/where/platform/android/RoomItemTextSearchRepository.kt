@@ -20,6 +20,7 @@ class RoomItemTextSearchRepository(
         execution: ItemTextSearchExecution,
     ): List<ItemTextSearchResult> = store.search(
         ftsQuery = execution.ftsQuery,
+        containsQuery = execution.containsQuery,
         history = execution.history,
     ).map { storedResult ->
         ItemTextSearchResult(

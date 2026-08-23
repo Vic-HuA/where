@@ -30,10 +30,12 @@ data class ItemTextSearchResult(
  * 单次本地搜索执行参数。
  *
  * @property ftsQuery 已安全转义的 SQLite FTS 查询。
+ * @property containsQuery 标准化后的子串，用于补全中文模糊匹配。
  * @property history 当前设备需要保存的最近查找记录。
  */
 data class ItemTextSearchExecution(
     val ftsQuery: String,
+    val containsQuery: String,
     val history: LocalSearchHistory,
 )
 
@@ -84,6 +86,7 @@ class SearchItemsUseCase(
         return repository.search(
             ItemTextSearchExecution(
                 ftsQuery = buildFtsQuery(normalizedQuery),
+                containsQuery = normalizedQuery,
                 history = history,
             ),
         )

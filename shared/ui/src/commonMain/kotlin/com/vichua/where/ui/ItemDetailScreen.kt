@@ -985,11 +985,29 @@ private fun ItemLocationHistoryDialog(
                         color = WhereSecondaryTextColor,
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    val fromPath = event.fromPath
+                    if (fromPath != null) {
+                        Text(
+                            modifier = Modifier.padding(top = 8.dp),
+                            text = "原来",
+                            color = WhereSecondaryTextColor,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            text = visibleLocationPath(fromPath),
+                            color = WherePrimaryTextColor,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            modifier = Modifier.padding(top = 6.dp),
+                            text = "现在",
+                            color = WhereSecondaryTextColor,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = event.fromPath?.let { path ->
-                            "${visibleLocationPath(path)} › ${visibleLocationPath(event.toPath)}"
-                        } ?: visibleLocationPath(event.toPath),
+                        modifier = Modifier.padding(top = if (fromPath == null) 8.dp else 0.dp),
+                        text = visibleLocationPath(event.toPath),
                         color = WherePrimaryTextColor,
                         style = MaterialTheme.typography.bodyMedium,
                     )

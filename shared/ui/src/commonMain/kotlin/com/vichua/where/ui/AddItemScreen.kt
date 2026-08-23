@@ -73,6 +73,7 @@ import com.vichua.where.feature.item.photo.ImportedItemPhoto
  * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
  * @param onSpeakRequested 用户主动说话后返回转写文字；取消或失败时为空。
  * @param onSpeakReleased 松开语音区域后结束本轮收听。
+ * @param voicePreparing 首次使用时是否正在下载离线语音模型。
  * @param onAiRecognizeRequested 用户主动选择识别后返回建议；取消或失败时为空，不得自动保存。
  */
 @Composable
@@ -91,6 +92,7 @@ fun AddItemScreen(
     onDiscardDraft: () -> Unit,
     onSubmit: (CreateManualItemRequest) -> Unit,
     elderFriendlyMode: Boolean = false,
+    voicePreparing: Boolean = false,
     onSpeakRequested: suspend () -> String? = { null },
     onSpeakReleased: () -> Unit = {},
     onAiRecognizeRequested: suspend () -> AiFieldSuggestions? = { null },
@@ -419,10 +421,10 @@ fun AddItemScreen(
                     tint = WherePrimaryColor,
                 )
                 Text(
-                    text = if (speechSubmitting) {
-                        "正在听，请说话…"
-                    } else {
-                        "按住说：放在书柜第二层蓝色盒子"
+                    text = when {
+                        voicePreparing -> "正在下载语音模型，请稍候…"
+                        speechSubmitting -> "正在听，请说话…"
+                        else -> "按住说：放在书柜第二层蓝色盒子"
                     },
                     color = WherePrimaryColor,
                     fontWeight = FontWeight.Medium,
@@ -506,8 +508,8 @@ fun AddItemScreen(
                 onDismissRequest = {
                     pendingAiSuggestions = null
                 },
-                title = "确认 AI 建议",
-                confirmText = "采用",
+                title = "确认识别结果",
+                confirmText = "采用建议",
                 onConfirm = {
                     val suggestedName = suggestions.itemName
                     val suggestedLocationDescription = suggestions.locationDescription
@@ -520,28 +522,71 @@ fun AddItemScreen(
                     }
                     pendingAiSuggestions = null
                 },
-                dismissText = "不用",
+                dismissText = "先不采用",
                 onDismiss = {
                     pendingAiSuggestions = null
                 },
             ) {
                 Text(
-                    text = "这些内容还不会保存。采用后写入当前表单，仍可再改。",
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "对照片识别后的建议。采用后只写入当前表单，仍可再改，不会直接保存。",
+                    color = WhereSecondaryTextColor,
+                    style = MaterialTheme.typography.bodySmall,
                 )
+                if (photos.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        photos.take(3).forEach { photo ->
+                            Surface(
+                                modifier = Modifier.size(64.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = WhereSelectedContainerColor,
+                            ) {
+                                LocalStorageImage(
+                                    absolutePath = resolveMediaPath(
+                                        photo.media.thumbnailTempStorageKey,
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                ) {
+                                    Icon(
+                                        imageVector = WhereIcons.Image,
+                                        contentDescription = null,
+                                        tint = WherePrimaryColor,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 if (!suggestions.itemName.isNullOrBlank()) {
                     Text(
-                        modifier = Modifier.padding(top = 8.dp),
-                        text = "物品名称：${suggestions.itemName}",
+                        modifier = Modifier.padding(top = 14.dp),
+                        text = "物品名称",
+                        color = WhereSecondaryTextColor,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 4.dp),
+                        text = suggestions.itemName.orEmpty(),
                         color = WherePrimaryTextColor,
-                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge,
                     )
                 }
                 if (!suggestions.locationDescription.isNullOrBlank()) {
                     Text(
-                        modifier = Modifier.padding(top = 6.dp),
-                        text = "位置说明：${suggestions.locationDescription}",
+                        modifier = Modifier.padding(top = 12.dp),
+                        text = "位置说明",
+                        color = WhereSecondaryTextColor,
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        modifier = Modifier.padding(top = 4.dp),
+                        text = suggestions.locationDescription.orEmpty(),
                         color = WherePrimaryTextColor,
                         style = MaterialTheme.typography.bodyMedium,
                     )
