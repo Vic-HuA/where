@@ -21,6 +21,8 @@ import com.vichua.where.core.model.UtcTimestamp
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.core.platform.DocumentGateway
 import com.vichua.where.core.platform.SelectedDocument
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -48,6 +50,7 @@ class ExportHouseholdDataUseCase(
         password: String,
         passwordConfirmation: String,
         destination: ExportDestination,
+        onProgress: suspend (String) -> Unit = {},
     ): BackupVerificationResult? {
         require(password.length >= BackupFormat.MIN_PASSWORD_LENGTH) {
             "Backup password is shorter than the accepted minimum."
@@ -55,42 +58,59 @@ class ExportHouseholdDataUseCase(
         require(password == passwordConfirmation) { "Backup password confirmation does not match." }
         require(documentGateway.isAvailable()) { "Document picker is unavailable." }
 
+        reportProgress(onProgress, "正在读取家庭数据…")
         val snapshot = repository.loadSnapshot()
-        val packedMedia = packOriginalPhotos(snapshot)
-        val snapshotBytes = BACKUP_JSON.encodeToString(snapshot).encodeToByteArray()
-        val snapshotHash = contentHasher.sha256Hex(snapshotBytes)
+        reportProgress(onProgress, "正在打包物品照片…")
+        val packedMedia = withContext(Dispatchers.Default) {
+            packOriginalPhotos(snapshot)
+        }
         val createdAt = UtcTimestamp(clock.now())
-        val manifest = BackupManifest(
-            formatVersion = BackupFormat.CURRENT_VERSION,
-            appVersion = BackupFormat.APP_VERSION,
-            createdAt = createdAt,
-            householdId = snapshot.household.id,
-            sourceDeviceId = repository.currentDeviceId(),
-            snapshotHash = snapshotHash,
-            itemPhotoCount = snapshot.photos.size,
-            locationPhotoCount = 0,
-            voiceLabelCount = 0,
-            mediaTotalBytes = packedMedia.payloads.sumOf { media -> media.bytes.size.toLong() },
-            mediaFiles = packedMedia.descriptors,
-            encryptionAlgorithm = BackupFormat.ENCRYPTION_ALGORITHM,
-            keyDerivationAlgorithm = BackupFormat.KEY_DERIVATION_ALGORITHM,
-            keyDerivationIterations = BackupFormat.KDF_ITERATIONS,
+        reportProgress(onProgress, "正在加密导出包…")
+        val packageBytes = withContext(Dispatchers.Default) {
+            val snapshotBytes = BACKUP_JSON.encodeToString(snapshot).encodeToByteArray()
+            val snapshotHash = contentHasher.sha256Hex(snapshotBytes)
+            val manifest = BackupManifest(
+                formatVersion = BackupFormat.CURRENT_VERSION,
+                appVersion = BackupFormat.APP_VERSION,
+                createdAt = createdAt,
+                householdId = snapshot.household.id,
+                sourceDeviceId = repository.currentDeviceId(),
+                snapshotHash = snapshotHash,
+                itemPhotoCount = snapshot.photos.size,
+                locationPhotoCount = 0,
+                voiceLabelCount = 0,
+                mediaTotalBytes = packedMedia.payloads.sumOf { media -> media.bytes.size.toLong() },
+                mediaFiles = packedMedia.descriptors,
+                encryptionAlgorithm = BackupFormat.ENCRYPTION_ALGORITHM,
+                keyDerivationAlgorithm = BackupFormat.KEY_DERIVATION_ALGORITHM,
+                keyDerivationIterations = BackupFormat.KDF_ITERATIONS,
+            )
+            val envelope = BackupEnvelope(
+                manifest = manifest,
+                snapshot = snapshot,
+                mediaFiles = packedMedia.payloads,
+            )
+            val plaintext = BACKUP_JSON.encodeToString(envelope).encodeToByteArray()
+            val blob = backupCrypto.encrypt(
+                password = password,
+                derivation = backupCrypto.createKeyDerivation(),
+                plaintext = plaintext,
+            )
+            BackupPackageCodec.encode(blob)
+        }
+        reportProgress(
+            onProgress,
+            when (destination) {
+                ExportDestination.SAVE_DOCUMENT -> "请选择导出保存位置…"
+                ExportDestination.SHARE -> "正在打开系统分享…"
+            },
         )
-        val envelope = BackupEnvelope(
-            manifest = manifest,
-            snapshot = snapshot,
-            mediaFiles = packedMedia.payloads,
-        )
-        val plaintext = BACKUP_JSON.encodeToString(envelope).encodeToByteArray()
-        val blob = backupCrypto.encrypt(
-            password = password,
-            derivation = backupCrypto.createKeyDerivation(),
-            plaintext = plaintext,
-        )
-        val packageBytes = BackupPackageCodec.encode(blob)
         val saved = writeDestination(destination, packageBytes) ?: return null
         return try {
-            val verified = verifyPackageBytes(saved.bytes, password, saved.bytes.size.toLong())
+            reportProgress(onProgress, "正在校验导出包…")
+            val verified = withContext(Dispatchers.Default) {
+                verifyPackageBytes(saved.bytes, password, saved.bytes.size.toLong())
+            }
             repository.insertRecord(
                 LocalBackupRecord(
                     id = LocalBackupRecordId(idGenerator.generate()),

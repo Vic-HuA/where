@@ -68,6 +68,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onVoiceSearchRequested 按下语音区域后开始听。
  * @param onVoiceSearchReleased 松开后结束本轮收听。
  * @param onItemClick 打开最近物品详情。
+ * @param onViewAllItems 打开全部物品列表。
  * @param onRecentSearchClick 用同一查询再次执行本地搜索。
  * @param onFavoriteLocationClick 按常用位置名称查找该处物品。
  * @param onRecordItemClick 打开新增物品流程。
@@ -95,6 +96,7 @@ fun HomeScreen(
     onVoiceSearchRequested: () -> Unit,
     onVoiceSearchReleased: () -> Unit = {},
     onItemClick: (HomeItemSummary) -> Unit,
+    onViewAllItems: () -> Unit = {},
     onRecentSearchClick: (String) -> Unit,
     onFavoriteLocationClick: (FavoriteLocationSummary) -> Unit,
     onRecordItemClick: () -> Unit,
@@ -295,6 +297,8 @@ fun HomeScreen(
             HomeSectionTitle(
                 modifier = Modifier.padding(top = 24.dp),
                 text = "最近记录",
+                actionText = if (loadedSnapshot.recentItems.isNotEmpty()) "查看全部" else null,
+                onActionClick = onViewAllItems,
             )
             if (loadedSnapshot.recentItems.isEmpty()) {
                 EmptyHomeCard(
@@ -303,7 +307,7 @@ fun HomeScreen(
                 )
             } else {
                 loadedSnapshot.recentItems.forEach { item ->
-                    RecentItemCard(
+                    ItemSummaryCard(
                         modifier = Modifier.padding(top = 12.dp),
                         item = item,
                         thumbnailPath = item.thumbnailStorageKey?.let(resolveMediaPath),
@@ -507,27 +511,46 @@ private fun HomeSearchSurface(
 }
 
 /**
- * 首页分区标题。
+ * 首页分区标题。右侧动作留给「查看全部」，避免再加底部入口。
  */
 @Composable
 private fun HomeSectionTitle(
     modifier: Modifier,
     text: String,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null,
 ) {
-    Text(
-        modifier = modifier,
-        text = text,
-        color = WherePrimaryTextColor,
-        fontWeight = FontWeight.Bold,
-        style = MaterialTheme.typography.titleLarge,
-    )
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            color = WherePrimaryTextColor,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleLarge,
+        )
+        if (actionText != null && onActionClick != null) {
+            Text(
+                modifier = Modifier.clickable(
+                    role = Role.Button,
+                    onClick = onActionClick,
+                ),
+                text = actionText,
+                color = WherePrimaryColor,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
 }
 
 /**
- * 最近物品卡片。
+ * 首页和全部物品共用的摘要卡片。
  */
 @Composable
-private fun RecentItemCard(
+internal fun ItemSummaryCard(
     modifier: Modifier,
     item: HomeItemSummary,
     thumbnailPath: String?,
@@ -603,7 +626,7 @@ private fun RecentItemCard(
  * 首页没有物品时的真实空状态。
  */
 @Composable
-private fun EmptyHomeCard(
+internal fun EmptyHomeCard(
     modifier: Modifier,
     text: String,
 ) {

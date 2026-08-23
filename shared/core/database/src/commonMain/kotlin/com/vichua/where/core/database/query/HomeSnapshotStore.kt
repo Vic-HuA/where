@@ -1,6 +1,7 @@
 package com.vichua.where.core.database.query
 
 import com.vichua.where.core.database.WhereDatabase
+import com.vichua.where.core.database.entity.ItemEntity
 import com.vichua.where.core.database.mapper.toDomain
 import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.Item
@@ -72,25 +73,13 @@ class HomeSnapshotStore(
             .map { entity -> entity.toDomain() }
         val locationsById = activeLocations.associateBy(LocationNode::id)
 
-        val recentItemEntities = database.itemDao().findRecentActive(
-            householdId = household.id,
-            limit = MAX_RECENT_ITEMS,
+        val recentItems = mapStoredItems(
+            itemEntities = database.itemDao().findRecentActive(
+                householdId = household.id,
+                limit = MAX_RECENT_ITEMS,
+            ),
+            locationsById = locationsById,
         )
-        val coverByItemId = if (recentItemEntities.isEmpty()) {
-            emptyMap()
-        } else {
-            database.photoAssetDao()
-                .findActiveCovers(recentItemEntities.map { entity -> entity.id })
-                .associateBy { entity -> entity.itemId }
-        }
-        val recentItems = recentItemEntities.map { entity ->
-            val item = entity.toDomain()
-            StoredHomeItem(
-                item = item,
-                locationPath = buildLocationPath(item.currentLocationId, locationsById),
-                thumbnailStorageKey = coverByItemId[item.id.value]?.thumbnailStorageKey,
-            )
-        }
 
         val recentSearches = if (device == null) {
             emptyList()
@@ -119,6 +108,44 @@ class HomeSnapshotStore(
             locationUnconfirmedCount = database.itemDao()
                 .countLocationUnconfirmed(household.id),
         )
+    }
+
+    /**
+     * 加载当前家庭全部未删除物品，供「查看全部」页使用，不截成首页三件。
+     */
+    suspend fun loadAllItems(): List<StoredHomeItem> {
+        val household = database.householdDao().findFirstActive() ?: return emptyList()
+        val activeLocations = database.locationNodeDao()
+            .findActiveTree(household.id)
+            .map { entity -> entity.toDomain() }
+        return mapStoredItems(
+            itemEntities = database.itemDao().findActiveByHousehold(household.id),
+            locationsById = activeLocations.associateBy(LocationNode::id),
+        )
+    }
+
+    /**
+     * 补上实时路径和封面，避免首页和全部列表各维护一套展示字段。
+     */
+    private suspend fun mapStoredItems(
+        itemEntities: List<ItemEntity>,
+        locationsById: Map<LocationNodeId, LocationNode>,
+    ): List<StoredHomeItem> {
+        val coverByItemId = if (itemEntities.isEmpty()) {
+            emptyMap()
+        } else {
+            database.photoAssetDao()
+                .findActiveCovers(itemEntities.map { entity -> entity.id })
+                .associateBy { entity -> entity.itemId }
+        }
+        return itemEntities.map { entity ->
+            val item = entity.toDomain()
+            StoredHomeItem(
+                item = item,
+                locationPath = buildLocationPath(item.currentLocationId, locationsById),
+                thumbnailStorageKey = coverByItemId[item.id.value]?.thumbnailStorageKey,
+            )
+        }
     }
 
     /**

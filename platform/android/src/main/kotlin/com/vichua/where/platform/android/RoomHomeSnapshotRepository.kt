@@ -46,4 +46,18 @@ class RoomHomeSnapshotRepository(
             locationUnconfirmedCount = snapshot.locationUnconfirmedCount,
         )
     }
+
+    /**
+     * 把数据库层全部物品收成与首页相同的只读摘要。
+     */
+    override suspend fun loadAllItems(): List<HomeItemSummary> =
+        store.loadAllItems().map { storedItem ->
+            HomeItemSummary(
+                itemId = storedItem.item.id,
+                name = storedItem.item.name,
+                locationPath = storedItem.locationPath,
+                updatedAt = storedItem.item.updatedAt,
+                thumbnailStorageKey = storedItem.thumbnailStorageKey,
+            )
+        }
 }

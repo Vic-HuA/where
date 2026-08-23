@@ -127,9 +127,28 @@ data class SelectedDocument(
 }
 
 /**
- * 系统文件选择器入口，用于加密备份的保存和只读打开。
+ * 应用固定备份目录里的一个加密备份文件。
  *
- * 取消选择时返回空，不能让设置页主流程崩溃。
+ * 只暴露展示名和受控路径，不在这里带上完整字节，避免列表阶段就把大文件读进内存。
+ */
+data class ManagedBackupFile(
+    val displayName: String,
+    val opaqueDocumentUri: String,
+    val sizeBytes: Long,
+    val lastModifiedMillis: Long,
+) {
+    init {
+        require(displayName.isNotBlank()) { "Managed backup name must not be blank." }
+        require(opaqueDocumentUri.isNotBlank()) { "Managed backup URI must not be blank." }
+        require(sizeBytes >= 0L) { "Managed backup size must not be negative." }
+        require(lastModifiedMillis >= 0L) { "Managed backup time must not be negative." }
+    }
+}
+
+/**
+ * 备份文件入口：日常备份写入固定目录，导出和旧文件才走系统选择器。
+ *
+ * 取消系统选择时返回空，不能让设置页主流程崩溃。
  */
 interface DocumentGateway {
     /**
@@ -138,7 +157,29 @@ interface DocumentGateway {
     fun isAvailable(): Boolean
 
     /**
+     * 给界面展示的固定备份目录说明，避免用户还要自己选文件夹。
+     */
+    fun managedBackupDirectoryLabel(): String
+
+    /**
+     * 列出固定备份目录中的加密备份，按修改时间从新到旧。
+     */
+    suspend fun listManagedBackups(): List<ManagedBackupFile>
+
+    /**
+     * 把加密备份写入固定目录，并生成带时间戳的文件名。
+     */
+    suspend fun saveManagedBackup(bytes: ByteArray): SelectedDocument
+
+    /**
+     * 只读取固定目录中的备份。路径必须落在该目录内，防止读到应用外文件。
+     */
+    suspend fun readManagedBackup(opaqueDocumentUri: String): SelectedDocument
+
+    /**
      * 让用户选择保存位置并写入完整备份字节。
+     *
+     * 仅供导出完整家庭数据使用；日常备份不再走这条路径。
      *
      * @return 写出后的文档引用；用户取消时为空。
      */
@@ -150,6 +191,8 @@ interface DocumentGateway {
 
     /**
      * 让用户选择已有备份文件并读取完整字节。
+     *
+     * 仅供从其他位置导入旧备份；日常验证和恢复走固定目录列表。
      *
      * @return 选中的文档；用户取消时为空。
      */

@@ -42,6 +42,7 @@ import com.vichua.where.core.model.ConflictResolution
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.RestoreMode
 import com.vichua.where.core.model.RestoreSession
+import com.vichua.where.core.platform.ManagedBackupFile
 
 /** 原型冲突卡背景。 */
 private val RestoreWarningFill = Color(0xFFF6E8C8)
@@ -70,14 +71,20 @@ fun RestoreBackupScreen(
     submitting: Boolean,
     progressText: String?,
     errorMessage: String?,
+    managedBackupDirectoryLabel: String,
+    managedBackups: List<ManagedBackupFile>,
+    managedBackupsLoading: Boolean,
+    formatBackupTime: (Long) -> String,
     onBack: () -> Unit,
-    onPickAndPreview: (String) -> Unit,
+    onPickAndPreview: (String, String?) -> Unit,
     onResolve: (String, ConflictResolution) -> Unit,
     onMerge: () -> Unit,
     onReplace: () -> Unit,
 ) {
     var replaceConfirmVisible by remember { mutableStateOf(false) }
     var restorePassword by remember { mutableStateOf("") }
+    var selectedBackupUri by remember { mutableStateOf<String?>(null) }
+    var importFromElsewhere by remember { mutableStateOf(false) }
     val preview = session?.preview
     var selectedMode by remember(preview?.differentHousehold) {
         mutableStateOf(
@@ -122,10 +129,38 @@ fun RestoreBackupScreen(
         if (preview == null) {
             Text(
                 modifier = Modifier.padding(top = 8.dp),
-                text = "先输入备份密码，再选择备份文件。密码对错要打开文件后才能判断；取消选文件会留在本页。",
+                text = "先在下面选出备份，再输入密码。密码对错要打开文件后才能判断。",
                 color = WhereSecondaryTextColor,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            ManagedBackupList(
+                directoryLabel = managedBackupDirectoryLabel,
+                backups = managedBackups,
+                loading = managedBackupsLoading,
+                selectedUri = if (importFromElsewhere) null else selectedBackupUri,
+                formatTime = formatBackupTime,
+                onSelect = { backup ->
+                    selectedBackupUri = backup.opaqueDocumentUri
+                    importFromElsewhere = false
+                },
+            )
+            Button(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .heightIn(min = 48.dp),
+                enabled = !submitting,
+                colors = ButtonDefaults.buttonColors(containerColor = WhereSurfaceColor),
+                onClick = {
+                    selectedBackupUri = null
+                    importFromElsewhere = true
+                },
+            ) {
+                Text(
+                    text = if (importFromElsewhere) "将从其他位置导入" else "从其他位置导入",
+                    color = WherePrimaryColor,
+                )
+            }
             OutlinedTextField(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -144,13 +179,18 @@ fun RestoreBackupScreen(
                     .fillMaxWidth()
                     .padding(top = 16.dp)
                     .heightIn(min = 48.dp),
-                enabled = !submitting && restorePassword.length >= BackupFormat.MIN_PASSWORD_LENGTH,
+                enabled = !submitting &&
+                    restorePassword.length >= BackupFormat.MIN_PASSWORD_LENGTH &&
+                    (selectedBackupUri != null || importFromElsewhere),
                 colors = ButtonDefaults.buttonColors(containerColor = WherePrimaryColor),
                 onClick = {
-                    onPickAndPreview(restorePassword)
+                    onPickAndPreview(
+                        restorePassword,
+                        if (importFromElsewhere) null else selectedBackupUri,
+                    )
                 },
             ) {
-                Text("选择备份并预览")
+                Text(if (importFromElsewhere) "导入并预览" else "预览选中备份")
             }
             if (submitting && progressText != null) {
                 WorkingProgressCard(

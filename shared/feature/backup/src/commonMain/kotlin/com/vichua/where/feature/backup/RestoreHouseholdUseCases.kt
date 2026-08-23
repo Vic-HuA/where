@@ -20,6 +20,8 @@ import com.vichua.where.core.model.RestoreMode
 import com.vichua.where.core.model.RestoreSession
 import com.vichua.where.core.platform.ControlledMediaFileStore
 import com.vichua.where.core.platform.DocumentGateway
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -40,18 +42,34 @@ class PreviewBackupRestoreUseCase(
     private val contentHasher: ContentHasher,
 ) {
     /**
-     * 解密、校验并对比当前快照。用户取消选择文件时返回空。
+     * 解密、校验并对比当前快照。用户取消导入时返回空。
+     *
+     * [backupUri] 指向固定目录中的文件；为空时才打开系统选择器导入旧备份。
      */
-    suspend operator fun invoke(password: String): RestoreSession? {
+    suspend operator fun invoke(
+        password: String,
+        backupUri: String? = null,
+        onProgress: suspend (String) -> Unit = {},
+    ): RestoreSession? {
         require(password.isNotEmpty()) { "Backup password must not be empty." }
-        require(documentGateway.isAvailable()) { "Document picker is unavailable." }
-        val opened = documentGateway.openDocument() ?: return null
-        val envelope = decodeVerifiedEnvelope(
-            packageBytes = opened.bytes,
-            password = password,
-            backupCrypto = backupCrypto,
-            contentHasher = contentHasher,
-        )
+        val opened = if (backupUri != null) {
+            reportProgress(onProgress, "正在读取备份文件…")
+            documentGateway.readManagedBackup(backupUri)
+        } else {
+            require(documentGateway.isAvailable()) { "Document picker is unavailable." }
+            reportProgress(onProgress, "请选择要恢复的备份文件…")
+            documentGateway.openDocument() ?: return null
+        }
+        reportProgress(onProgress, "正在解密备份…")
+        val envelope = withContext(Dispatchers.Default) {
+            decodeVerifiedEnvelope(
+                packageBytes = opened.bytes,
+                password = password,
+                backupCrypto = backupCrypto,
+                contentHasher = contentHasher,
+            )
+        }
+        reportProgress(onProgress, "正在对比当前家庭数据…")
         val current = repository.loadSnapshot()
         return RestoreSession(
             preview = buildImportPreview(current, envelope, opened.bytes.size.toLong()),

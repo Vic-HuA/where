@@ -74,6 +74,11 @@ interface HomeSnapshotRepository {
      * 加载当前家庭和当前设备的首页摘要。
      */
     suspend fun load(): HomeSnapshot
+
+    /**
+     * 加载当前家庭全部未删除物品，不截成首页三件。
+     */
+    suspend fun loadAllItems(): List<HomeItemSummary>
 }
 
 /**
@@ -86,4 +91,16 @@ class LoadHomeSnapshotUseCase(
      * 返回当前首页快照。
      */
     suspend operator fun invoke(): HomeSnapshot = repository.load()
+}
+
+/**
+ * 加载全部物品列表，供首页「查看全部」使用。
+ */
+class LoadAllItemsUseCase(
+    private val repository: HomeSnapshotRepository,
+) {
+    /**
+     * 按最近更新时间返回当前家庭全部未删除物品。
+     */
+    suspend operator fun invoke(): List<HomeItemSummary> = repository.loadAllItems()
 }

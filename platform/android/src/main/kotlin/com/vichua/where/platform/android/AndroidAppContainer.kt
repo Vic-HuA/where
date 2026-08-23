@@ -51,6 +51,7 @@ import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
 import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
+import com.vichua.where.feature.search.home.LoadAllItemsUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.SearchItemsUseCase
 import com.vichua.where.core.platform.DocumentGateway
@@ -58,6 +59,7 @@ import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
 import com.vichua.where.feature.backup.ClearHouseholdDataUseCase
 import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
 import com.vichua.where.feature.backup.ExportHouseholdDataUseCase
+import com.vichua.where.feature.backup.ListManagedBackupsUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
 import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
@@ -143,6 +145,9 @@ class AndroidAppContainer(
 
     /** 加载首页最近记录、最近查找、常用位置和待确认数量的用例。 */
     val loadHomeSnapshotUseCase = LoadHomeSnapshotUseCase(homeSnapshotRepository)
+
+    /** 加载当前家庭全部未删除物品的用例。 */
+    val loadAllItemsUseCase = LoadAllItemsUseCase(homeSnapshotRepository)
 
     /** 加载新增物品页面可选位置的用例。 */
     val loadItemCreationContextUseCase =
@@ -346,6 +351,13 @@ class AndroidAppContainer(
     /** 读取最近一次已验证备份状态的用例。 */
     val loadLatestBackupStatusUseCase =
         LoadLatestBackupStatusUseCase(householdBackupRepository)
+
+    /**
+     * 列出固定备份目录。文档入口绑定 Activity，因此在界面层注入。
+     */
+    fun listManagedBackupsUseCase(
+        documentGateway: DocumentGateway,
+    ): ListManagedBackupsUseCase = ListManagedBackupsUseCase(documentGateway)
 
     /**
      * 创建加密备份用例。文档选择器绑定 Activity，因此在界面层注入。

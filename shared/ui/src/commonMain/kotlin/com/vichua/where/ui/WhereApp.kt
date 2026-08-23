@@ -93,14 +93,18 @@ import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.RestoreMode
 import com.vichua.where.core.model.RestoreSession
+import com.vichua.where.core.platform.ManagedBackupFile
 import com.vichua.where.feature.backup.ApplyBackupRestoreUseCase
 import com.vichua.where.feature.backup.ClearHouseholdDataUseCase
 import com.vichua.where.feature.backup.CreateEncryptedBackupUseCase
 import com.vichua.where.feature.backup.ExportHouseholdDataUseCase
+import com.vichua.where.feature.backup.ListManagedBackupsUseCase
 import com.vichua.where.feature.backup.LoadLatestBackupStatusUseCase
 import com.vichua.where.feature.backup.PreviewBackupRestoreUseCase
 import com.vichua.where.feature.backup.VerifyBackupPackageUseCase
+import com.vichua.where.feature.search.home.HomeItemSummary
 import com.vichua.where.feature.search.home.HomeSnapshot
+import com.vichua.where.feature.search.home.LoadAllItemsUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
 import com.vichua.where.feature.search.text.SearchItemsUseCase
@@ -114,6 +118,7 @@ import com.vichua.where.feature.settings.preferences.UpdateAiProviderCredentials
 import com.vichua.where.feature.settings.preferences.UpdateAppPreferencesUseCase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 /**
  * 提供跨平台应用根界面，并根据本地家庭状态进入初始化页或首页。
@@ -121,6 +126,7 @@ import kotlinx.coroutines.launch
  * @param hasActiveHouseholdUseCase 查询本地是否已有家庭的用例。
  * @param initializeHouseholdUseCase 保存首个家庭的用例。
  * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
+ * @param loadAllItemsUseCase 加载全部物品列表的用例。
  * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
  * @param loadLatestItemDraftUseCase 加载当前设备未过期草稿的用例。
  * @param saveItemDraftUseCase 保存新增物品未完成输入的用例。
@@ -164,6 +170,7 @@ import kotlinx.coroutines.launch
  * @param aiAssistanceGateway 可选 AI 辅助入口。
  * @param diagnosticLogGateway 不含敏感内容的本机诊断日志入口。
  * @param loadLatestBackupStatusUseCase 读取最近成功备份状态的用例。
+ * @param listManagedBackupsUseCase 列出固定备份目录中的文件。
  * @param createEncryptedBackupUseCase 创建加密备份的用例。
  * @param exportHouseholdDataUseCase 导出完整家庭数据的用例。
  * @param verifyBackupPackageUseCase 只读验证备份的用例。
@@ -179,6 +186,7 @@ fun WhereApp(
     hasActiveHouseholdUseCase: HasActiveHouseholdUseCase,
     initializeHouseholdUseCase: InitializeHouseholdUseCase,
     loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
+    loadAllItemsUseCase: LoadAllItemsUseCase,
     loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
     loadLatestItemDraftUseCase: LoadLatestItemDraftUseCase,
     saveItemDraftUseCase: SaveItemDraftUseCase,
@@ -223,6 +231,7 @@ fun WhereApp(
     aiAssistanceGateway: AiAssistanceGateway,
     diagnosticLogGateway: DiagnosticLogGateway,
     loadLatestBackupStatusUseCase: LoadLatestBackupStatusUseCase,
+    listManagedBackupsUseCase: ListManagedBackupsUseCase,
     createEncryptedBackupUseCase: CreateEncryptedBackupUseCase,
     exportHouseholdDataUseCase: ExportHouseholdDataUseCase,
     verifyBackupPackageUseCase: VerifyBackupPackageUseCase,
@@ -377,6 +386,12 @@ fun WhereApp(
     var latestBackupStatus by remember { mutableStateOf<LatestBackupStatus?>(null) }
     var backupSubmitting by remember { mutableStateOf(false) }
     var backupProgressText by remember { mutableStateOf<String?>(null) }
+    var managedBackups by remember { mutableStateOf<List<ManagedBackupFile>>(emptyList()) }
+    var managedBackupsLoading by remember { mutableStateOf(false) }
+    var allItems by remember { mutableStateOf<List<HomeItemSummary>>(emptyList()) }
+    var allItemsLoading by remember { mutableStateOf(false) }
+    var allItemsError by remember { mutableStateOf<String?>(null) }
+    var allItemsLoadAttempt by remember { mutableIntStateOf(0) }
     var backupVerificationResult by remember { mutableStateOf<BackupVerificationResult?>(null) }
     var householdSummary by remember { mutableStateOf<HouseholdDataSummary?>(null) }
     var restoreSession by remember { mutableStateOf<RestoreSession?>(null) }
@@ -395,6 +410,34 @@ fun WhereApp(
     var confirmationSpeechError by remember { mutableStateOf<String?>(null) }
     val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
     val coroutineScope = rememberCoroutineScope()
+    val managedBackupDirectoryLabel = remember {
+        listManagedBackupsUseCase.directoryLabel()
+    }
+
+    /**
+     * 备份重活前先刷新进度文案，让转圈有一帧可画。
+     */
+    suspend fun reportBackupProgress(text: String) {
+        backupProgressText = text
+        yield()
+    }
+
+    /**
+     * 打开验证或恢复选择界面前刷新固定目录列表。
+     */
+    fun loadManagedBackups() {
+        coroutineScope.launch {
+            managedBackupsLoading = true
+            try {
+                managedBackups = listManagedBackupsUseCase()
+            } catch (_: Exception) {
+                managedBackups = emptyList()
+                settingsError = "暂时无法读取应用备份文件夹。"
+            } finally {
+                managedBackupsLoading = false
+            }
+        }
+    }
     /**
      * 开关打开且设备支持时给一次短反馈；不可用时忽略，避免打断当前操作。
      */
@@ -726,6 +769,36 @@ fun WhereApp(
         }
     }
 
+    LaunchedEffect(destination, allItemsLoadAttempt) {
+        if (destination == AppDestination.ALL_ITEMS) {
+            if (allItems.isEmpty()) {
+                allItemsLoading = true
+            }
+            allItemsError = null
+            try {
+                allItems = loadAllItemsUseCase()
+            } catch (_: Exception) {
+                allItemsError = "暂时无法读取全部物品。"
+            } finally {
+                allItemsLoading = false
+            }
+        }
+    }
+
+    LaunchedEffect(destination) {
+        if (destination == AppDestination.RESTORE_BACKUP) {
+            managedBackupsLoading = true
+            try {
+                managedBackups = listManagedBackupsUseCase()
+            } catch (_: Exception) {
+                managedBackups = emptyList()
+                settingsError = "暂时无法读取应用备份文件夹。"
+            } finally {
+                managedBackupsLoading = false
+            }
+        }
+    }
+
     LaunchedEffect(destination, settingsLoadAttempt) {
         val shouldLoadPreferences = destination == AppDestination.HOME ||
             destination == AppDestination.SETTINGS ||
@@ -734,7 +807,8 @@ fun WhereApp(
             destination == AppDestination.ITEM_DETAIL ||
             destination == AppDestination.PHOTO_MANAGEMENT ||
             destination == AppDestination.MOVE_ITEM ||
-            destination == AppDestination.RESTORE_BACKUP
+            destination == AppDestination.RESTORE_BACKUP ||
+            destination == AppDestination.ALL_ITEMS
         if (shouldLoadPreferences && accessibilityPreferences == null) {
             settingsLoading = true
             settingsError = null
@@ -930,6 +1004,9 @@ fun WhereApp(
                     onItemClick = { item ->
                         navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
                     },
+                    onViewAllItems = {
+                        navigateTo(AppDestination.ALL_ITEMS)
+                    },
                     onRecentSearchClick = { query ->
                         navigateTo(AppDestination.SEARCH)
                         performSearch(query)
@@ -952,6 +1029,21 @@ fun WhereApp(
                     elderFriendlyMode = elderFriendlyMode,
                     voiceListening = voiceListening,
                     voicePreparing = voicePreparing,
+                )
+                AppDestination.ALL_ITEMS -> AllItemsScreen(
+                    items = allItems,
+                    resolveMediaPath = resolveMediaPath,
+                    loading = allItemsLoading,
+                    errorMessage = allItemsError,
+                    onBack = {
+                        popNavigation()
+                    },
+                    onRetry = {
+                        allItemsLoadAttempt += 1
+                    },
+                    onItemClick = { item ->
+                        navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
+                    },
                 )
                 AppDestination.SEARCH -> SearchScreen(
                     initialQuery = searchQuery,
@@ -1465,21 +1557,33 @@ fun WhereApp(
                             }
                         }
                     },
+                    managedBackupDirectoryLabel = managedBackupDirectoryLabel,
+                    managedBackups = managedBackups,
+                    managedBackupsLoading = managedBackupsLoading,
+                    onLoadManagedBackups = {
+                        loadManagedBackups()
+                    },
+                    formatBackupTime = { epochMilliseconds ->
+                        visibleDateTimeFormatter.format(epochMilliseconds)
+                    },
                     onCreateBackup = { password, confirmation ->
                         if (!backupSubmitting) {
                             coroutineScope.launch {
                                 backupSubmitting = true
-                                backupProgressText = "正在创建加密备份…"
+                                reportBackupProgress("正在创建加密备份…")
                                 settingsError = null
                                 backupVerificationResult = null
                                 try {
-                                    val result = createEncryptedBackupUseCase(password, confirmation)
-                                    if (result == null) {
-                                        backupProgressText = null
-                                        return@launch
-                                    }
+                                    val result = createEncryptedBackupUseCase(
+                                        password = password,
+                                        passwordConfirmation = confirmation,
+                                        onProgress = { text ->
+                                            reportBackupProgress(text)
+                                        },
+                                    )
                                     latestBackupStatus = loadLatestBackupStatusUseCase()
                                     backupVerificationResult = result
+                                    managedBackups = listManagedBackupsUseCase()
                                     backupProgressText = null
                                 } catch (_: IllegalArgumentException) {
                                     settingsError = "请检查密码，或确认两次输入一致。"
@@ -1498,17 +1602,22 @@ fun WhereApp(
                         if (!backupSubmitting) {
                             coroutineScope.launch {
                                 backupSubmitting = true
-                                backupProgressText = when (destination) {
-                                    ExportDestination.SAVE_DOCUMENT -> "正在导出完整家庭数据…"
-                                    ExportDestination.SHARE -> "正在准备分享导出包…"
-                                }
+                                reportBackupProgress(
+                                    when (destination) {
+                                        ExportDestination.SAVE_DOCUMENT -> "正在导出完整家庭数据…"
+                                        ExportDestination.SHARE -> "正在准备分享导出包…"
+                                    },
+                                )
                                 settingsError = null
                                 backupVerificationResult = null
                                 try {
                                     val result = exportHouseholdDataUseCase(
-                                        password,
-                                        confirmation,
-                                        destination,
+                                        password = password,
+                                        passwordConfirmation = confirmation,
+                                        destination = destination,
+                                        onProgress = { text ->
+                                            reportBackupProgress(text)
+                                        },
                                     )
                                     if (result == null) {
                                         backupProgressText = null
@@ -1529,15 +1638,21 @@ fun WhereApp(
                             }
                         }
                     },
-                    onVerifyBackup = { password ->
+                    onVerifyBackup = { password, backupUri ->
                         if (!backupSubmitting) {
                             coroutineScope.launch {
                                 backupSubmitting = true
-                                backupProgressText = "正在验证备份…"
+                                reportBackupProgress("正在验证备份…")
                                 settingsError = null
                                 backupVerificationResult = null
                                 try {
-                                    val result = verifyBackupPackageUseCase(password)
+                                    val result = verifyBackupPackageUseCase(
+                                        password = password,
+                                        backupUri = backupUri,
+                                        onProgress = { text ->
+                                            reportBackupProgress(text)
+                                        },
+                                    )
                                     if (result == null) {
                                         backupProgressText = null
                                         return@launch
@@ -1607,16 +1722,28 @@ fun WhereApp(
                     onBack = {
                         leaveRestoreAndPop()
                     },
-                    onPickAndPreview = { password ->
+                    managedBackupDirectoryLabel = managedBackupDirectoryLabel,
+                    managedBackups = managedBackups,
+                    managedBackupsLoading = managedBackupsLoading,
+                    formatBackupTime = { epochMilliseconds ->
+                        visibleDateTimeFormatter.format(epochMilliseconds)
+                    },
+                    onPickAndPreview = { password, backupUri ->
                         if (!backupSubmitting) {
                             coroutineScope.launch {
                                 backupSubmitting = true
-                                backupProgressText = "正在准备恢复预览…"
+                                reportBackupProgress("正在准备恢复预览…")
                                 settingsError = null
                                 restoreSession = null
                                 conflictResolutions = emptyMap()
                                 try {
-                                    val session = previewBackupRestoreUseCase(password)
+                                    val session = previewBackupRestoreUseCase(
+                                        password = password,
+                                        backupUri = backupUri,
+                                        onProgress = { text ->
+                                            reportBackupProgress(text)
+                                        },
+                                    )
                                     if (session == null) {
                                         backupProgressText = null
                                         return@launch
@@ -2144,6 +2271,7 @@ private enum class AppDestination {
     STARTUP_ERROR,
     INITIALIZATION,
     HOME,
+    ALL_ITEMS,
     SEARCH,
     ADD_ITEM,
     LOCATION,
@@ -2163,6 +2291,7 @@ private fun AppDestination.isRootTab(): Boolean = this == AppDestination.HOME ||
 
 private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
     AppDestination.HOME,
+    AppDestination.ALL_ITEMS,
     AppDestination.SEARCH,
     AppDestination.ADD_ITEM,
     AppDestination.LOCATION,

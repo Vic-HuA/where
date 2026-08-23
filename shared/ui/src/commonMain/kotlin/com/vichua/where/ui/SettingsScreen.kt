@@ -53,6 +53,7 @@ import com.vichua.where.core.model.ExportDestination
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.LocalAppPreferences
+import com.vichua.where.core.platform.ManagedBackupFile
 
 /**
  * 设置与数据页：适老偏好、创建加密备份和只读验证。
@@ -81,9 +82,14 @@ import com.vichua.where.core.model.LocalAppPreferences
  * @param onCloudSpeechChange 在确认披露后开启或关闭云端语音识别。当前语音走本机 Vosk，此开关不再展示。
  * @param onBackupReminderChange 切换尚未成功备份时是否在首页提醒。
  * @param onDiagnosticLoggingChange 切换是否写入不含敏感内容的本机诊断事件。
+ * @param managedBackupDirectoryLabel 固定备份目录的用户可见说明。
+ * @param managedBackups 固定目录中已有的加密备份。
+ * @param managedBackupsLoading 是否正在读取备份列表。
+ * @param onLoadManagedBackups 打开选择界面前刷新备份列表。
+ * @param formatBackupTime 把备份文件修改时间格式化为本地可见文本。
  * @param onCreateBackup 使用密码创建加密备份。
  * @param onExportHousehold 使用密码导出完整家庭数据。
- * @param onVerifyBackup 使用密码只读验证备份。
+ * @param onVerifyBackup 使用密码只读验证备份；uri 为空表示从其他位置导入。
  * @param onDismissVerification 关闭验证摘要。
  * @param householdSummary 当前家庭摘要，供清除二次确认使用。
  * @param onRestoreBackup 进入独立恢复备份页，在该页选择文件并输入密码。
@@ -116,9 +122,14 @@ fun SettingsScreen(
     onCloudSpeechChange: (Boolean) -> Unit,
     onBackupReminderChange: (Boolean) -> Unit,
     onDiagnosticLoggingChange: (Boolean) -> Unit,
+    managedBackupDirectoryLabel: String,
+    managedBackups: List<ManagedBackupFile>,
+    managedBackupsLoading: Boolean,
+    onLoadManagedBackups: () -> Unit,
+    formatBackupTime: (Long) -> String,
     onCreateBackup: (String, String) -> Unit,
     onExportHousehold: (String, String, ExportDestination) -> Unit,
-    onVerifyBackup: (String) -> Unit,
+    onVerifyBackup: (String, String?) -> Unit,
     onDismissVerification: () -> Unit,
     onRestoreBackup: () -> Unit,
     onClearHousehold: () -> Unit,
@@ -131,7 +142,10 @@ fun SettingsScreen(
     var exportDestinationDialogVisible by remember { mutableStateOf(false) }
     var pendingExportPassword by remember { mutableStateOf<String?>(null) }
     var pendingExportConfirmation by remember { mutableStateOf<String?>(null) }
+    var verifyPickerVisible by remember { mutableStateOf(false) }
     var verifyPasswordDialogVisible by remember { mutableStateOf(false) }
+    var pendingVerifyBackupUri by remember { mutableStateOf<String?>(null) }
+    var verifyImportFromElsewhere by remember { mutableStateOf(false) }
     var clearFirstConfirmVisible by remember { mutableStateOf(false) }
     var clearSecondConfirmVisible by remember { mutableStateOf(false) }
 
@@ -289,9 +303,15 @@ fun SettingsScreen(
             },
             style = MaterialTheme.typography.bodySmall,
         )
+        Text(
+            modifier = Modifier.padding(bottom = 10.dp),
+            text = "日常备份保存在 $managedBackupDirectoryLabel，不用再选文件夹。",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodySmall,
+        )
         SettingsActionRow(
             title = "创建加密备份",
-            description = "导出过滤后的家庭数据和物品原图，不包含草稿和本机设置",
+            description = "直接写入应用备份文件夹，包含过滤后的家庭数据和物品原图",
             enabled = !submitting,
             onClick = {
                 createPasswordDialogVisible = true
@@ -299,10 +319,13 @@ fun SettingsScreen(
         )
         SettingsActionRow(
             title = "验证备份",
-            description = "只读检查密码、格式和摘要，不覆盖当前家庭数据",
+            description = "在应用里选择备份后只读检查密码、格式和摘要",
             enabled = !submitting,
             onClick = {
-                verifyPasswordDialogVisible = true
+                onLoadManagedBackups()
+                verifyImportFromElsewhere = false
+                pendingVerifyBackupUri = null
+                verifyPickerVisible = true
             },
         )
         SettingsActionRow(
@@ -418,6 +441,7 @@ fun SettingsScreen(
             title = "创建加密备份",
             confirmLabel = "创建",
             requireConfirmation = true,
+            extraHint = "备份会直接保存到应用备份文件夹，不用再选位置。",
             enabled = !submitting,
             onDismiss = {
                 if (!submitting) {
@@ -471,21 +495,58 @@ fun SettingsScreen(
             },
         )
     }
+    if (verifyPickerVisible) {
+        ManagedBackupPickerDialog(
+            directoryLabel = managedBackupDirectoryLabel,
+            backups = managedBackups,
+            loading = managedBackupsLoading,
+            formatTime = formatBackupTime,
+            onSelect = { backup ->
+                pendingVerifyBackupUri = backup.opaqueDocumentUri
+                verifyImportFromElsewhere = false
+                verifyPickerVisible = false
+                verifyPasswordDialogVisible = true
+            },
+            onImportFromElsewhere = {
+                pendingVerifyBackupUri = null
+                verifyImportFromElsewhere = true
+                verifyPickerVisible = false
+                verifyPasswordDialogVisible = true
+            },
+            onDismiss = {
+                if (!submitting) {
+                    verifyPickerVisible = false
+                    pendingVerifyBackupUri = null
+                    verifyImportFromElsewhere = false
+                }
+            },
+        )
+    }
     if (verifyPasswordDialogVisible) {
         BackupPasswordDialog(
             title = "验证备份",
             confirmLabel = "验证",
             requireConfirmation = false,
-            extraHint = "密码要和备份文件一起校验，下一步会选择文件。",
+            extraHint = if (verifyImportFromElsewhere) {
+                "下一步会打开系统文件界面，用于导入不在应用备份文件夹里的旧文件。"
+            } else {
+                "密码要和刚才选中的备份一起校验。"
+            },
             enabled = !submitting,
             onDismiss = {
                 if (!submitting) {
                     verifyPasswordDialogVisible = false
+                    pendingVerifyBackupUri = null
+                    verifyImportFromElsewhere = false
                 }
             },
             onConfirm = { password, _ ->
+                val backupUri = pendingVerifyBackupUri
+                val importFromElsewhere = verifyImportFromElsewhere
                 verifyPasswordDialogVisible = false
-                onVerifyBackup(password)
+                pendingVerifyBackupUri = null
+                verifyImportFromElsewhere = false
+                onVerifyBackup(password, if (importFromElsewhere) null else backupUri)
             },
         )
     }
