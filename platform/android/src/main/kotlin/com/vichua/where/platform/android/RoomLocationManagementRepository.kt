@@ -2,6 +2,8 @@ package com.vichua.where.platform.android
 
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.StoredLocationTreeNode
+import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.feature.location.management.LocationCreation
 import com.vichua.where.feature.location.management.LocationDeletion
 import com.vichua.where.feature.location.management.LocationManagementRepository
@@ -49,14 +51,20 @@ class RoomLocationManagementRepository(
         )
     }
 
-    /** 保存空位置删除聚合。 */
+    /** 保存叶子位置删除聚合，并同步待确认物品。 */
     override suspend fun delete(deletion: LocationDeletion) {
         store.delete(
             location = deletion.location,
             favoriteLocation = deletion.favoriteLocation,
             changeRecords = deletion.changeRecords,
+            displacedItems = deletion.displacedItems,
+            locationEvents = deletion.locationEvents,
         )
     }
+
+    /** 加载直接放在指定位置上的未删除物品。 */
+    override suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item> =
+        store.findActiveItemsAt(locationId)
 
     /**
      * 将数据库节点映射为页面展示模型，并补齐可操作状态。
@@ -74,9 +82,7 @@ class RoomLocationManagementRepository(
             childCount = node.childCount,
             itemCount = node.itemCount,
             canRename = !location.isHouseholdRoot,
-            canDelete = !location.isHouseholdRoot &&
-                node.childCount == 0 &&
-                node.directItemCount == 0,
+            canDelete = !location.isHouseholdRoot && node.childCount == 0,
             allowedChildTypes = allowedChildTypes(location.type),
         )
     }

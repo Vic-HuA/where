@@ -56,6 +56,7 @@ data class ItemDetailLocationHistory(
  * @property sourceDeviceName 来源设备名称。
  * @property photos 按画廊顺序排列的未删除照片。
  * @property locationHistory 按时间倒序排列的位置历史。
+ * @property locationUnconfirmed 原位置失效后是否仍待用户重新确认。
  */
 data class ItemDetail(
     val itemId: ItemId,
@@ -71,6 +72,7 @@ data class ItemDetail(
     val sourceDeviceName: String,
     val photos: List<ItemDetailPhoto>,
     val locationHistory: List<ItemDetailLocationHistory>,
+    val locationUnconfirmed: Boolean = false,
 )
 
 /**

@@ -34,6 +34,7 @@ class MainActivity : ComponentActivity() {
                 loadHomeSnapshotUseCase = container.loadHomeSnapshotUseCase,
                 loadAllItemsUseCase = container.loadAllItemsUseCase,
                 loadItemsAtLocationUseCase = container.loadItemsAtLocationUseCase,
+                loadLocationUnconfirmedItemsUseCase = container.loadLocationUnconfirmedItemsUseCase,
                 loadItemCreationContextUseCase = container.loadItemCreationContextUseCase,
                 loadLatestItemDraftUseCase = container.loadLatestItemDraftUseCase,
                 saveItemDraftUseCase = container.saveItemDraftUseCase,

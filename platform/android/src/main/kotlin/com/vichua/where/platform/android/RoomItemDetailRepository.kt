@@ -2,6 +2,7 @@ package com.vichua.where.platform.android
 
 import com.vichua.where.core.database.query.ItemDetailStore
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.ItemDetailLocationHistory
 import com.vichua.where.feature.item.detail.ItemDetailPhoto
@@ -46,6 +47,7 @@ class RoomItemDetailRepository(
                     occurredAt = event.occurredAt,
                 )
             },
+            locationUnconfirmed = detail.item.status == ItemStatus.LOCATION_UNCONFIRMED,
         )
     }
 }

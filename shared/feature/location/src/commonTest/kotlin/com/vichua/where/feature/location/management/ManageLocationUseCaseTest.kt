@@ -3,10 +3,15 @@ package com.vichua.where.feature.location.management
 import com.vichua.where.core.common.DefaultTextNormalizer
 import com.vichua.where.core.common.EpochMillisecondsClock
 import com.vichua.where.core.common.UniqueIdGenerator
+import com.vichua.where.core.model.ChangeEntityType
 import com.vichua.where.core.model.ChangeOperation
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.HouseholdId
+import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.ItemLocationReason
+import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
@@ -144,16 +149,40 @@ class ManageLocationUseCaseTest {
         assertTrue(deletion.favoriteLocation == null)
     }
 
-    /** 验证仍包含物品或子节点的位置不能直接删除。 */
+    /** 验证仍有子节点的位置不能直接删除。 */
     @Test
-    fun `非空位置不能直接删除`() = runTest {
-        val repository = FakeLocationManagementRepository()
+    fun `有子节点的位置不能直接删除`() = runTest {
+        val repository = FakeLocationManagementRepository(snapshot = SNAPSHOT_WITH_CHILD)
         val useCase = deleteLocationUseCase(repository)
 
         assertFailsWith<IllegalArgumentException> {
             useCase(STUDY_ID)
         }
         assertNull(repository.savedDeletion)
+    }
+
+    /** 验证叶子位置上的物品会回退到家庭根并标为待确认。 */
+    @Test
+    fun `删除有物品的叶子位置会标为待确认`() = runTest {
+        val repository = FakeLocationManagementRepository(
+            itemsAtLocation = mapOf(STUDY_ID to listOf(STUDY_ITEM)),
+        )
+        val useCase = deleteLocationUseCase(repository)
+
+        useCase(STUDY_ID)
+
+        val deletion = assertNotNull(repository.savedDeletion)
+        val displacedItem = deletion.displacedItems.single()
+        assertEquals(HOME_ID, displacedItem.currentLocationId)
+        assertEquals(ItemStatus.LOCATION_UNCONFIRMED, displacedItem.status)
+        assertEquals("书房", displacedItem.locationDescription)
+        assertEquals(ItemLocationReason.LOCATION_DELETED, deletion.locationEvents.single().reason)
+        assertTrue(
+            deletion.changeRecords.any { record ->
+                record.entityType == ChangeEntityType.ITEM &&
+                    record.operation == ChangeOperation.UPDATE
+            },
+        )
     }
 
     /** 验证已有书房时再填书房、课桌只会新建课桌。 */
@@ -272,6 +301,8 @@ class ManageLocationUseCaseTest {
      */
     private class FakeLocationManagementRepository(
         extraLocations: List<LocationNode> = emptyList(),
+        private val snapshot: LocationTreeSnapshot = SAMPLE_SNAPSHOT,
+        private val itemsAtLocation: Map<LocationNodeId, List<Item>> = emptyMap(),
     ) : LocationManagementRepository {
         var savedCreation: LocationCreation? = null
             private set
@@ -281,9 +312,9 @@ class ManageLocationUseCaseTest {
             private set
         var createdCount: Int = 0
             private set
-        private val locations = (SAMPLE_SNAPSHOT.locations + extraLocations).toMutableList()
+        private val locations = (snapshot.locations + extraLocations).toMutableList()
 
-        override suspend fun loadTree(): LocationTreeSnapshot = SAMPLE_SNAPSHOT.copy(
+        override suspend fun loadTree(): LocationTreeSnapshot = snapshot.copy(
             locations = locations.toList(),
         )
 
@@ -300,6 +331,9 @@ class ManageLocationUseCaseTest {
         override suspend fun delete(deletion: LocationDeletion) {
             savedDeletion = deletion
         }
+
+        override suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item> =
+            itemsAtLocation[locationId].orEmpty()
     }
 
     private companion object {
@@ -363,7 +397,7 @@ class ManageLocationUseCaseTest {
                     childCount = 0,
                     itemCount = 1,
                     canRename = true,
-                    canDelete = false,
+                    canDelete = true,
                 ),
                 node(
                     location = EMPTY_ROOM_LOCATION,
@@ -374,6 +408,54 @@ class ManageLocationUseCaseTest {
                     canDelete = true,
                 ),
             ),
+        )
+        val SNAPSHOT_WITH_CHILD = SAMPLE_SNAPSHOT.copy(
+            locations = listOf(HOME_LOCATION, STUDY_LOCATION, EMPTY_ROOM_LOCATION, DESK_LOCATION),
+            nodes = listOf(
+                node(
+                    location = HOME_LOCATION,
+                    depth = 0,
+                    childCount = 2,
+                    itemCount = 1,
+                    canRename = false,
+                    canDelete = false,
+                ),
+                node(
+                    location = STUDY_LOCATION,
+                    depth = 1,
+                    childCount = 1,
+                    itemCount = 1,
+                    canRename = true,
+                    canDelete = false,
+                ),
+                node(
+                    location = EMPTY_ROOM_LOCATION,
+                    depth = 1,
+                    childCount = 0,
+                    itemCount = 0,
+                    canRename = true,
+                    canDelete = true,
+                ),
+                node(
+                    location = DESK_LOCATION,
+                    depth = 2,
+                    childCount = 0,
+                    itemCount = 0,
+                    canRename = true,
+                    canDelete = true,
+                ),
+            ),
+        )
+        val STUDY_ITEM = Item(
+            id = ItemId("item-study"),
+            householdId = HOUSEHOLD_ID,
+            currentLocationId = STUDY_ID,
+            name = "钥匙",
+            normalizedName = "钥匙",
+            createdAt = UtcTimestamp(TEST_TIME),
+            updatedAt = UtcTimestamp(TEST_TIME),
+            version = EntityVersion(1L),
+            sourceDeviceId = DEVICE_ID,
         )
 
         fun location(

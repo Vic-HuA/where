@@ -12,6 +12,11 @@ import com.vichua.where.core.model.DomainValidators
 import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.HouseholdId
+import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemLocationEvent
+import com.vichua.where.core.model.ItemLocationEventId
+import com.vichua.where.core.model.ItemLocationReason
+import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
@@ -31,7 +36,7 @@ import com.vichua.where.core.model.UtcTimestamp
  * @property childCount 未删除直接子节点数量。
  * @property itemCount 该节点及其后代上的未删除物品数量。
  * @property canRename 家庭根节点不允许普通重命名。
- * @property canDelete 仅空位置可直接删除。
+ * @property canDelete 家庭根和仍有子节点的位置不能删；叶子上有物品时可删，物品会标为待确认。
  * @property allowedChildTypes 当前节点允许新增的子类型。
  */
 data class LocationTreeNode(
@@ -138,16 +143,20 @@ data class LocationRename(
 )
 
 /**
- * 删除空位置后需要原子保存的聚合。
+ * 删除叶子位置后需要原子保存的聚合。
  *
  * @property location 已标记软删除的位置。
  * @property favoriteLocation 同步取消固定的常用位置，没有引用时为空。
- * @property changeRecords 位置删除及可选常用位置取消对应的变更记录。
+ * @property changeRecords 位置删除、物品待确认及可选常用位置取消对应的变更记录。
+ * @property displacedItems 原位置上的物品，已回退到家庭根并标为待确认。
+ * @property locationEvents 物品因位置删除产生的历史事件。
  */
 data class LocationDeletion(
     val location: LocationNode,
     val favoriteLocation: FavoriteLocation?,
     val changeRecords: List<ChangeRecord>,
+    val displacedItems: List<Item> = emptyList(),
+    val locationEvents: List<ItemLocationEvent> = emptyList(),
 )
 
 /**
@@ -163,8 +172,11 @@ interface LocationManagementRepository {
     /** 原子保存重命名后的位置、变更记录和受影响物品搜索路径。 */
     suspend fun rename(rename: LocationRename)
 
-    /** 原子软删除空位置及其常用位置引用。 */
+    /** 原子软删除叶子位置，并把其上物品标为位置待确认。 */
     suspend fun delete(deletion: LocationDeletion)
+
+    /** 加载直接放在指定位置上的未删除物品。 */
+    suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item>
 }
 
 /**
@@ -388,7 +400,7 @@ class RenameLocationUseCase(
 }
 
 /**
- * 删除没有子节点且没有直接关联物品的空位置。
+ * 删除没有子节点的叶子位置；其上物品回退到家庭根并标为位置待确认。
  */
 class DeleteEmptyLocationUseCase(
     private val repository: LocationManagementRepository,
@@ -396,9 +408,10 @@ class DeleteEmptyLocationUseCase(
     private val clock: EpochMillisecondsClock,
 ) {
     /**
-     * 软删除指定空位置。
+     * 软删除指定叶子位置。
      *
-     * 非空位置必须先移动物品和子节点；家庭根节点不能删除。
+     * 仍有子节点的位置必须先处理下级；家庭根节点不能删除。
+     * 叶子上的物品保留档案，当前位置改为家庭根，状态改为待确认。
      */
     suspend operator fun invoke(locationId: LocationNodeId) {
         val snapshot = repository.loadTree()
@@ -408,7 +421,7 @@ class DeleteEmptyLocationUseCase(
             "Location is unavailable."
         }
         require(currentNode.canDelete) {
-            "Only an empty non-root location can be deleted."
+            "Only a non-root location without children can be deleted."
         }
         val currentLocation = requireNotNull(
             snapshot.locations.singleOrNull { location ->
@@ -437,6 +450,33 @@ class DeleteEmptyLocationUseCase(
                     deletedAt = now,
                 )
             }
+        val previousPath = currentNode.displayPath.trim().ifBlank { currentLocation.name }
+        val itemsAtLocation = repository.findActiveItemsAt(locationId)
+        val displacedItems = itemsAtLocation.map { item ->
+            item.copy(
+                currentLocationId = snapshot.rootLocationId,
+                locationDescription = item.locationDescription ?: previousPath,
+                status = ItemStatus.LOCATION_UNCONFIRMED,
+                updatedAt = now,
+                version = item.version.next(),
+                sourceDeviceId = snapshot.sourceDeviceId,
+            )
+        }
+        val locationEvents = itemsAtLocation.zip(displacedItems).map { (originalItem, displacedItem) ->
+            ItemLocationEvent(
+                id = ItemLocationEventId(idGenerator.generate()),
+                householdId = displacedItem.householdId,
+                itemId = displacedItem.id,
+                fromLocationId = originalItem.currentLocationId,
+                toLocationId = snapshot.rootLocationId,
+                fromPathSnapshot = previousPath,
+                toPathSnapshot = UNCONFIRMED_LOCATION_PATH,
+                reason = ItemLocationReason.LOCATION_DELETED,
+                occurredAt = now,
+                sourceDeviceId = snapshot.sourceDeviceId,
+                version = displacedItem.version,
+            )
+        }
         DomainValidators.validateLocationTree(
             householdId = snapshot.householdId,
             locations = snapshot.locations.map { location ->
@@ -473,7 +513,23 @@ class DeleteEmptyLocationUseCase(
                             ),
                         )
                     }
+                    displacedItems.forEach { item ->
+                        add(
+                            ChangeRecord(
+                                id = ChangeRecordId(idGenerator.generate()),
+                                householdId = snapshot.householdId,
+                                entityType = ChangeEntityType.ITEM,
+                                entityId = item.id.value,
+                                operation = ChangeOperation.UPDATE,
+                                entityVersion = item.version,
+                                sourceDeviceId = snapshot.sourceDeviceId,
+                                occurredAt = now,
+                            ),
+                        )
+                    }
                 },
+                displacedItems = displacedItems,
+                locationEvents = locationEvents,
             ),
         )
     }
@@ -528,3 +584,4 @@ private fun createLocationChangeRecord(
 )
 
 private const val INITIAL_ENTITY_VERSION = 1L
+private const val UNCONFIRMED_LOCATION_PATH = "位置待确认"

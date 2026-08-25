@@ -53,7 +53,7 @@ import com.vichua.where.feature.location.management.LocationTreeSnapshot
 /**
  * 按位置树维护房间、家具和容器，并展示物品数量与待确认提醒。
  *
- * 本页只覆盖空位置删除；包含物品或子节点的位置必须先处理关联内容。
+ * 叶子位置可以直接删除；其上物品会标为位置待确认。仍有子节点时必须先处理下级。
  */
 @Composable
 fun LocationManagementScreen(
@@ -68,6 +68,7 @@ fun LocationManagementScreen(
     onRename: (LocationTreeNode, String) -> Unit,
     onDelete: (LocationTreeNode) -> Unit,
     onViewItems: (LocationTreeNode) -> Unit,
+    onLocationUnconfirmedClick: () -> Unit = {},
 ) {
     var expandedLocationIds by remember(snapshot?.rootLocationId) {
         mutableStateOf(
@@ -133,7 +134,10 @@ fun LocationManagementScreen(
                             locationQuery = value
                         },
                     )
-                    LocationSummaryCard(snapshot = snapshot)
+                    LocationSummaryCard(
+                        snapshot = snapshot,
+                        onLocationUnconfirmedClick = onLocationUnconfirmedClick,
+                    )
                     Text(
                         modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
                         text = "位置结构",
@@ -253,7 +257,12 @@ fun LocationManagementScreen(
                 dismissText = "取消",
                 onDismiss = { editorState = null },
             ) {
-                Text("删除“${editor.node.name}”后，该空位置不再出现在位置树中。")
+                val deleteMessage = if (editor.node.itemCount > 0) {
+                    "删除“${editor.node.name}”后，这里的 ${editor.node.itemCount} 件物品会标为位置待确认，请再选一次位置。"
+                } else {
+                    "删除“${editor.node.name}”后，该空位置不再出现在位置树中。"
+                }
+                Text(deleteMessage)
             }
             null -> Unit
         }
@@ -300,11 +309,24 @@ private fun LocationSearchField(
  * 展示家庭房间数、物品总数和位置待确认数量。
  */
 @Composable
-private fun LocationSummaryCard(snapshot: LocationTreeSnapshot) {
+private fun LocationSummaryCard(
+    snapshot: LocationTreeSnapshot,
+    onLocationUnconfirmedClick: () -> Unit,
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp),
+            .padding(top = 16.dp)
+            .then(
+                if (snapshot.locationUnconfirmedCount > 0L) {
+                    Modifier.clickable(
+                        role = Role.Button,
+                        onClick = onLocationUnconfirmedClick,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
         shape = RoundedCornerShape(16.dp),
         color = WhereSelectedContainerColor,
     ) {

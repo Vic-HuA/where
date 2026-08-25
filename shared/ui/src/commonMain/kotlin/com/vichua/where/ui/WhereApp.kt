@@ -109,6 +109,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.LoadAllItemsUseCase
 import com.vichua.where.feature.search.home.LoadHomeSnapshotUseCase
 import com.vichua.where.feature.search.home.LoadItemsAtLocationUseCase
+import com.vichua.where.feature.search.home.LoadLocationUnconfirmedItemsUseCase
 import com.vichua.where.feature.search.text.ItemTextSearchResult
 import com.vichua.where.feature.search.text.SearchItemsUseCase
 import com.vichua.where.feature.search.text.PrepareVoiceSearchQueryUseCase
@@ -131,6 +132,7 @@ import kotlinx.coroutines.yield
  * @param loadHomeSnapshotUseCase 加载首页本地摘要的用例。
  * @param loadAllItemsUseCase 加载全部物品列表的用例。
  * @param loadItemsAtLocationUseCase 加载某个位置及其下级物品的用例。
+ * @param loadLocationUnconfirmedItemsUseCase 加载位置待确认物品的用例。
  * @param loadItemCreationContextUseCase 加载新增物品可选位置的用例。
  * @param loadLatestItemDraftUseCase 加载当前设备未过期草稿的用例。
  * @param saveItemDraftUseCase 保存新增物品未完成输入的用例。
@@ -192,6 +194,7 @@ fun WhereApp(
     loadHomeSnapshotUseCase: LoadHomeSnapshotUseCase,
     loadAllItemsUseCase: LoadAllItemsUseCase,
     loadItemsAtLocationUseCase: LoadItemsAtLocationUseCase,
+    loadLocationUnconfirmedItemsUseCase: LoadLocationUnconfirmedItemsUseCase,
     loadItemCreationContextUseCase: LoadItemCreationContextUseCase,
     loadLatestItemDraftUseCase: LoadLatestItemDraftUseCase,
     saveItemDraftUseCase: SaveItemDraftUseCase,
@@ -398,6 +401,10 @@ fun WhereApp(
     var allItemsLoading by remember { mutableStateOf(false) }
     var allItemsError by remember { mutableStateOf<String?>(null) }
     var allItemsLoadAttempt by remember { mutableIntStateOf(0) }
+    var unconfirmedItems by remember { mutableStateOf<List<HomeItemSummary>>(emptyList()) }
+    var unconfirmedItemsLoading by remember { mutableStateOf(false) }
+    var unconfirmedItemsError by remember { mutableStateOf<String?>(null) }
+    var unconfirmedItemsLoadAttempt by remember { mutableIntStateOf(0) }
     var selectedLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
     var selectedLocationTitle by remember { mutableStateOf<String?>(null) }
     var locationItems by remember { mutableStateOf<List<HomeItemSummary>>(emptyList()) }
@@ -801,6 +808,22 @@ fun WhereApp(
         }
     }
 
+    LaunchedEffect(destination, unconfirmedItemsLoadAttempt) {
+        if (destination == AppDestination.UNCONFIRMED_ITEMS) {
+            if (unconfirmedItems.isEmpty()) {
+                unconfirmedItemsLoading = true
+            }
+            unconfirmedItemsError = null
+            try {
+                unconfirmedItems = loadLocationUnconfirmedItemsUseCase()
+            } catch (_: Exception) {
+                unconfirmedItemsError = "暂时无法读取待确认物品。"
+            } finally {
+                unconfirmedItemsLoading = false
+            }
+        }
+    }
+
     LaunchedEffect(destination, allItemsLoadAttempt) {
         if (destination == AppDestination.ALL_ITEMS) {
             if (allItems.isEmpty()) {
@@ -858,6 +881,7 @@ fun WhereApp(
             destination == AppDestination.MOVE_ITEM ||
             destination == AppDestination.RESTORE_BACKUP ||
             destination == AppDestination.ALL_ITEMS ||
+            destination == AppDestination.UNCONFIRMED_ITEMS ||
             destination == AppDestination.LOCATION_ITEMS
         if (shouldLoadPreferences && accessibilityPreferences == null) {
             settingsLoading = true
@@ -1060,6 +1084,9 @@ fun WhereApp(
                     onVoiceSearchReleased = {
                         speechRecognitionGateway.finishListening()
                     },
+                    onLocationUnconfirmedClick = {
+                        navigateTo(AppDestination.UNCONFIRMED_ITEMS)
+                    },
                     onItemClick = { item ->
                         navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
                     },
@@ -1087,6 +1114,24 @@ fun WhereApp(
                     elderFriendlyMode = elderFriendlyMode,
                     voiceListening = voiceListening,
                     voicePreparing = voicePreparing,
+                )
+                AppDestination.UNCONFIRMED_ITEMS -> AllItemsScreen(
+                    title = "位置待确认",
+                    subtitle = "这些物品的原位置已失效，点进去重新选择现在放在哪里。",
+                    emptyText = "没有需要重新确认位置的物品",
+                    items = unconfirmedItems,
+                    resolveMediaPath = resolveMediaPath,
+                    loading = unconfirmedItemsLoading,
+                    errorMessage = unconfirmedItemsError,
+                    onBack = {
+                        popNavigation()
+                    },
+                    onRetry = {
+                        unconfirmedItemsLoadAttempt += 1
+                    },
+                    onItemClick = { item ->
+                        navigateTo(AppDestination.ITEM_DETAIL, item.itemId)
+                    },
                 )
                 AppDestination.ALL_ITEMS -> AllItemsScreen(
                     items = allItems,
@@ -1423,8 +1468,9 @@ fun WhereApp(
                                     deleteEmptyLocationUseCase(node.locationId)
                                     locationTree = loadLocationTreeUseCase()
                                     homeLoadAttempt += 1
+                                    unconfirmedItemsLoadAttempt += 1
                                 } catch (_: IllegalArgumentException) {
-                                    locationTreeError = "请先处理该位置中的物品或下级位置。"
+                                    locationTreeError = "请先处理该位置的下级位置。"
                                 } catch (_: Exception) {
                                     locationTreeError = "删除失败，请稍后重试。"
                                 } finally {
@@ -1435,6 +1481,9 @@ fun WhereApp(
                     },
                     onViewItems = { node ->
                         navigateToLocationItems(node.locationId, node.name)
+                    },
+                    onLocationUnconfirmedClick = {
+                        navigateTo(AppDestination.UNCONFIRMED_ITEMS)
                     },
                 )
                 AppDestination.SETTINGS -> SettingsScreen(
@@ -2185,6 +2234,7 @@ fun WhereApp(
                                     moveItemUseCase(itemId, locationId)
                                     itemDetail = loadItemDetailUseCase(itemId)
                                     homeLoadAttempt += 1
+                                    unconfirmedItemsLoadAttempt += 1
                                     popNavigation()
                                 } catch (_: Exception) {
                                     moveItemError = "更新位置失败，请重试。"
@@ -2398,6 +2448,7 @@ private enum class AppDestination {
     INITIALIZATION,
     HOME,
     ALL_ITEMS,
+    UNCONFIRMED_ITEMS,
     LOCATION_ITEMS,
     SEARCH,
     ADD_ITEM,
@@ -2419,6 +2470,7 @@ private fun AppDestination.isRootTab(): Boolean = this == AppDestination.HOME ||
 private fun AppDestination.canEnterBackStack(): Boolean = when (this) {
     AppDestination.HOME,
     AppDestination.ALL_ITEMS,
+    AppDestination.UNCONFIRMED_ITEMS,
     AppDestination.LOCATION_ITEMS,
     AppDestination.SEARCH,
     AppDestination.ADD_ITEM,

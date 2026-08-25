@@ -313,6 +313,14 @@ fun ItemDetailScreen(
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodyLarge,
                 )
+                if (detail.locationUnconfirmed) {
+                    Text(
+                        modifier = Modifier.padding(top = 8.dp),
+                        text = "原位置已失效，请重新选择现在放在哪里。",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 val locationDescription = detail.locationDescription
                 if (!locationDescription.isNullOrBlank()) {
                     Text(
@@ -380,7 +388,7 @@ fun ItemDetailScreen(
                 )
                 Text(
                     modifier = Modifier.padding(start = 6.dp),
-                    text = "更新位置",
+                    text = if (detail.locationUnconfirmed) "重新选择位置" else "更新位置",
                 )
             }
         }

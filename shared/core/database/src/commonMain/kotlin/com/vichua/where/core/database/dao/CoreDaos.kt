@@ -284,6 +284,28 @@ interface ItemDao {
     )
     suspend fun countLocationUnconfirmed(householdId: String): Long
 
+    /** 加载家庭中位置待确认的未删除物品，供提醒列表使用。 */
+    @Query(
+        """
+        SELECT * FROM items
+        WHERE household_id = :householdId
+          AND status = 'LOCATION_UNCONFIRMED'
+          AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id ASC
+        """,
+    )
+    suspend fun findActiveLocationUnconfirmed(householdId: String): List<ItemEntity>
+
+    /** 加载直接放在指定位置上的未删除物品，供删除位置时迁移。 */
+    @Query(
+        """
+        SELECT * FROM items
+        WHERE current_location_id = :locationId AND deleted_at IS NULL
+        ORDER BY updated_at DESC, id ASC
+        """,
+    )
+    suspend fun findActiveAtLocation(locationId: String): List<ItemEntity>
+
     /** 统计直接关联指定位置的未删除物品数量。 */
     @Query(
         """

@@ -11,6 +11,10 @@ import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.DomainValidators
 import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.HouseholdId
+import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemLocationEvent
+import com.vichua.where.core.model.ItemLocationReason
+import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
@@ -222,12 +226,22 @@ class LocationManagementStore(
     }
 
     /**
-     * 原子软删除空位置，并同步取消仍指向该位置的常用位置引用。
+     * 加载直接放在指定位置上的未删除物品。
+     */
+    suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item> =
+        database.itemDao()
+            .findActiveAtLocation(locationId.value)
+            .map { entity -> entity.toDomain() }
+
+    /**
+     * 原子软删除叶子位置；其上物品回退到家庭根并标为待确认。
      */
     suspend fun delete(
         location: LocationNode,
         favoriteLocation: FavoriteLocation?,
         changeRecords: List<ChangeRecord>,
+        displacedItems: List<Item> = emptyList(),
+        locationEvents: List<ItemLocationEvent> = emptyList(),
     ) {
         require(location.deletedAt != null) { "Deleted location must be soft-deleted." }
         require(!location.isHouseholdRoot) { "Household root cannot be deleted." }
@@ -246,6 +260,9 @@ class LocationManagementStore(
                 "Deleted favorite must be soft-deleted."
             }
         }
+        require(displacedItems.size == locationEvents.size) {
+            "Each displaced item must have one location-deleted event."
+        }
 
         transactionRunner.write {
             val storedEntity = locationNodeDao().findById(location.id.value)
@@ -259,9 +276,6 @@ class LocationManagementStore(
             require(locationNodeDao().countActiveChildren(location.id.value) == 0L) {
                 "Location with active children cannot be deleted."
             }
-            require(itemDao().countActiveAtLocation(location.id.value) == 0L) {
-                "Location with active items cannot be deleted."
-            }
 
             val remainingLocations = locationNodeDao()
                 .findActiveTree(location.householdId.value)
@@ -273,6 +287,56 @@ class LocationManagementStore(
                 householdId = location.householdId,
                 locations = remainingLocations,
             )
+            val activeLocations = remainingLocations.filter { current ->
+                current.deletedAt == null
+            }
+            val root = requireNotNull(
+                activeLocations.singleOrNull(LocationNode::isHouseholdRoot),
+            ) {
+                "Active household must contain exactly one home root."
+            }
+            val storedItems = itemDao()
+                .findActiveAtLocation(location.id.value)
+                .map { entity -> entity.toDomain() }
+            val storedItemsById = storedItems.associateBy(Item::id)
+            require(displacedItems.map(Item::id).toSet() == storedItemsById.keys) {
+                "Displaced items must match the items stored at the deleted location."
+            }
+            displacedItems.forEach { updatedItem ->
+                val storedItem = requireNotNull(storedItemsById[updatedItem.id]) {
+                    "Displaced item does not exist."
+                }
+                require(updatedItem.deletedAt == null) {
+                    "Displaced item must remain active."
+                }
+                require(updatedItem.status == ItemStatus.LOCATION_UNCONFIRMED) {
+                    "Displaced item must be marked location-unconfirmed."
+                }
+                require(updatedItem.currentLocationId == root.id) {
+                    "Displaced item must fall back to the household root."
+                }
+                require(updatedItem.version == storedItem.version.next()) {
+                    "Displaced item version must increment the stored version by one."
+                }
+                DomainValidators.validateItemLocation(updatedItem, activeLocations)
+            }
+            locationEvents.forEach { event ->
+                val updatedItem = requireNotNull(
+                    displacedItems.singleOrNull { item -> item.id == event.itemId },
+                ) {
+                    "Location-deleted event must belong to a displaced item."
+                }
+                require(event.reason == ItemLocationReason.LOCATION_DELETED) {
+                    "Displaced item event reason must be LOCATION_DELETED."
+                }
+                require(event.fromLocationId == location.id) {
+                    "Location-deleted event source must be the deleted location."
+                }
+                require(event.toLocationId == updatedItem.currentLocationId) {
+                    "Location-deleted event target must match the displaced item."
+                }
+            }
+
             require(locationNodeDao().update(location.toEntity()) == 1) {
                 "Deleted location update must affect exactly one row."
             }
@@ -283,6 +347,15 @@ class LocationManagementStore(
                     "Deleted favorite update must affect exactly one row."
                 }
             }
+            displacedItems.forEach { updatedItem ->
+                require(itemDao().update(updatedItem.toEntity()) == 1) {
+                    "Displaced item update must affect exactly one row."
+                }
+            }
+            locationEvents.forEach { event ->
+                itemLocationEventDao().insert(event.toEntity())
+            }
+            rebuildDisplacedSearchDocuments(displacedItems = displacedItems)
             changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
         }
     }
@@ -345,6 +418,33 @@ class LocationManagementStore(
             }
         }
         return collectedIds
+    }
+
+    /**
+     * 位置删除后按待确认路径重写被回退物品的搜索文档。
+     */
+    private suspend fun WhereDatabase.rebuildDisplacedSearchDocuments(
+        displacedItems: List<Item>,
+    ) {
+        displacedItems.forEach { item ->
+            val aliasesText = itemAliasDao()
+                .findActiveByItem(item.id.value)
+                .joinToString(" ") { alias -> alias.alias }
+            val categoryText = item.categoryId
+                ?.let { categoryId -> categoryDao().findActiveById(categoryId.value)?.name }
+                .orEmpty()
+            itemSearchDao().deleteByItemId(item.id.value)
+            itemSearchDao().insert(
+                ItemSearchDocument(
+                    itemId = item.id,
+                    name = item.name,
+                    aliasesText = aliasesText,
+                    categoryText = categoryText,
+                    noteText = item.note.orEmpty(),
+                    locationPathText = UNKNOWN_LOCATION_TEXT,
+                ).toEntity(),
+            )
+        }
     }
 
     /**

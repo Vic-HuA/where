@@ -163,6 +163,20 @@ class HomeSnapshotStore(
     }
 
     /**
+     * 加载位置待确认物品，供首页和位置管理提醒点进去处理。
+     */
+    suspend fun loadLocationUnconfirmedItems(): List<StoredHomeItem> {
+        val household = database.householdDao().findFirstActive() ?: return emptyList()
+        val activeLocations = database.locationNodeDao()
+            .findActiveTree(household.id)
+            .map { entity -> entity.toDomain() }
+        return mapStoredItems(
+            itemEntities = database.itemDao().findActiveLocationUnconfirmed(household.id),
+            locationsById = activeLocations.associateBy(LocationNode::id),
+        )
+    }
+
+    /**
      * 加载当前家庭全部未删除物品，供「查看全部」页使用，不截成首页三件。
      */
     suspend fun loadAllItems(): List<StoredHomeItem> {

@@ -75,4 +75,18 @@ class RoomHomeSnapshotRepository(
                 thumbnailStorageKey = storedItem.thumbnailStorageKey,
             )
         }
+
+    /**
+     * 把位置待确认物品收成与首页相同的只读摘要。
+     */
+    override suspend fun loadLocationUnconfirmedItems(): List<HomeItemSummary> =
+        store.loadLocationUnconfirmedItems().map { storedItem ->
+            HomeItemSummary(
+                itemId = storedItem.item.id,
+                name = storedItem.item.name,
+                locationPath = storedItem.locationPath,
+                updatedAt = storedItem.item.updatedAt,
+                thumbnailStorageKey = storedItem.thumbnailStorageKey,
+            )
+        }
 }

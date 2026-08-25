@@ -62,6 +62,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param confirmationSpeechErrorMessage 确认保存后自动朗读失败时的中文降级提示。
  * @param backupReminderMessage 开启备份提醒且尚未成功备份时的中文提示；已有备份或未开启时为空。
  * @param onBackupReminderClick 从提醒进入设置与数据。
+ * @param onLocationUnconfirmedClick 从提醒进入位置待确认列表。
  * @param onUndoDeletion 撤销最近一次物品删除。
  * @param onRetry 重试加载首页数据。
  * @param onTextSearch 提交首页键盘查询。
@@ -90,6 +91,7 @@ fun HomeScreen(
     confirmationSpeechErrorMessage: String? = null,
     backupReminderMessage: String? = null,
     onBackupReminderClick: () -> Unit = {},
+    onLocationUnconfirmedClick: () -> Unit = {},
     onUndoDeletion: () -> Unit = {},
     onRetry: () -> Unit,
     onTextSearch: (String) -> Unit,
@@ -239,16 +241,20 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 14.dp)
-                        .height(44.dp),
+                        .heightIn(min = 48.dp)
+                        .clickable(
+                            role = Role.Button,
+                            onClick = onLocationUnconfirmedClick,
+                        ),
                     color = WhereSelectedContainerColor,
                     shape = RoundedCornerShape(13.dp),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "ⓘ ${loadedSnapshot.locationUnconfirmedCount} 件位置待确认",
+                            text = "ⓘ ${loadedSnapshot.locationUnconfirmedCount} 件位置待确认，点这里重新选位置",
                             color = WherePrimaryTextColor,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium,

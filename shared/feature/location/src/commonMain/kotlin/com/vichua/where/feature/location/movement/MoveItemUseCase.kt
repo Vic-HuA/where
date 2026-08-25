@@ -11,6 +11,7 @@ import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.ItemLocationEventId
 import com.vichua.where.core.model.ItemLocationReason
+import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.UtcTimestamp
@@ -105,8 +106,15 @@ class MoveItemUseCase(
         }
 
         val now = UtcTimestamp(clock.now())
+        val confirmingUnconfirmedLocation =
+            context.item.status == ItemStatus.LOCATION_UNCONFIRMED
         val updatedItem = context.item.copy(
             currentLocationId = targetLocationId,
+            status = if (confirmingUnconfirmedLocation) {
+                ItemStatus.ACTIVE
+            } else {
+                context.item.status
+            },
             updatedAt = now,
             version = context.item.version.next(),
         )
@@ -121,7 +129,11 @@ class MoveItemUseCase(
                     toLocationId = targetLocationId,
                     fromPathSnapshot = context.currentLocationPath,
                     toPathSnapshot = targetLocation.displayPath,
-                    reason = ItemLocationReason.MOVED,
+                    reason = if (confirmingUnconfirmedLocation) {
+                        ItemLocationReason.CORRECTION
+                    } else {
+                        ItemLocationReason.MOVED
+                    },
                     occurredAt = now,
                     sourceDeviceId = updatedItem.sourceDeviceId,
                     version = updatedItem.version,

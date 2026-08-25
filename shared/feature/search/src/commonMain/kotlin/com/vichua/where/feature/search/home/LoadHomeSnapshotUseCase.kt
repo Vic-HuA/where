@@ -84,6 +84,11 @@ interface HomeSnapshotRepository {
      * 加载指定位置及其下级上的未删除物品。
      */
     suspend fun loadItemsAtLocation(locationId: LocationNodeId): List<HomeItemSummary>
+
+    /**
+     * 加载位置待确认的未删除物品。
+     */
+    suspend fun loadLocationUnconfirmedItems(): List<HomeItemSummary>
 }
 
 /**
@@ -121,4 +126,17 @@ class LoadItemsAtLocationUseCase(
      */
     suspend operator fun invoke(locationId: LocationNodeId): List<HomeItemSummary> =
         repository.loadItemsAtLocation(locationId)
+}
+
+/**
+ * 加载位置待确认物品，供提醒条进入处理列表。
+ */
+class LoadLocationUnconfirmedItemsUseCase(
+    private val repository: HomeSnapshotRepository,
+) {
+    /**
+     * 按最近更新时间返回仍待重新选择位置的物品。
+     */
+    suspend operator fun invoke(): List<HomeItemSummary> =
+        repository.loadLocationUnconfirmedItems()
 }
