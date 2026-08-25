@@ -364,10 +364,11 @@ private fun HomePrimaryActionDock(
                     description = when {
                         voicePreparing -> "正在准备语音，请稍候…"
                         voiceListening -> "正在听，请说话…"
-                        else -> "先说要找什么，也可以改用键盘"
+                        else -> "按住说话，说要找什么"
                     },
                     primary = true,
-                    onClick = onVoiceSearchRequested,
+                    onPress = onVoiceSearchRequested,
+                    onRelease = onVoiceSearchReleased,
                 )
                 ElderHomeActionButton(
                     modifier = Modifier,
@@ -781,6 +782,7 @@ private fun HomeLoadError(
 
 /**
  * 适老首页主入口：图形、文字和可朗读语义同时给出。
+ * 查找用按住说话，避免沉底后点一下就开听；记录仍是点一下。
  */
 @Composable
 private fun ElderHomeActionButton(
@@ -789,21 +791,42 @@ private fun ElderHomeActionButton(
     title: String,
     description: String,
     primary: Boolean,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
+    onPress: (() -> Unit)? = null,
+    onRelease: (() -> Unit)? = null,
 ) {
-    Button(
+    val pressHandler = onPress
+    val interactionModifier = if (pressHandler != null) {
+        Modifier.holdToSpeak(
+            enabled = true,
+            onPress = pressHandler,
+            onRelease = onRelease ?: {},
+            holdDelayMillis = HOME_VOICE_HOLD_DELAY_MILLIS,
+        )
+    } else {
+        Modifier.clickable(
+            role = Role.Button,
+            onClick = onClick ?: {},
+        )
+    }
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 88.dp),
+            .heightIn(min = 88.dp)
+            .then(interactionModifier),
         shape = RoundedCornerShape(20.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (primary) WherePrimaryColor else WhereSurfaceColor,
-            contentColor = if (primary) WhereSurfaceColor else WherePrimaryTextColor,
-        ),
-        onClick = onClick,
+        color = if (primary) WherePrimaryColor else WhereSurfaceColor,
+        contentColor = if (primary) WhereSurfaceColor else WherePrimaryTextColor,
+        border = if (primary) {
+            null
+        } else {
+            BorderStroke(WhereStrokeWidth, WhereOutlineColor)
+        },
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
