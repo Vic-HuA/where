@@ -50,7 +50,7 @@ import com.vichua.where.feature.search.home.HomeItemSummary
 import com.vichua.where.feature.search.home.HomeSnapshot
 
 /**
- * 按 Pencil 原型展示首页搜索入口和本地摘要。
+ * 首页：上面展示问候和最近内容，查找与记录固定在底栏上方方便单手按住。
  *
  * @param snapshot 已加载的首页快照；加载中或失败时为空。
  * @param resolveMediaPath 把封面缩略图标识解析为本地绝对路径。
@@ -109,12 +109,24 @@ fun HomeScreen(
     Scaffold(
         containerColor = WhereBackgroundColor,
         bottomBar = {
-            WhereBottomNavigation(
-                selected = WhereRootTab.HOME,
-                onHomeClick = {},
-                onLocationClick = onLocationClick,
-                onSettingsClick = onSettingsClick,
-            )
+            // 查找和记录放在拇指区，和底栏、系统手势条隔开。
+            Column {
+                HomePrimaryActionDock(
+                    elderFriendlyMode = elderFriendlyMode,
+                    onTextSearch = onTextSearch,
+                    onVoiceSearchRequested = onVoiceSearchRequested,
+                    onVoiceSearchReleased = onVoiceSearchReleased,
+                    onRecordItemClick = onRecordItemClick,
+                    voiceListening = voiceListening,
+                    voicePreparing = voicePreparing,
+                )
+                WhereBottomNavigation(
+                    selected = WhereRootTab.HOME,
+                    onHomeClick = {},
+                    onLocationClick = onLocationClick,
+                    onSettingsClick = onSettingsClick,
+                )
+            }
         },
     ) { innerPadding ->
         Column(
@@ -198,55 +210,6 @@ fun HomeScreen(
                         color = WherePrimaryTextColor,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-
-            if (elderFriendlyMode) {
-                ElderHomeActionButton(
-                    modifier = Modifier.padding(top = 18.dp),
-                    icon = WhereIcons.Search,
-                    title = "我要找东西",
-                    description = when {
-                        voicePreparing -> "正在下载语音模型，请稍候…"
-                        voiceListening -> "正在听，请说话…"
-                        else -> "先说要找什么，也可以改用键盘"
-                    },
-                    primary = true,
-                    onClick = onVoiceSearchRequested,
-                )
-                ElderHomeActionButton(
-                    modifier = Modifier.padding(top = 12.dp),
-                    icon = WhereIcons.Camera,
-                    title = "我要放东西",
-                    description = "拍照或说一句记录存放位置",
-                    primary = false,
-                    onClick = onRecordItemClick,
-                )
-            } else {
-                HomeSearchSurface(
-                    modifier = Modifier.padding(top = 18.dp),
-                    onTextSearch = onTextSearch,
-                    onVoiceSearchRequested = onVoiceSearchRequested,
-                    onVoiceSearchReleased = onVoiceSearchReleased,
-                    voiceListening = voiceListening,
-                    voicePreparing = voicePreparing,
-                )
-                Button(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 14.dp)
-                        .heightIn(min = 54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = WherePrimaryColor,
-                        contentColor = WhereSurfaceColor,
-                    ),
-                    onClick = onRecordItemClick,
-                ) {
-                    Text(
-                        text = "拍照记录物品",
-                        style = MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -370,6 +333,81 @@ fun HomeScreen(
 }
 
 /**
+ * 固定在底栏上方的查找和记录入口，避免按住说话时够不到顶部。
+ */
+@Composable
+private fun HomePrimaryActionDock(
+    elderFriendlyMode: Boolean,
+    onTextSearch: (String) -> Unit,
+    onVoiceSearchRequested: () -> Unit,
+    onVoiceSearchReleased: () -> Unit,
+    onRecordItemClick: () -> Unit,
+    voiceListening: Boolean,
+    voicePreparing: Boolean,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = WhereBackgroundColor,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 10.dp, bottom = HOME_ACTION_NAV_GAP),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (elderFriendlyMode) {
+                ElderHomeActionButton(
+                    modifier = Modifier,
+                    icon = WhereIcons.Search,
+                    title = "我要找东西",
+                    description = when {
+                        voicePreparing -> "正在下载语音模型，请稍候…"
+                        voiceListening -> "正在听，请说话…"
+                        else -> "先说要找什么，也可以改用键盘"
+                    },
+                    primary = true,
+                    onClick = onVoiceSearchRequested,
+                )
+                ElderHomeActionButton(
+                    modifier = Modifier,
+                    icon = WhereIcons.Camera,
+                    title = "我要放东西",
+                    description = "拍照或说一句记录存放位置",
+                    primary = false,
+                    onClick = onRecordItemClick,
+                )
+            } else {
+                HomeSearchSurface(
+                    modifier = Modifier,
+                    onTextSearch = onTextSearch,
+                    onVoiceSearchRequested = onVoiceSearchRequested,
+                    onVoiceSearchReleased = onVoiceSearchReleased,
+                    voiceListening = voiceListening,
+                    voicePreparing = voicePreparing,
+                )
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 54.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WherePrimaryColor,
+                        contentColor = WhereSurfaceColor,
+                    ),
+                    onClick = onRecordItemClick,
+                ) {
+                    Text(
+                        text = "拍照记录物品",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * 首页语音和文字查找入口。
  */
 @Composable
@@ -455,7 +493,7 @@ private fun HomeSearchSurface(
         Surface(
             modifier = modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp),
+                .height(56.dp),
             color = WhereSelectedContainerColor,
             shape = RoundedCornerShape(16.dp),
             border = BorderStroke(WhereStrokeWidth, WhereSoftBorderColor),
@@ -801,3 +839,4 @@ data class HomeDeletionUndo(
 )
 
 private const val MAX_VISIBLE_CHIPS = 3
+private val HOME_ACTION_NAV_GAP = 10.dp
