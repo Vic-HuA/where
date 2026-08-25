@@ -76,7 +76,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onSettingsClick 打开设置与数据。
  * @param elderFriendlyMode 是否使用适老首页：两大入口替代搜索框和拍照记录按钮。
  * @param voiceListening 是否正在听用户主动说的查找内容。
- * @param voicePreparing 首次使用时是否正在下载离线语音模型。
+ * @param voicePreparing 是否正在下载或冷启动加载离线语音模型。
  */
 @Composable
 fun HomeScreen(
@@ -362,7 +362,7 @@ private fun HomePrimaryActionDock(
                     icon = WhereIcons.Search,
                     title = "我要找东西",
                     description = when {
-                        voicePreparing -> "正在下载语音模型，请稍候…"
+                        voicePreparing -> "正在准备语音，请稍候…"
                         voiceListening -> "正在听，请说话…"
                         else -> "先说要找什么，也可以改用键盘"
                     },
@@ -510,6 +510,7 @@ private fun HomeSearchSurface(
                             enabled = true,
                             onPress = onVoiceSearchRequested,
                             onRelease = onVoiceSearchReleased,
+                            holdDelayMillis = HOME_VOICE_HOLD_DELAY_MILLIS,
                         )
                         .semantics(mergeDescendants = true) {}
                         .padding(start = 16.dp),
@@ -524,7 +525,7 @@ private fun HomeSearchSurface(
                     )
                     Text(
                         text = when {
-                            voicePreparing -> "正在下载语音模型，请稍候…"
+                            voicePreparing -> "正在准备语音，请稍候…"
                             voiceListening -> "正在听，请说话…"
                             else -> "按住说话查找物品"
                         },
@@ -839,4 +840,5 @@ data class HomeDeletionUndo(
 )
 
 private const val MAX_VISIBLE_CHIPS = 3
-private val HOME_ACTION_NAV_GAP = 10.dp
+private val HOME_ACTION_NAV_GAP = 16.dp
+private const val HOME_VOICE_HOLD_DELAY_MILLIS = 300L

@@ -54,7 +54,7 @@ import com.vichua.where.feature.location.movement.MoveTargetLocation
 /**
  * 选择并保存物品新位置。
  *
- * @param voicePreparing 首次使用时是否正在下载离线语音模型。
+ * @param voicePreparing 是否正在下载或冷启动加载离线语音模型。
  * @param pendingCreatedLocationId 刚新建完成、需要自动选中的位置。
  * @param onPendingCreatedLocationConsumed 界面已经选中新建位置后清空待选 ID。
  */
@@ -323,7 +323,7 @@ fun MoveItemScreen(
                     Text(
                         modifier = Modifier.padding(start = 7.dp),
                         text = when {
-                            voicePreparing -> "正在下载语音模型，请稍候…"
+                            voicePreparing -> "正在准备语音，请稍候…"
                             voiceListening -> "正在听…"
                             else -> "语音描述"
                         },

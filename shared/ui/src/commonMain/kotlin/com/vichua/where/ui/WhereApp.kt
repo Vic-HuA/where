@@ -487,7 +487,7 @@ fun WhereApp(
     /**
      * 先准备本机 Vosk 模型，再开始按住说话。
      *
-     * 首次使用需要下载模型，这时先把准备状态交给界面，避免一直显示“正在听”。
+     * 下载、解压或冷启动加载进内存时先显示准备中，避免一直停在“正在听”。
      */
     suspend fun listenWithOfflineEngine(): SpeechRecognitionOutcome {
         val engineWasReady = speechRecognitionGateway.isEngineReady()

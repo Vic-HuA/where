@@ -76,7 +76,7 @@ import com.vichua.where.feature.location.management.CreateLocationPathRequest
  * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
  * @param onSpeakRequested 用户主动说话后返回转写文字；取消或失败时为空。
  * @param onSpeakReleased 松开语音区域后结束本轮收听。
- * @param voicePreparing 首次使用时是否正在下载离线语音模型。
+ * @param voicePreparing 是否正在下载或冷启动加载离线语音模型。
  * @param onAiRecognizeRequested 用户主动选择识别后返回建议；取消或失败时为空，不得自动保存。
  * @param creatingLocation 是否正在从录入页新建位置。
  * @param pendingCreatedLocationId 刚新建完成、需要自动选中的位置。
@@ -444,7 +444,7 @@ fun AddItemScreen(
                 )
                 Text(
                     text = when {
-                        voicePreparing -> "正在下载语音模型，请稍候…"
+                        voicePreparing -> "正在准备语音，请稍候…"
                         speechSubmitting -> "正在听，请说话…"
                         else -> "按住说：放在书柜第二层蓝色盒子"
                     },

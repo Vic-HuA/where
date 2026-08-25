@@ -47,8 +47,10 @@ class AndroidSpeechRecognitionGateway(
      */
     override fun isAvailable(allowNetwork: Boolean): Boolean = true
 
-    override fun isEngineReady(): Boolean =
-        loadedModel.get() != null || modelStore.isReady()
+    /**
+     * 只有模型已经在内存里才能立刻听。磁盘上有文件但进程刚起来时仍要先加载。
+     */
+    override fun isEngineReady(): Boolean = loadedModel.get() != null
 
     /**
      * 首次使用时下载中文小模型；已解压则立即返回。

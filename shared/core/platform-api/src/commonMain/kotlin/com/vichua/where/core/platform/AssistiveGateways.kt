@@ -252,14 +252,15 @@ interface SpeechRecognitionGateway {
     fun isAvailable(allowNetwork: Boolean): Boolean
 
     /**
-     * 本机离线模型是否已经解压并可以立刻开始听。
+     * 离线模型是否已加载进内存，可以立刻开始听。
+     * 仅磁盘上有模型、进程刚冷启动时仍应返回未就绪。
      */
     fun isEngineReady(): Boolean
 
     /**
-     * 首次使用时准备离线引擎；已就绪时立即成功。
+     * 首次使用时准备离线引擎；已在内存中时立即成功。
      *
-     * 需要联网下载中文模型时会阻塞到完成或失败，界面应提示正在准备。
+     * 下载、解压或冷启动加载模型时会阻塞，界面应提示正在准备，不要显示“正在听”。
      */
     suspend fun ensureEngine(): Boolean
 
