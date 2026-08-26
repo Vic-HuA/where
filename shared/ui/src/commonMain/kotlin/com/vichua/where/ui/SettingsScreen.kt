@@ -56,7 +56,7 @@ import com.vichua.where.core.model.LocalAppPreferences
 import com.vichua.where.core.platform.ManagedBackupFile
 
 /**
- * 设置与数据页：适老偏好、创建加密备份和只读验证。
+ * 设置与数据页：适老偏好、创建加密备份、只读验证，以及隐私、权限和 SDK 说明。
  *
  * @param preferences 当前设备辅助偏好；加载中或失败时为空。
  * @param loading 是否正在读取偏好。
@@ -146,6 +146,9 @@ fun SettingsScreen(
     var verifyImportFromElsewhere by remember { mutableStateOf(false) }
     var clearFirstConfirmVisible by remember { mutableStateOf(false) }
     var clearSecondConfirmVisible by remember { mutableStateOf(false) }
+    var privacyDialogVisible by remember { mutableStateOf(false) }
+    var permissionDialogVisible by remember { mutableStateOf(false) }
+    var sdkDialogVisible by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = WhereBackgroundColor,
@@ -332,6 +335,32 @@ fun SettingsScreen(
             enabled = !submitting,
             onClick = {
                 exportPasswordDialogVisible = true
+            },
+        )
+
+        SettingsSectionTitle("隐私与权限")
+        SettingsActionRow(
+            title = "隐私说明",
+            description = "本地存储、备份加密、云端能力默认关闭，以及数据删除方式",
+            enabled = true,
+            onClick = {
+                privacyDialogVisible = true
+            },
+        )
+        SettingsActionRow(
+            title = "权限用途",
+            description = "相机、麦克风、网络和振动只在使用对应功能时申请",
+            enabled = true,
+            onClick = {
+                permissionDialogVisible = true
+            },
+        )
+        SettingsActionRow(
+            title = "第三方 SDK",
+            description = "列出本机数据库、离线语音、可选云端 AI 和尚未接入的微信",
+            enabled = true,
+            onClick = {
+                sdkDialogVisible = true
             },
         )
 
@@ -605,6 +634,100 @@ fun SettingsScreen(
             dismissEnabled = !submitting,
         ) {
             Text("此操作不能仅靠一次误触完成。确认后将返回家庭初始化页。")
+        }
+    }
+    if (privacyDialogVisible) {
+        WhereDialog(
+            onDismissRequest = { privacyDialogVisible = false },
+            title = "隐私说明",
+            confirmText = "知道了",
+            onConfirm = { privacyDialogVisible = false },
+            dismissText = null,
+        ) {
+            DisclosureField(
+                label = "本地存储",
+                value = "家庭物品、位置、照片、语音名称和草稿默认只存在当前设备。没有账号，也没有云库。",
+            )
+            DisclosureField(
+                label = "加密备份",
+                value = "备份由你主动创建。密码只在本机使用，丢失后无法恢复。草稿和本机设置不进入备份。",
+            )
+            DisclosureField(
+                label = "云端能力",
+                value = "AI 辅助和云端语音默认关闭。开启前会说明数据类型、供应商和用途；只上传这次主动提交的内容。",
+            )
+            DisclosureField(
+                label = "家人帮助",
+                value = "只在这台手机上临时露出键盘和完整位置，不发消息、不打电话、不上传家庭数据。",
+            )
+            DisclosureField(
+                label = "诊断与删除",
+                value = "诊断日志不含物品名称、位置和查询原文。删除物品可在当前会话撤销；清除家庭数据需两次确认。",
+            )
+        }
+    }
+    if (permissionDialogVisible) {
+        WhereDialog(
+            onDismissRequest = { permissionDialogVisible = false },
+            title = "权限用途",
+            confirmText = "知道了",
+            onConfirm = { permissionDialogVisible = false },
+            dismissText = null,
+        ) {
+            DisclosureField(
+                label = "相机",
+                value = "拍照记录物品或位置代表照。拒绝后仍可用系统相册。",
+            )
+            DisclosureField(
+                label = "麦克风",
+                value = "按住说话做离线或云端转写。拒绝后仍可用键盘。",
+            )
+            DisclosureField(
+                label = "网络",
+                value = "仅在你主动开启云端 AI、云端语音、下载离线语音模型或分享时使用。",
+            )
+            DisclosureField(
+                label = "振动",
+                value = "主要操作和危险确认的触觉反馈。设备不支持时自动忽略。",
+            )
+            DisclosureField(
+                label = "申请时机",
+                value = "使用对应功能时才申请，启动时不集中索取。非必要权限不是本地查找和手填的使用条件。",
+            )
+        }
+    }
+    if (sdkDialogVisible) {
+        WhereDialog(
+            onDismissRequest = { sdkDialogVisible = false },
+            title = "第三方 SDK",
+            confirmText = "知道了",
+            onConfirm = { sdkDialogVisible = false },
+            dismissText = null,
+        ) {
+            DisclosureField(
+                label = "AndroidX Room 2.8.4",
+                value = "本机数据库。数据不离开当前设备，除非你主动备份或分享。",
+            )
+            DisclosureField(
+                label = "Compose Multiplatform 1.11.1",
+                value = "界面框架，不收集家庭数据。",
+            )
+            DisclosureField(
+                label = "Vosk Android 0.3.47",
+                value = "离线中文语音识别，模型 vosk-model-small-cn-0.22。录音留在本机，不因使用离线识别而上传。",
+            )
+            DisclosureField(
+                label = "可选云端 AI",
+                value = "你填写的 OpenAI 或 Anthropic 兼容接口。Key 只存在本机，不进入备份。默认关闭。",
+            )
+            DisclosureField(
+                label = "系统能力",
+                value = "相册、相机、文字转语音和系统分享由系统提供，不是第三方账号 SDK。",
+            )
+            DisclosureField(
+                label = "微信 SDK",
+                value = "尚未接入。当前分享走系统分享面板。",
+            )
         }
     }
     if (submitting && backupProgressText != null) {
