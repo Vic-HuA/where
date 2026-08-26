@@ -407,6 +407,73 @@ data class PhotoAssetEntity(
 )
 
 /**
+ * 位置代表照片的 Room 持久化结构。
+ *
+ * 不保存物品用途角色；每个未删除位置最多一张未删除封面。
+ */
+@Entity(
+    tableName = "location_photo_assets",
+    foreignKeys = [
+        ForeignKey(
+            entity = HouseholdEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["household_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+        ForeignKey(
+            entity = LocationNodeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["location_node_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+    indices = [
+        Index(value = ["location_node_id", "sort_order", "deleted_at"]),
+        Index(value = ["location_node_id", "is_cover", "deleted_at"]),
+        Index(value = ["content_hash"]),
+        Index(value = ["integrity_status", "deleted_at"]),
+        Index(value = ["household_id"]),
+    ],
+)
+data class LocationPhotoAssetEntity(
+    @PrimaryKey
+    val id: String,
+    @ColumnInfo(name = "household_id")
+    val householdId: String,
+    @ColumnInfo(name = "location_node_id")
+    val locationNodeId: String,
+    @ColumnInfo(name = "storage_key")
+    val storageKey: String,
+    @ColumnInfo(name = "thumbnail_storage_key")
+    val thumbnailStorageKey: String,
+    @ColumnInfo(name = "mime_type")
+    val mimeType: String,
+    val width: Int,
+    val height: Int,
+    @ColumnInfo(name = "size_bytes")
+    val sizeBytes: Long,
+    @ColumnInfo(name = "content_hash")
+    val contentHash: String,
+    @ColumnInfo(name = "integrity_status")
+    val integrityStatus: String,
+    @ColumnInfo(name = "last_integrity_checked_at")
+    val lastIntegrityCheckedAt: Long?,
+    @ColumnInfo(name = "sort_order")
+    val sortOrder: Int,
+    @ColumnInfo(name = "is_cover")
+    val isCover: Boolean,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long,
+    val version: Long,
+    @ColumnInfo(name = "source_device_id")
+    val sourceDeviceId: String,
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long?,
+)
+
+/**
  * 物品位置历史的 Room 持久化结构。
  *
  * @property id 位置事件全局唯一 ID。

@@ -114,3 +114,58 @@ data class PhotoAsset(
         }
     }
 }
+
+/**
+ * 关联到单个位置节点的代表照片。
+ *
+ * 与物品照片分开管理，没有用途角色；每个未删除位置最多保留一张未删除代表照。
+ */
+@Serializable
+data class LocationPhotoAsset(
+    val id: LocationPhotoAssetId,
+    val householdId: HouseholdId,
+    val locationNodeId: LocationNodeId,
+    val storageKey: String,
+    val thumbnailStorageKey: String,
+    val mimeType: String,
+    val width: Int,
+    val height: Int,
+    val sizeBytes: Long,
+    val contentHash: String,
+    val integrityStatus: MediaIntegrityStatus = MediaIntegrityStatus.UNCHECKED,
+    val lastIntegrityCheckedAt: UtcTimestamp? = null,
+    val sortOrder: SortOrder,
+    val isCover: Boolean,
+    val createdAt: UtcTimestamp,
+    val updatedAt: UtcTimestamp,
+    val version: EntityVersion,
+    val sourceDeviceId: DeviceId,
+    val deletedAt: UtcTimestamp? = null,
+) {
+    init {
+        require(storageKey.isNotBlank()) { "Location photo storage key must not be blank." }
+        require(thumbnailStorageKey.isNotBlank()) {
+            "Location photo thumbnail storage key must not be blank."
+        }
+        require(mimeType.isNotBlank()) { "Location photo MIME type must not be blank." }
+        require(width > 0) { "Location photo width must be greater than zero." }
+        require(height > 0) { "Location photo height must be greater than zero." }
+        require(sizeBytes > 0L) { "Location photo size must be greater than zero." }
+        require(contentHash.isNotBlank()) { "Location photo content hash must not be blank." }
+        require(
+            integrityStatus == MediaIntegrityStatus.UNCHECKED ||
+                lastIntegrityCheckedAt != null,
+        ) {
+            "Checked location photo integrity status requires a check timestamp."
+        }
+        require(lastIntegrityCheckedAt == null || lastIntegrityCheckedAt >= createdAt) {
+            "Location photo integrity check time must not precede import time."
+        }
+        require(updatedAt >= createdAt) {
+            "Location photo update time must not precede import time."
+        }
+        require(deletedAt == null || deletedAt >= createdAt) {
+            "Location photo deletion time must not precede import time."
+        }
+    }
+}

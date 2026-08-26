@@ -38,6 +38,7 @@ import com.vichua.where.core.model.UtcTimestamp
  * @property canRename 家庭根节点不允许普通重命名。
  * @property canDelete 家庭根和仍有子节点的位置不能删；叶子上有物品时可删，物品会标为待确认。
  * @property allowedChildTypes 当前节点允许新增的子类型。
+ * @property coverThumbnailStorageKey 代表照缩略图标识，没有照片时为空。
  */
 data class LocationTreeNode(
     val locationId: LocationNodeId,
@@ -52,6 +53,7 @@ data class LocationTreeNode(
     val canRename: Boolean,
     val canDelete: Boolean,
     val allowedChildTypes: List<LocationType>,
+    val coverThumbnailStorageKey: String? = null,
 )
 
 /**

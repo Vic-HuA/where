@@ -9,6 +9,7 @@ import com.vichua.where.core.model.HouseholdBackupSnapshot
 import com.vichua.where.core.model.ItemDraft
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationPhotoAsset
 
 /**
  * 把确认后的家庭快照原子写入正式库。
@@ -73,6 +74,7 @@ class HouseholdRestoreStore(
         val targetHouseholdId = snapshot.household.id.value
 
         itemLocationEventDao().deleteByHousehold(previousHouseholdId)
+        locationPhotoAssetDao().deleteByHousehold(previousHouseholdId)
         photoAssetDao().deleteByHousehold(previousHouseholdId)
         itemAliasDao().deleteByHousehold(previousHouseholdId)
         itemDao().findAllByHousehold(previousHouseholdId).forEach { item ->
@@ -125,6 +127,11 @@ class HouseholdRestoreStore(
         }
         if (snapshot.photos.isNotEmpty()) {
             photoAssetDao().insertAll(snapshot.photos.map { photo -> photo.toEntity() })
+        }
+        if (snapshot.locationPhotos.isNotEmpty()) {
+            locationPhotoAssetDao().insertAll(
+                snapshot.locationPhotos.map(LocationPhotoAsset::toEntity),
+            )
         }
         snapshot.locationEvents.forEach { event ->
             itemLocationEventDao().insert(event.toEntity())

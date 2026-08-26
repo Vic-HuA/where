@@ -29,11 +29,13 @@ data class StoredHomeItem(
  * @property favorite 常用位置领域模型。
  * @property location 对应的未删除位置节点。
  * @property itemCount 该位置及其下级上的未删除物品数量。
+ * @property coverThumbnailStorageKey 代表照缩略图标识，没有照片时为空。
  */
 data class StoredFavoriteLocation(
     val favorite: FavoriteLocation,
     val location: LocationNode,
     val itemCount: Long,
+    val coverThumbnailStorageKey: String? = null,
 )
 
 /**
@@ -93,6 +95,16 @@ class HomeSnapshotStore(
         val itemsByLocationId = database.itemDao()
             .findActiveByHousehold(household.id)
             .groupBy { entity -> entity.currentLocationId }
+        val favoriteLocationIds = database.homeSupportDao()
+            .findActiveFavoriteLocations(household.id, MAX_FAVORITE_LOCATIONS)
+            .map { favoriteEntity -> favoriteEntity.locationNodeId }
+        val coverThumbnailByLocationId = if (favoriteLocationIds.isEmpty()) {
+            emptyMap()
+        } else {
+            database.locationPhotoAssetDao()
+                .findActiveCovers(favoriteLocationIds)
+                .associate { photo -> photo.locationNodeId to photo.thumbnailStorageKey }
+        }
         val favoriteLocations = database.homeSupportDao()
             .findActiveFavoriteLocations(household.id, MAX_FAVORITE_LOCATIONS)
             .mapNotNull { favoriteEntity ->
@@ -107,6 +119,7 @@ class HomeSnapshotStore(
                     itemCount = locationIds.sumOf { locationId ->
                         itemsByLocationId[locationId]?.size ?: 0
                     }.toLong(),
+                    coverThumbnailStorageKey = coverThumbnailByLocationId[location.id.value],
                 )
             }
 

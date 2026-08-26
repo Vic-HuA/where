@@ -44,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.vichua.where.feature.search.home.FavoriteLocationSummary
 import com.vichua.where.feature.search.home.HomeItemSummary
@@ -326,6 +327,7 @@ fun HomeScreen(
                         .forEach { favorite ->
                             FavoriteLocationChip(
                                 favorite = favorite,
+                                resolveMediaPath = resolveMediaPath,
                                 onClick = {
                                     onFavoriteLocationClick(favorite)
                                 },
@@ -749,13 +751,53 @@ private fun HomeChip(
 @Composable
 private fun FavoriteLocationChip(
     favorite: FavoriteLocationSummary,
+    resolveMediaPath: (String) -> String?,
     onClick: () -> Unit,
 ) {
-    HomeChip(
-        icon = WhereIcons.room(favorite.iconKey.orEmpty()),
-        text = "${favorite.name} ${favorite.itemCount}",
-        onClick = onClick,
-    )
+    val coverPath = favorite.coverThumbnailStorageKey?.let(resolveMediaPath)
+    Surface(
+        color = WhereSurfaceColor,
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
+    ) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (coverPath != null) {
+                LocalStorageImage(
+                    absolutePath = coverPath,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                ) {
+                    Icon(
+                        modifier = Modifier.size(15.dp),
+                        imageVector = WhereIcons.room(favorite.iconKey.orEmpty()),
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
+                    )
+                }
+            } else {
+                Icon(
+                    modifier = Modifier.size(15.dp),
+                    imageVector = WhereIcons.room(favorite.iconKey.orEmpty()),
+                    contentDescription = null,
+                    tint = WherePrimaryColor,
+                )
+            }
+            Text(
+                text = "${favorite.name} ${favorite.itemCount}",
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
 }
 
 /**

@@ -21,6 +21,7 @@ import com.vichua.where.core.model.LatestBackupStatus
 import com.vichua.where.core.model.LocalBackupRecord
 import com.vichua.where.core.model.LocalBackupRecordId
 import com.vichua.where.core.model.LocalBackupStatus
+import com.vichua.where.core.model.LocationPhotoAsset
 import com.vichua.where.core.model.PhotoAsset
 import com.vichua.where.core.model.UtcTimestamp
 import com.vichua.where.core.platform.ControlledMediaFileStore
@@ -87,6 +88,11 @@ interface HouseholdBackupRepository {
      * 读取当前家庭照片元数据。
      */
     suspend fun loadPhotos(): List<PhotoAsset>
+
+    /**
+     * 读取当前家庭位置代表照元数据，供清除后删除受控文件。
+     */
+    suspend fun loadLocationPhotos(): List<LocationPhotoAsset>
 
     /**
      * 清除当前家庭可导出数据，保留本机设备数据。
@@ -176,7 +182,7 @@ class CreateEncryptedBackupUseCase(
                 sourceDeviceId = repository.currentDeviceId(),
                 snapshotHash = snapshotHash,
                 itemPhotoCount = snapshot.photos.size,
-                locationPhotoCount = 0,
+                locationPhotoCount = snapshot.locationPhotos.size,
                 voiceLabelCount = 0,
                 mediaTotalBytes = packedMedia.payloads.sumOf { media -> media.bytes.size.toLong() },
                 mediaFiles = packedMedia.descriptors,
@@ -244,6 +250,23 @@ class CreateEncryptedBackupUseCase(
             val included = originalBytes != null
             descriptors += BackupMediaDescriptor(
                 kind = BackupMediaKind.ITEM_PHOTO,
+                storageKey = photo.storageKey,
+                sizeBytes = photo.sizeBytes,
+                contentHash = photo.contentHash,
+                included = included,
+            )
+            if (originalBytes != null) {
+                payloads += BackupMediaPayload(
+                    storageKey = photo.storageKey,
+                    bytes = originalBytes,
+                )
+            }
+        }
+        snapshot.locationPhotos.forEach { photo ->
+            val originalBytes = mediaFileStore.readBytes(photo.storageKey)
+            val included = originalBytes != null
+            descriptors += BackupMediaDescriptor(
+                kind = BackupMediaKind.LOCATION_PHOTO,
                 storageKey = photo.storageKey,
                 sizeBytes = photo.sizeBytes,
                 contentHash = photo.contentHash,

@@ -94,6 +94,19 @@ value class PhotoAssetId(val value: String) {
 }
 
 /**
+ * 位置照片记录的全局唯一标识。
+ *
+ * @property value 客户端生成且不包含文件路径的标识文本。
+ */
+@Serializable
+@JvmInline
+value class LocationPhotoAssetId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Location photo asset ID must not be blank." }
+    }
+}
+
+/**
  * 位置历史事件的全局唯一标识。
  *
  * @property value 客户端生成的标识文本。

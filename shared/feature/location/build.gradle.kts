@@ -23,6 +23,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":shared:core:common"))
             api(project(":shared:core:model"))
+            implementation(project(":shared:core:platform-api"))
         }
 
         commonTest.dependencies {

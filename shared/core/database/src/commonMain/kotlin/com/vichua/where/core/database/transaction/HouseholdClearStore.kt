@@ -5,6 +5,7 @@ import com.vichua.where.core.database.mapper.toDomain
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.HouseholdDataSummary
 import com.vichua.where.core.model.ItemDraft
+import com.vichua.where.core.model.LocationPhotoAsset
 import com.vichua.where.core.model.PhotoAsset
 
 /**
@@ -26,7 +27,8 @@ class HouseholdClearStore(
         return HouseholdDataSummary(
             itemCount = database.itemDao().findAllByHousehold(householdId).size,
             locationCount = database.locationNodeDao().findAllByHousehold(householdId).size,
-            photoCount = database.photoAssetDao().findAllByHousehold(householdId).size,
+            photoCount = database.photoAssetDao().findAllByHousehold(householdId).size +
+                database.locationPhotoAssetDao().findAllByHousehold(householdId).size,
         )
     }
 
@@ -37,6 +39,17 @@ class HouseholdClearStore(
         val household = database.householdDao().findFirstActive()
             ?: error("Active household is required before clearing household data.")
         return database.photoAssetDao().findAllByHousehold(household.id).map { it.toDomain() }
+    }
+
+    /**
+     * 返回当前家庭全部位置代表照元数据，供清除后删除受控原图。
+     */
+    suspend fun loadLocationPhotos(): List<LocationPhotoAsset> {
+        val household = database.householdDao().findFirstActive()
+            ?: error("Active household is required before clearing household data.")
+        return database.locationPhotoAssetDao()
+            .findAllByHousehold(household.id)
+            .map { it.toDomain() }
     }
 
     /**
@@ -67,6 +80,7 @@ class HouseholdClearStore(
         val householdId = household.id
         transactionRunner.write {
             itemLocationEventDao().deleteByHousehold(householdId)
+            locationPhotoAssetDao().deleteByHousehold(householdId)
             photoAssetDao().deleteByHousehold(householdId)
             itemAliasDao().deleteByHousehold(householdId)
             itemDao().findAllByHousehold(householdId).forEach { item ->

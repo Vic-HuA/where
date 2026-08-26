@@ -83,6 +83,11 @@ class RoomHouseholdBackupRepository(
     override suspend fun loadPhotos(): List<PhotoAsset> = clearStore.loadPhotos()
 
     /**
+     * 读取当前家庭位置代表照元数据。
+     */
+    override suspend fun loadLocationPhotos() = clearStore.loadLocationPhotos()
+
+    /**
      * 清除当前家庭可导出数据。
      */
     override suspend fun clearHousehold(clearedAtMillis: Long) {

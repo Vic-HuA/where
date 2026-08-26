@@ -28,6 +28,7 @@ import com.vichua.where.core.model.LocationType
  * @property childCount 未删除直接子节点数量。
  * @property itemCount 该节点及其后代上的未删除物品数量。
  * @property directItemCount 直接放在该节点上的未删除物品数量。
+ * @property coverThumbnailStorageKey 代表照缩略图标识，没有照片时为空。
  */
 data class StoredLocationTreeNode(
     val location: LocationNode,
@@ -36,6 +37,7 @@ data class StoredLocationTreeNode(
     val childCount: Int,
     val itemCount: Int,
     val directItemCount: Int,
+    val coverThumbnailStorageKey: String? = null,
 )
 
 /**
@@ -109,6 +111,13 @@ class LocationManagementStore(
         ) {
             "Active household must contain exactly one home root."
         }
+        val coverThumbnailByLocationId = if (locations.isEmpty()) {
+            emptyMap()
+        } else {
+            database.locationPhotoAssetDao()
+                .findActiveCovers(locations.map { location -> location.id.value })
+                .associate { photo -> photo.locationNodeId to photo.thumbnailStorageKey }
+        }
         val nodes = mutableListOf<StoredLocationTreeNode>()
         appendNodes(
             current = root,
@@ -117,6 +126,7 @@ class LocationManagementStore(
             childrenByParent = childrenByParent,
             descendantIdsByLocation = descendantIdsByLocation,
             directItemCountByLocation = directItemCountByLocation,
+            coverThumbnailByLocationId = coverThumbnailByLocationId,
             nodes = nodes,
         )
 
@@ -370,6 +380,7 @@ class LocationManagementStore(
         childrenByParent: Map<LocationNodeId?, List<LocationNode>>,
         descendantIdsByLocation: Map<LocationNodeId, Set<LocationNodeId>>,
         directItemCountByLocation: Map<LocationNodeId, Int>,
+        coverThumbnailByLocationId: Map<String, String>,
         nodes: MutableList<StoredLocationTreeNode>,
     ) {
         val children = childrenByParent[current.id].orEmpty()
@@ -386,6 +397,7 @@ class LocationManagementStore(
             childCount = children.size,
             itemCount = itemCount,
             directItemCount = directItemCount,
+            coverThumbnailStorageKey = coverThumbnailByLocationId[current.id.value],
         )
         children.forEach { child ->
             appendNodes(
@@ -395,6 +407,7 @@ class LocationManagementStore(
                 childrenByParent = childrenByParent,
                 descendantIdsByLocation = descendantIdsByLocation,
                 directItemCountByLocation = directItemCountByLocation,
+                coverThumbnailByLocationId = coverThumbnailByLocationId,
                 nodes = nodes,
             )
         }

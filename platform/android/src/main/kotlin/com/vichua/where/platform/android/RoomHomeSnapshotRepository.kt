@@ -42,6 +42,7 @@ class RoomHomeSnapshotRepository(
                     name = storedFavorite.location.name,
                     iconKey = storedFavorite.location.iconKey,
                     itemCount = storedFavorite.itemCount,
+                    coverThumbnailStorageKey = storedFavorite.coverThumbnailStorageKey,
                 )
             },
             locationUnconfirmedCount = snapshot.locationUnconfirmedCount,

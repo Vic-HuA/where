@@ -161,11 +161,14 @@ class ClearHouseholdDataUseCase(
     suspend operator fun invoke() {
         val drafts = repository.loadDrafts()
         val photos = repository.loadPhotos()
+        val locationPhotos = repository.loadLocationPhotos()
         drafts.forEach { draft ->
             repository.saveDraft(clearDraftLocation(draft))
         }
         repository.clearHousehold(clock.now())
         val discardedKeys = photos.flatMap { photo ->
+            listOf(photo.storageKey, photo.thumbnailStorageKey)
+        } + locationPhotos.flatMap { photo ->
             listOf(photo.storageKey, photo.thumbnailStorageKey)
         }
         if (discardedKeys.isNotEmpty()) {
@@ -448,6 +451,15 @@ private fun mergeSnapshots(
         items = items,
         aliases = aliases.filter { alias -> alias.itemId in itemIds },
         photos = photos,
+        locationPhotos = mergeById(
+            local = local.locationPhotos,
+            incoming = incoming.locationPhotos,
+            idOf = { photo -> photo.id.value },
+            entityType = ChangeEntityType.LOCATION_PHOTO_ASSET,
+            resolutions = resolutions,
+            versionOf = { photo -> photo.version.value },
+            copyIncoming = { photo -> photo },
+        ),
         locationEvents = events,
         changeRecords = changeRecords,
         favoriteLocations = favorites,
@@ -530,7 +542,7 @@ private fun collectRestoredMedia(
     target: HouseholdBackupSnapshot,
 ): List<RestoredMedia> {
     val payloadByKey = envelope.mediaFiles.associateBy { media -> media.storageKey }
-    return target.photos.mapNotNull { photo ->
+    val itemMedia = target.photos.mapNotNull { photo ->
         val payload = payloadByKey[photo.storageKey] ?: return@mapNotNull null
         RestoredMedia(
             storageKey = photo.storageKey,
@@ -538,6 +550,15 @@ private fun collectRestoredMedia(
             bytes = payload.bytes,
         )
     }
+    val locationMedia = target.locationPhotos.mapNotNull { photo ->
+        val payload = payloadByKey[photo.storageKey] ?: return@mapNotNull null
+        RestoredMedia(
+            storageKey = photo.storageKey,
+            thumbnailStorageKey = photo.thumbnailStorageKey,
+            bytes = payload.bytes,
+        )
+    }
+    return itemMedia + locationMedia
 }
 
 private suspend fun writeMedia(

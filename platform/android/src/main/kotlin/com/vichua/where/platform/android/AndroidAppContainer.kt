@@ -18,6 +18,7 @@ import com.vichua.where.core.database.transaction.HouseholdRestoreStore
 import com.vichua.where.core.database.transaction.ItemDeletionStore
 import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
+import com.vichua.where.core.database.transaction.LocationPhotoStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
 import com.vichua.where.core.database.transaction.ItemPhotoStore
@@ -48,6 +49,9 @@ import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCa
 import com.vichua.where.feature.location.management.CreateLocationUseCase
 import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
+import com.vichua.where.feature.location.photo.AddLocationPhotoUseCase
+import com.vichua.where.feature.location.photo.DeleteLocationPhotoUseCase
+import com.vichua.where.feature.location.photo.ImportLocationPhotoUseCase
 import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
@@ -108,6 +112,8 @@ class AndroidAppContainer(
         RoomItemDeletionRepository(ItemDeletionStore(database))
     private val locationManagementRepository =
         RoomLocationManagementRepository(LocationManagementStore(database))
+    private val locationPhotoRepository =
+        RoomLocationPhotoRepository(LocationPhotoStore(database))
     private val accessibilityPreferencesRepository =
         RoomAccessibilityPreferencesRepository(
             store = AccessibilityPreferencesStore(database),
@@ -317,6 +323,24 @@ class AndroidAppContainer(
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
         textNormalizer = DefaultTextNormalizer,
+    )
+
+    /** 把相册图片写入临时目录供位置代表照使用。 */
+    val importLocationPhotoUseCase = ImportLocationPhotoUseCase(mediaFileStore)
+
+    /** 为位置写入或更换代表照。 */
+    val addLocationPhotoUseCase = AddLocationPhotoUseCase(
+        repository = locationPhotoRepository,
+        mediaFileStore = mediaFileStore,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    /** 删除位置当前代表照。 */
+    val deleteLocationPhotoUseCase = DeleteLocationPhotoUseCase(
+        repository = locationPhotoRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
     )
 
     /** 删除空位置的用例。 */

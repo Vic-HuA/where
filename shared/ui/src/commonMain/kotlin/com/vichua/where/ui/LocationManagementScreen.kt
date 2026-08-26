@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -68,6 +69,9 @@ fun LocationManagementScreen(
     onRename: (LocationTreeNode, String) -> Unit,
     onDelete: (LocationTreeNode) -> Unit,
     onViewItems: (LocationTreeNode) -> Unit,
+    onAddPhoto: (LocationTreeNode) -> Unit = {},
+    onRemovePhoto: (LocationTreeNode) -> Unit = {},
+    resolveMediaPath: (String) -> String? = { null },
     onLocationUnconfirmedClick: () -> Unit = {},
 ) {
     var expandedLocationIds by remember(snapshot?.rootLocationId) {
@@ -179,6 +183,13 @@ fun LocationManagementScreen(
                                 onViewItems = {
                                     onViewItems(node)
                                 },
+                                onAddPhoto = {
+                                    onAddPhoto(node)
+                                },
+                                onRemovePhoto = {
+                                    onRemovePhoto(node)
+                                },
+                                resolveMediaPath = resolveMediaPath,
                             )
                         }
 
@@ -374,6 +385,9 @@ private fun LocationTreeRow(
     onRename: () -> Unit,
     onDelete: () -> Unit,
     onViewItems: () -> Unit,
+    onAddPhoto: () -> Unit,
+    onRemovePhoto: () -> Unit,
+    resolveMediaPath: (String) -> String?,
 ) {
     var menuExpanded by remember(node.locationId) { mutableStateOf(false) }
     val canAdd = node.allowedChildTypes.isNotEmpty()
@@ -419,12 +433,30 @@ private fun LocationTreeRow(
                     .clickable(role = Role.Button, onClick = onViewItems),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    modifier = Modifier.size(16.dp),
-                    imageVector = WhereIcons.location(node.iconKey, node.type),
-                    contentDescription = locationTypeLabel(node.type),
-                    tint = WherePrimaryColor,
-                )
+                val coverPath = node.coverThumbnailStorageKey?.let(resolveMediaPath)
+                if (coverPath != null) {
+                    LocalStorageImage(
+                        absolutePath = coverPath,
+                        contentDescription = locationTypeLabel(node.type),
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(16.dp),
+                            imageVector = WhereIcons.location(node.iconKey, node.type),
+                            contentDescription = locationTypeLabel(node.type),
+                            tint = WherePrimaryColor,
+                        )
+                    }
+                } else {
+                    Icon(
+                        modifier = Modifier.size(16.dp),
+                        imageVector = WhereIcons.location(node.iconKey, node.type),
+                        contentDescription = locationTypeLabel(node.type),
+                        tint = WherePrimaryColor,
+                    )
+                }
                 Text(
                     modifier = Modifier
                         .weight(1f)
@@ -489,6 +521,28 @@ private fun LocationTreeRow(
                                         )
                                     }
                                     if (node.canRename) {
+                                        LocationNodeMenuRow(
+                                            icon = WhereIcons.AddPhoto,
+                                            label = if (node.coverThumbnailStorageKey == null) {
+                                                "添加照片"
+                                            } else {
+                                                "更换照片"
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onAddPhoto()
+                                            },
+                                        )
+                                        if (node.coverThumbnailStorageKey != null) {
+                                            LocationNodeMenuRow(
+                                                icon = WhereIcons.Delete,
+                                                label = "删除照片",
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onRemovePhoto()
+                                                },
+                                            )
+                                        }
                                         LocationNodeMenuRow(
                                             icon = WhereIcons.Edit,
                                             label = "重命名",

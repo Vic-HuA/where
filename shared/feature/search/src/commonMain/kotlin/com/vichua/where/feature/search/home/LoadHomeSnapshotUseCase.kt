@@ -42,6 +42,7 @@ data class RecentSearchSummary(
  * @property name 位置名称。
  * @property iconKey 受控位置图标键。
  * @property itemCount 该位置及其下级上的未删除物品数量。
+ * @property coverThumbnailStorageKey 代表照缩略图标识，没有照片时为空。
  */
 data class FavoriteLocationSummary(
     val favoriteId: FavoriteLocationId,
@@ -49,6 +50,7 @@ data class FavoriteLocationSummary(
     val name: String,
     val iconKey: String?,
     val itemCount: Long,
+    val coverThumbnailStorageKey: String? = null,
 )
 
 /**

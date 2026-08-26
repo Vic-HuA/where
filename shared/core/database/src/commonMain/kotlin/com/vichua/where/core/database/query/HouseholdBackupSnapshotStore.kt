@@ -27,6 +27,9 @@ class HouseholdBackupSnapshotStore(
             items = database.itemDao().findAllByHousehold(householdId).map { it.toDomain() },
             aliases = database.itemAliasDao().findAllByHousehold(householdId).map { it.toDomain() },
             photos = database.photoAssetDao().findAllByHousehold(householdId).map { it.toDomain() },
+            locationPhotos = database.locationPhotoAssetDao()
+                .findAllByHousehold(householdId)
+                .map { it.toDomain() },
             locationEvents = database.itemLocationEventDao()
                 .findAllByHousehold(householdId)
                 .map { it.toDomain() },

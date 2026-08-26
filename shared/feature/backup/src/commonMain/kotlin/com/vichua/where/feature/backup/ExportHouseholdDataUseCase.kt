@@ -77,7 +77,7 @@ class ExportHouseholdDataUseCase(
                 sourceDeviceId = repository.currentDeviceId(),
                 snapshotHash = snapshotHash,
                 itemPhotoCount = snapshot.photos.size,
-                locationPhotoCount = 0,
+                locationPhotoCount = snapshot.locationPhotos.size,
                 voiceLabelCount = 0,
                 mediaTotalBytes = packedMedia.payloads.sumOf { media -> media.bytes.size.toLong() },
                 mediaFiles = packedMedia.descriptors,
@@ -163,7 +163,7 @@ class ExportHouseholdDataUseCase(
     }
 
     /**
-     * 只打包物品原图，位置照片和语音名称保持计数为 0。
+     * 打包物品原图和位置代表照；语音名称尚未接入。
      */
     private suspend fun packOriginalPhotos(snapshot: HouseholdBackupSnapshot): PackedMedia {
         val descriptors = mutableListOf<BackupMediaDescriptor>()
@@ -173,6 +173,23 @@ class ExportHouseholdDataUseCase(
             val included = originalBytes != null
             descriptors += BackupMediaDescriptor(
                 kind = BackupMediaKind.ITEM_PHOTO,
+                storageKey = photo.storageKey,
+                sizeBytes = photo.sizeBytes,
+                contentHash = photo.contentHash,
+                included = included,
+            )
+            if (originalBytes != null) {
+                payloads += BackupMediaPayload(
+                    storageKey = photo.storageKey,
+                    bytes = originalBytes,
+                )
+            }
+        }
+        snapshot.locationPhotos.forEach { photo ->
+            val originalBytes = mediaFileStore.readBytes(photo.storageKey)
+            val included = originalBytes != null
+            descriptors += BackupMediaDescriptor(
+                kind = BackupMediaKind.LOCATION_PHOTO,
                 storageKey = photo.storageKey,
                 sizeBytes = photo.sizeBytes,
                 contentHash = photo.contentHash,

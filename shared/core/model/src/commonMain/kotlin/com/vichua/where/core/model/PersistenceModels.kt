@@ -58,6 +58,9 @@ enum class ChangeEntityType {
     /** 物品照片。 */
     PHOTO_ASSET,
 
+    /** 位置代表照片。 */
+    LOCATION_PHOTO_ASSET,
+
     /** 物品位置历史。 */
     ITEM_LOCATION_EVENT,
 

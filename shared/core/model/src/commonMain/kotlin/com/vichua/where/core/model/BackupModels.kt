@@ -22,7 +22,7 @@ enum class LocalBackupStatus {
 /**
  * 备份包中的媒体类型。
  *
- * 当前只打包物品原图；位置照片和语音名称表尚未接入，计数固定为 0。
+ * 当前打包物品原图和位置代表照；语音名称表尚未接入，计数固定为 0。
  */
 @Serializable
 enum class BackupMediaKind {
@@ -124,6 +124,7 @@ data class HouseholdBackupSnapshot(
     val items: List<Item>,
     val aliases: List<ItemAlias>,
     val photos: List<PhotoAsset>,
+    val locationPhotos: List<LocationPhotoAsset> = emptyList(),
     val locationEvents: List<ItemLocationEvent>,
     val changeRecords: List<ChangeRecord>,
     val favoriteLocations: List<FavoriteLocation>,
@@ -137,6 +138,9 @@ data class HouseholdBackupSnapshot(
         }
         require(items.all { item -> item.householdId == household.id }) {
             "Backup snapshot items must belong to the household."
+        }
+        require(locationPhotos.all { photo -> photo.householdId == household.id }) {
+            "Backup snapshot location photos must belong to the household."
         }
     }
 }

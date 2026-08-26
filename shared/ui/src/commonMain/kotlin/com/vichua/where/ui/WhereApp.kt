@@ -76,6 +76,9 @@ import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
 import com.vichua.where.feature.location.management.LocationTreeSnapshot
 import com.vichua.where.feature.location.management.RenameLocationUseCase
+import com.vichua.where.feature.location.photo.AddLocationPhotoUseCase
+import com.vichua.where.feature.location.photo.DeleteLocationPhotoUseCase
+import com.vichua.where.feature.location.photo.ImportLocationPhotoUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveItemUseCase
@@ -164,6 +167,9 @@ import kotlinx.coroutines.yield
  * @param createLocationPathUseCase 一次创建多层位置的用例。
  * @param renameLocationUseCase 重命名位置的用例。
  * @param deleteEmptyLocationUseCase 删除空位置的用例。
+ * @param importLocationPhotoUseCase 把相册图片写入临时目录供位置代表照使用。
+ * @param addLocationPhotoUseCase 为位置写入或更换代表照。
+ * @param deleteLocationPhotoUseCase 删除位置当前代表照。
  * @param loadAccessibilityPreferencesUseCase 读取当前设备适老偏好的用例。
  * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
  * @param loadAppPreferencesUseCase 读取当前设备应用开关的用例。
@@ -227,6 +233,9 @@ fun WhereApp(
     createLocationPathUseCase: CreateLocationPathUseCase,
     renameLocationUseCase: RenameLocationUseCase,
     deleteEmptyLocationUseCase: DeleteEmptyLocationUseCase,
+    importLocationPhotoUseCase: ImportLocationPhotoUseCase,
+    addLocationPhotoUseCase: AddLocationPhotoUseCase,
+    deleteLocationPhotoUseCase: DeleteLocationPhotoUseCase,
     loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
     loadAppPreferencesUseCase: LoadAppPreferencesUseCase,
@@ -1489,6 +1498,58 @@ fun WhereApp(
                     },
                     onViewItems = { node ->
                         navigateToLocationItems(node.locationId, node.name)
+                    },
+                    resolveMediaPath = resolveMediaPath,
+                    onAddPhoto = { node ->
+                        if (!locationTreeSubmitting) {
+                            requestImage { pickedImage ->
+                                coroutineScope.launch {
+                                    locationTreeSubmitting = true
+                                    locationTreeError = null
+                                    var importedKeys = emptyList<String>()
+                                    try {
+                                        val imported = importLocationPhotoUseCase(
+                                            bytes = pickedImage.bytes,
+                                            sourceMimeType = pickedImage.mimeType,
+                                        )
+                                        importedKeys = listOf(
+                                            imported.tempStorageKey,
+                                            imported.thumbnailTempStorageKey,
+                                        )
+                                        addLocationPhotoUseCase(node.locationId, imported)
+                                        locationTree = loadLocationTreeUseCase()
+                                        homeLoadAttempt += 1
+                                    } catch (_: IllegalArgumentException) {
+                                        discardImportedPhotos(importedKeys)
+                                        locationTreeError = "无法使用所选照片，请换一张后重试。"
+                                    } catch (_: Exception) {
+                                        discardImportedPhotos(importedKeys)
+                                        locationTreeError = "保存位置照片失败，请稍后重试。"
+                                    } finally {
+                                        locationTreeSubmitting = false
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    onRemovePhoto = { node ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                locationTreeError = null
+                                try {
+                                    deleteLocationPhotoUseCase(node.locationId)
+                                    locationTree = loadLocationTreeUseCase()
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    locationTreeError = "当前位置没有可删除的照片。"
+                                } catch (_: Exception) {
+                                    locationTreeError = "删除位置照片失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
                     },
                     onLocationUnconfirmedClick = {
                         navigateTo(AppDestination.UNCONFIRMED_ITEMS)

@@ -84,6 +84,7 @@ class RoomLocationManagementRepository(
             canRename = !location.isHouseholdRoot,
             canDelete = !location.isHouseholdRoot && node.childCount == 0,
             allowedChildTypes = allowedChildTypes(location.type),
+            coverThumbnailStorageKey = node.coverThumbnailStorageKey,
         )
     }
 }

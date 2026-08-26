@@ -157,8 +157,12 @@ object StorageKeys {
         require(!storageKey.contains("..")) { "Storage key must not contain parent segments." }
         require(!storageKey.contains("//")) { "Storage key must not contain empty segments." }
         require(ALLOWED_PATTERN.matches(storageKey)) { "Storage key contains unsupported characters." }
-        require(storageKey.startsWith("tmp/") || storageKey.startsWith("items/")) {
-            "Storage key must stay inside tmp or items directories."
+        require(
+            storageKey.startsWith("tmp/") ||
+                storageKey.startsWith("items/") ||
+                storageKey.startsWith("locations/"),
+        ) {
+            "Storage key must stay inside tmp, items, or locations directories."
         }
     }
 
@@ -179,6 +183,25 @@ object StorageKeys {
         require(itemId.isNotBlank()) { "Item ID for storage key must not be blank." }
         require(photoId.isNotBlank()) { "Photo ID for storage key must not be blank." }
         return "items/$itemId/thumb-$photoId.jpg".also(::validate)
+    }
+
+    /**
+     * 生成位置原图正式标识。
+     */
+    fun locationOriginal(locationNodeId: String, photoId: String, extension: String): String {
+        require(locationNodeId.isNotBlank()) { "Location ID for storage key must not be blank." }
+        require(photoId.isNotBlank()) { "Photo ID for storage key must not be blank." }
+        val safeExtension = normalizeExtension(extension)
+        return "locations/$locationNodeId/$photoId.$safeExtension".also(::validate)
+    }
+
+    /**
+     * 生成位置缩略图正式标识。缩略图统一使用 JPEG，降低解码成本。
+     */
+    fun locationThumbnail(locationNodeId: String, photoId: String): String {
+        require(locationNodeId.isNotBlank()) { "Location ID for storage key must not be blank." }
+        require(photoId.isNotBlank()) { "Photo ID for storage key must not be blank." }
+        return "locations/$locationNodeId/thumb-$photoId.jpg".also(::validate)
     }
 
     /**

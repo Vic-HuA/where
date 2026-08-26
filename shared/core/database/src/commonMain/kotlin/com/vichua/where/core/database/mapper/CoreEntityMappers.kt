@@ -9,6 +9,7 @@ import com.vichua.where.core.database.entity.ItemDraftEntity
 import com.vichua.where.core.database.entity.ItemEntity
 import com.vichua.where.core.database.entity.ItemLocationEventEntity
 import com.vichua.where.core.database.entity.LocationNodeEntity
+import com.vichua.where.core.database.entity.LocationPhotoAssetEntity
 import com.vichua.where.core.database.entity.PhotoAssetEntity
 import com.vichua.where.core.model.Category
 import com.vichua.where.core.model.CategoryId
@@ -34,6 +35,8 @@ import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationPhotoAsset
+import com.vichua.where.core.model.LocationPhotoAssetId
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.MediaIntegrityStatus
 import com.vichua.where.core.model.PhotoAsset
@@ -257,6 +260,52 @@ internal fun PhotoAssetEntity.toDomain(): PhotoAsset = PhotoAsset(
     sortOrder = SortOrder(sortOrder),
     isCover = isCover,
     capturedAt = capturedAt?.let(::UtcTimestamp),
+    createdAt = UtcTimestamp(createdAt),
+    updatedAt = UtcTimestamp(updatedAt),
+    version = EntityVersion(version),
+    sourceDeviceId = DeviceId(sourceDeviceId),
+    deletedAt = deletedAt?.let(::UtcTimestamp),
+)
+
+/** 将位置照片领域模型转换为 Room 实体。 */
+internal fun LocationPhotoAsset.toEntity(): LocationPhotoAssetEntity = LocationPhotoAssetEntity(
+    id = id.value,
+    householdId = householdId.value,
+    locationNodeId = locationNodeId.value,
+    storageKey = storageKey,
+    thumbnailStorageKey = thumbnailStorageKey,
+    mimeType = mimeType,
+    width = width,
+    height = height,
+    sizeBytes = sizeBytes,
+    contentHash = contentHash,
+    integrityStatus = integrityStatus.name,
+    lastIntegrityCheckedAt = lastIntegrityCheckedAt?.epochMilliseconds,
+    sortOrder = sortOrder.value,
+    isCover = isCover,
+    createdAt = createdAt.epochMilliseconds,
+    updatedAt = updatedAt.epochMilliseconds,
+    version = version.value,
+    sourceDeviceId = sourceDeviceId.value,
+    deletedAt = deletedAt?.epochMilliseconds,
+)
+
+/** 将位置照片 Room 实体还原为领域模型。 */
+internal fun LocationPhotoAssetEntity.toDomain(): LocationPhotoAsset = LocationPhotoAsset(
+    id = LocationPhotoAssetId(id),
+    householdId = HouseholdId(householdId),
+    locationNodeId = LocationNodeId(locationNodeId),
+    storageKey = storageKey,
+    thumbnailStorageKey = thumbnailStorageKey,
+    mimeType = mimeType,
+    width = width,
+    height = height,
+    sizeBytes = sizeBytes,
+    contentHash = contentHash,
+    integrityStatus = enumValueOf<MediaIntegrityStatus>(integrityStatus),
+    lastIntegrityCheckedAt = lastIntegrityCheckedAt?.let(::UtcTimestamp),
+    sortOrder = SortOrder(sortOrder),
+    isCover = isCover,
     createdAt = UtcTimestamp(createdAt),
     updatedAt = UtcTimestamp(updatedAt),
     version = EntityVersion(version),
