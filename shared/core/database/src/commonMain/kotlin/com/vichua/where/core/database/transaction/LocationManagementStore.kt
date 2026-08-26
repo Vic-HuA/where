@@ -17,7 +17,9 @@ import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationPhotoAsset
 import com.vichua.where.core.model.LocationType
+import com.vichua.where.core.model.VoiceLabelAsset
 
 /**
  * 数据库层提供的位置树展示节点。
@@ -305,6 +307,22 @@ class LocationManagementStore(
             .map { entity -> entity.toDomain() }
 
     /**
+     * 加载指定位置当前未删除代表照。
+     */
+    suspend fun findActivePhotosAt(locationId: LocationNodeId): List<LocationPhotoAsset> =
+        database.locationPhotoAssetDao()
+            .findActiveByLocation(locationId.value)
+            .map { entity -> entity.toDomain() }
+
+    /**
+     * 加载指定位置当前未删除语音名称。
+     */
+    suspend fun findActiveVoiceLabelsAt(locationId: LocationNodeId): List<VoiceLabelAsset> =
+        database.voiceLabelAssetDao()
+            .findActiveByLocations(listOf(locationId.value))
+            .map { entity -> entity.toDomain() }
+
+    /**
      * 原子软删除叶子位置；其上物品回退到家庭根并标为待确认。
      */
     suspend fun delete(
@@ -313,6 +331,8 @@ class LocationManagementStore(
         changeRecords: List<ChangeRecord>,
         displacedItems: List<Item> = emptyList(),
         locationEvents: List<ItemLocationEvent> = emptyList(),
+        retiredPhotos: List<LocationPhotoAsset> = emptyList(),
+        retiredVoiceLabels: List<VoiceLabelAsset> = emptyList(),
     ) {
         require(location.deletedAt != null) { "Deleted location must be soft-deleted." }
         require(!location.isHouseholdRoot) { "Household root cannot be deleted." }
@@ -425,6 +445,28 @@ class LocationManagementStore(
             }
             locationEvents.forEach { event ->
                 itemLocationEventDao().insert(event.toEntity())
+            }
+            retiredPhotos.forEach { photo ->
+                require(photo.locationNodeId == location.id) {
+                    "Retired location photo must belong to the deleted location."
+                }
+                require(photo.deletedAt != null) {
+                    "Retired location photo must be soft-deleted."
+                }
+                require(locationPhotoAssetDao().update(photo.toEntity()) == 1) {
+                    "Retired location photo update must affect exactly one row."
+                }
+            }
+            retiredVoiceLabels.forEach { label ->
+                require(label.locationNodeId == location.id) {
+                    "Retired voice label must belong to the deleted location."
+                }
+                require(label.deletedAt != null) {
+                    "Retired voice label must be soft-deleted."
+                }
+                require(voiceLabelAssetDao().update(label.toEntity()) == 1) {
+                    "Retired voice label update must affect exactly one row."
+                }
             }
             rebuildDisplacedSearchDocuments(displacedItems = displacedItems)
             changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))

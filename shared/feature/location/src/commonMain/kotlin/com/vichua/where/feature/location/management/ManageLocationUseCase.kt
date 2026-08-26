@@ -20,9 +20,11 @@ import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationPhotoAsset
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.SortOrder
 import com.vichua.where.core.model.UtcTimestamp
+import com.vichua.where.core.model.VoiceLabelAsset
 
 /**
  * 位置管理页展示的单个节点。
@@ -156,6 +158,8 @@ data class LocationRename(
  * @property changeRecords 位置删除、物品待确认及可选常用位置取消对应的变更记录。
  * @property displacedItems 原位置上的物品，已回退到家庭根并标为待确认。
  * @property locationEvents 物品因位置删除产生的历史事件。
+ * @property retiredPhotos 一并软删除的位置代表照。
+ * @property retiredVoiceLabels 一并软删除的位置语音名称。
  */
 data class LocationDeletion(
     val location: LocationNode,
@@ -163,6 +167,8 @@ data class LocationDeletion(
     val changeRecords: List<ChangeRecord>,
     val displacedItems: List<Item> = emptyList(),
     val locationEvents: List<ItemLocationEvent> = emptyList(),
+    val retiredPhotos: List<LocationPhotoAsset> = emptyList(),
+    val retiredVoiceLabels: List<VoiceLabelAsset> = emptyList(),
 )
 
 /**
@@ -183,6 +189,12 @@ interface LocationManagementRepository {
 
     /** 加载直接放在指定位置上的未删除物品。 */
     suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item>
+
+    /** 加载指定位置当前未删除代表照。 */
+    suspend fun findActivePhotosAt(locationId: LocationNodeId): List<LocationPhotoAsset>
+
+    /** 加载指定位置当前未删除语音名称。 */
+    suspend fun findActiveVoiceLabelsAt(locationId: LocationNodeId): List<VoiceLabelAsset>
 
     /** 固定一个常用位置。 */
     suspend fun pinFavorite(favorite: FavoriteLocation, changeRecord: ChangeRecord)
@@ -550,6 +562,23 @@ class DeleteEmptyLocationUseCase(
             }
         val previousPath = currentNode.displayPath.trim().ifBlank { currentLocation.name }
         val itemsAtLocation = repository.findActiveItemsAt(locationId)
+        // 位置删掉后代表照和语音名称不能继续挂在已失效节点上。
+        val retiredPhotos = repository.findActivePhotosAt(locationId).map { photo ->
+            photo.copy(
+                updatedAt = now,
+                version = photo.version.next(),
+                sourceDeviceId = snapshot.sourceDeviceId,
+                deletedAt = now,
+            )
+        }
+        val retiredVoiceLabels = repository.findActiveVoiceLabelsAt(locationId).map { label ->
+            label.copy(
+                updatedAt = now,
+                version = label.version.next(),
+                sourceDeviceId = snapshot.sourceDeviceId,
+                deletedAt = now,
+            )
+        }
         val displacedItems = itemsAtLocation.map { item ->
             item.copy(
                 currentLocationId = snapshot.rootLocationId,
@@ -625,9 +654,39 @@ class DeleteEmptyLocationUseCase(
                             ),
                         )
                     }
+                    retiredPhotos.forEach { photo ->
+                        add(
+                            ChangeRecord(
+                                id = ChangeRecordId(idGenerator.generate()),
+                                householdId = snapshot.householdId,
+                                entityType = ChangeEntityType.LOCATION_PHOTO_ASSET,
+                                entityId = photo.id.value,
+                                operation = ChangeOperation.DELETE,
+                                entityVersion = photo.version,
+                                sourceDeviceId = snapshot.sourceDeviceId,
+                                occurredAt = now,
+                            ),
+                        )
+                    }
+                    retiredVoiceLabels.forEach { label ->
+                        add(
+                            ChangeRecord(
+                                id = ChangeRecordId(idGenerator.generate()),
+                                householdId = snapshot.householdId,
+                                entityType = ChangeEntityType.VOICE_LABEL_ASSET,
+                                entityId = label.id.value,
+                                operation = ChangeOperation.DELETE,
+                                entityVersion = label.version,
+                                sourceDeviceId = snapshot.sourceDeviceId,
+                                occurredAt = now,
+                            ),
+                        )
+                    }
                 },
                 displacedItems = displacedItems,
                 locationEvents = locationEvents,
+                retiredPhotos = retiredPhotos,
+                retiredVoiceLabels = retiredVoiceLabels,
             ),
         )
     }

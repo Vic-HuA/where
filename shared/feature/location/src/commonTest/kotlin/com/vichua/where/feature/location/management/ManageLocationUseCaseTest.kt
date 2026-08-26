@@ -334,6 +334,20 @@ class ManageLocationUseCaseTest {
 
         override suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item> =
             itemsAtLocation[locationId].orEmpty()
+
+        override suspend fun findActivePhotosAt(locationId: LocationNodeId) = emptyList<com.vichua.where.core.model.LocationPhotoAsset>()
+
+        override suspend fun findActiveVoiceLabelsAt(locationId: LocationNodeId) = emptyList<com.vichua.where.core.model.VoiceLabelAsset>()
+
+        override suspend fun pinFavorite(
+            favorite: com.vichua.where.core.model.FavoriteLocation,
+            changeRecord: com.vichua.where.core.model.ChangeRecord,
+        ) = Unit
+
+        override suspend fun unpinFavorite(
+            favorite: com.vichua.where.core.model.FavoriteLocation,
+            changeRecord: com.vichua.where.core.model.ChangeRecord,
+        ) = Unit
     }
 
     private companion object {

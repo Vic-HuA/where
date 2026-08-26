@@ -862,10 +862,10 @@ private fun FavoriteLocationChip(
             if (coverPath != null) {
                 LocalStorageImage(
                     absolutePath = coverPath,
-                    contentDescription = null,
+                    contentDescription = favorite.name,
                     modifier = Modifier
-                        .size(20.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(10.dp)),
                 ) {
                     Icon(
                         modifier = Modifier.size(15.dp),

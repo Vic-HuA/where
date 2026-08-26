@@ -4,8 +4,10 @@ import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.StoredLocationTreeNode
 import com.vichua.where.core.model.Item
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.LocationPhotoAsset
 import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.FavoriteLocation
+import com.vichua.where.core.model.VoiceLabelAsset
 import com.vichua.where.feature.location.management.LocationCreation
 import com.vichua.where.feature.location.management.LocationDeletion
 import com.vichua.where.feature.location.management.LocationManagementRepository
@@ -65,12 +67,20 @@ class RoomLocationManagementRepository(
             changeRecords = deletion.changeRecords,
             displacedItems = deletion.displacedItems,
             locationEvents = deletion.locationEvents,
+            retiredPhotos = deletion.retiredPhotos,
+            retiredVoiceLabels = deletion.retiredVoiceLabels,
         )
     }
 
     /** 加载直接放在指定位置上的未删除物品。 */
     override suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item> =
         store.findActiveItemsAt(locationId)
+
+    override suspend fun findActivePhotosAt(locationId: LocationNodeId): List<LocationPhotoAsset> =
+        store.findActivePhotosAt(locationId)
+
+    override suspend fun findActiveVoiceLabelsAt(locationId: LocationNodeId): List<VoiceLabelAsset> =
+        store.findActiveVoiceLabelsAt(locationId)
 
     override suspend fun pinFavorite(favorite: FavoriteLocation, changeRecord: ChangeRecord) {
         store.pinFavorite(favorite, changeRecord)

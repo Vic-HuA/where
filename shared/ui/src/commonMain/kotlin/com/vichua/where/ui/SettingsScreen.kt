@@ -1073,7 +1073,7 @@ private fun BackupVerificationDialog(
                 )
                 DisclosureField(
                     label = "照片",
-                    value = "物品照片 ${result.itemPhotoCount} 张，已打包原图 ${result.includedMediaCount} 张",
+                    value = "物品照片 ${result.itemPhotoCount} 张，位置照片 ${result.manifest.locationPhotoCount} 张，已打包原图 ${result.includedMediaCount} 张",
                 )
                 DisclosureField(
                     label = "文件大小",
