@@ -3,12 +3,15 @@ package com.vichua.where.feature.item.profile
 import com.vichua.where.core.common.EpochMillisecondsClock
 import com.vichua.where.core.common.TextNormalizer
 import com.vichua.where.core.common.UniqueIdGenerator
+import com.vichua.where.core.model.CategoryId
 import com.vichua.where.core.model.ChangeEntityType
 import com.vichua.where.core.model.ChangeOperation
 import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.ChangeRecordId
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemAlias
+import com.vichua.where.core.model.ItemAliasId
 import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.UtcTimestamp
 
@@ -20,6 +23,8 @@ import com.vichua.where.core.model.UtcTimestamp
  * @property aliasesText 未删除别名，用于重建搜索索引。
  * @property categoryText 当前分类文本。
  * @property currentDeviceId 本次修改来源设备。
+ * @property aliases 当前未删除别名。
+ * @property categories 可供选择的分类。
  */
 data class ItemProfileContext(
     val item: Item,
@@ -27,21 +32,70 @@ data class ItemProfileContext(
     val aliasesText: String,
     val categoryText: String,
     val currentDeviceId: DeviceId,
+    val aliases: List<String> = emptyList(),
+    val categories: List<ItemCategoryOption> = emptyList(),
 )
 
 /**
- * 用户确认后的档案编辑输入。
+ * 录入和编辑共用的分类选项。
+ */
+data class ItemCategoryOption(
+    val categoryId: CategoryId,
+    val name: String,
+)
+
+/**
+ * 把用户输入的别名拆成去重后的可见名称。
  *
- * @property itemId 要编辑的物品。
+ * 用逗号、顿号或换行分隔；标准化后相同的别名只保留第一次出现的原文。
+ */
+fun parseItemAliasInputs(
+    rawAliases: Collection<String>,
+    textNormalizer: TextNormalizer,
+): List<String> {
+    val seenNormalized = mutableSetOf<String>()
+    return rawAliases
+        .flatMap { raw -> raw.split(ALIAS_SEPARATOR_REGEX) }
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .filter { alias ->
+            val normalized = textNormalizer.normalize(alias)
+            normalized.isNotEmpty() && seenNormalized.add(normalized)
+        }
+}
+
+private val ALIAS_SEPARATOR_REGEX = Regex("[,，;；\\n]+")
+
+/**
+ * 详情编辑对话框确认后的可见字段，物品 ID 由页面补上。
+ *
  * @property name 新的物品名称。
  * @property locationDescription 可选位置补充说明。
  * @property note 可选备注。
+ * @property aliases 用户确认后的别名原文。
+ * @property categoryId 可选分类；为空表示不分类。
+ * @property quantity 大于 0 的数量。
+ * @property unit 可选数量单位。
  */
+data class ItemProfileEdits(
+    val name: String,
+    val locationDescription: String? = null,
+    val note: String? = null,
+    val aliases: List<String> = emptyList(),
+    val categoryId: CategoryId? = null,
+    val quantity: Double = 1.0,
+    val unit: String? = null,
+)
+
 data class UpdateItemProfileRequest(
     val itemId: ItemId,
     val name: String,
     val locationDescription: String? = null,
     val note: String? = null,
+    val aliases: List<String> = emptyList(),
+    val categoryId: CategoryId? = null,
+    val quantity: Double = 1.0,
+    val unit: String? = null,
 )
 
 /**
@@ -53,6 +107,7 @@ data class ItemProfileUpdate(
     val aliasesText: String,
     val categoryText: String,
     val locationPathText: String,
+    val aliases: List<ItemAlias> = emptyList(),
 )
 
 /**
@@ -90,20 +145,49 @@ class UpdateItemProfileUseCase(
         val note = request.note
             ?.trim()
             ?.takeIf(String::isNotEmpty)
+        val unit = request.unit
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+        val selectedCategory = request.categoryId?.let { categoryId ->
+            context.categories.singleOrNull { option -> option.categoryId == categoryId }
+        }
         require(name.isNotEmpty()) { "Item name must not be blank." }
         require(normalizedName.isNotEmpty()) { "Normalized item name must not be blank." }
+        require(request.categoryId == null || selectedCategory != null) {
+            "Selected item category is unavailable."
+        }
+        require(request.quantity.isFinite() && request.quantity > 0.0) {
+            "Item quantity must be finite and greater than zero."
+        }
+        val aliasNames = parseItemAliasInputs(request.aliases, textNormalizer)
         require(
             name != context.item.name ||
                 locationDescription != context.item.locationDescription ||
-                note != context.item.note,
+                note != context.item.note ||
+                aliasNames != context.aliases ||
+                request.categoryId != context.item.categoryId ||
+                request.quantity != context.item.quantity ||
+                unit != context.item.unit,
         ) {
             "Item profile update must change at least one visible field."
         }
 
         val now = UtcTimestamp(clock.now())
+        val aliases = aliasNames.map { aliasName ->
+            ItemAlias(
+                id = ItemAliasId(idGenerator.generate()),
+                itemId = context.item.id,
+                alias = aliasName,
+                normalizedAlias = textNormalizer.normalize(aliasName),
+                createdAt = now,
+            )
+        }
         val updatedItem = context.item.copy(
             name = name,
             normalizedName = normalizedName,
+            categoryId = selectedCategory?.categoryId,
+            quantity = request.quantity,
+            unit = unit,
             locationDescription = locationDescription,
             note = note,
             updatedAt = now,
@@ -123,9 +207,10 @@ class UpdateItemProfileUseCase(
                     sourceDeviceId = updatedItem.sourceDeviceId,
                     occurredAt = now,
                 ),
-                aliasesText = context.aliasesText,
-                categoryText = context.categoryText,
+                aliasesText = aliasNames.joinToString(" "),
+                categoryText = selectedCategory?.name.orEmpty(),
                 locationPathText = context.locationPath,
+                aliases = aliases,
             ),
         )
     }

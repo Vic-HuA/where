@@ -3,6 +3,7 @@ package com.vichua.where.feature.item.creation
 import com.vichua.where.core.common.EpochMillisecondsClock
 import com.vichua.where.core.common.TextNormalizer
 import com.vichua.where.core.common.UniqueIdGenerator
+import com.vichua.where.core.model.CategoryId
 import com.vichua.where.core.model.ChangeEntityType
 import com.vichua.where.core.model.ChangeOperation
 import com.vichua.where.core.model.ChangeRecord
@@ -11,12 +12,16 @@ import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemAlias
+import com.vichua.where.core.model.ItemAliasId
 import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.ItemLocationEventId
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.feature.item.profile.ItemCategoryOption
+import com.vichua.where.feature.item.profile.parseItemAliasInputs
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.MediaIntegrityStatus
 import com.vichua.where.core.model.PhotoAsset
@@ -54,12 +59,14 @@ data class ItemCreationLocation(
  * @property sourceDeviceId 当前有效设备 ID。
  * @property rootLocationId 家庭根位置，录入页新建房间时作为父节点。
  * @property availableLocations 可供物品选择的未删除非根位置。
+ * @property categories 可供选择的物品分类。
  */
 data class ItemCreationContext(
     val householdId: HouseholdId,
     val sourceDeviceId: DeviceId,
     val rootLocationId: LocationNodeId,
     val availableLocations: List<ItemCreationLocation>,
+    val categories: List<ItemCategoryOption> = emptyList(),
 )
 
 /**
@@ -69,6 +76,10 @@ data class ItemCreationContext(
  * @property locationId 用户选择的位置 ID。
  * @property locationDescription 可选位置补充说明。
  * @property note 可选备注。
+ * @property aliases 用户输入的别名原文，可为空。
+ * @property categoryId 可选分类。
+ * @property quantity 大于 0 的数量，默认 1。
+ * @property unit 可选数量单位。
  * @property photos 已导入的临时照片；可为空，第一张会成为封面。
  */
 data class CreateManualItemRequest(
@@ -76,6 +87,10 @@ data class CreateManualItemRequest(
     val locationId: LocationNodeId,
     val locationDescription: String? = null,
     val note: String? = null,
+    val aliases: List<String> = emptyList(),
+    val categoryId: CategoryId? = null,
+    val quantity: Double = 1.0,
+    val unit: String? = null,
     val photos: List<ImportedItemPhoto> = emptyList(),
 )
 
@@ -106,6 +121,7 @@ data class ItemSearchContent(
  * @property initialLocationEvent 首次位置历史事件。
  * @property changeRecord 物品创建变更记录。
  * @property searchContent 全文索引内容。
+ * @property aliases 与物品同时写入的别名。
  */
 data class ManualItemCreation(
     val item: Item,
@@ -113,6 +129,7 @@ data class ManualItemCreation(
     val initialLocationEvent: ItemLocationEvent,
     val changeRecord: ChangeRecord,
     val searchContent: ItemSearchContent,
+    val aliases: List<ItemAlias> = emptyList(),
 )
 
 /**
@@ -177,15 +194,40 @@ class CreateManualItemUseCase(
         val note = request.note
             ?.trim()
             ?.takeIf(String::isNotEmpty)
+        val unit = request.unit
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+        val selectedCategory = request.categoryId?.let { categoryId ->
+            context.categories.singleOrNull { option -> option.categoryId == categoryId }
+        }
+        require(request.categoryId == null || selectedCategory != null) {
+            "Selected item category is unavailable."
+        }
+        require(request.quantity.isFinite() && request.quantity > 0.0) {
+            "Item quantity must be finite and greater than zero."
+        }
+        val aliasNames = parseItemAliasInputs(request.aliases, textNormalizer)
         val now = UtcTimestamp(clock.now())
         val initialVersion = EntityVersion(INITIAL_ENTITY_VERSION)
         val itemId = ItemId(idGenerator.generate())
+        val aliases = aliasNames.map { aliasName ->
+            ItemAlias(
+                id = ItemAliasId(idGenerator.generate()),
+                itemId = itemId,
+                alias = aliasName,
+                normalizedAlias = textNormalizer.normalize(aliasName),
+                createdAt = now,
+            )
+        }
         val item = Item(
             id = itemId,
             householdId = context.householdId,
             currentLocationId = selectedLocation.locationId,
             name = name,
             normalizedName = normalizedName,
+            categoryId = selectedCategory?.categoryId,
+            quantity = request.quantity,
+            unit = unit,
             locationDescription = locationDescription,
             note = note,
             status = ItemStatus.ACTIVE,
@@ -220,8 +262,8 @@ class CreateManualItemUseCase(
         val searchContent = ItemSearchContent(
             itemId = itemId,
             name = name,
-            aliasesText = "",
-            categoryText = "",
+            aliasesText = aliasNames.joinToString(" "),
+            categoryText = selectedCategory?.name.orEmpty(),
             noteText = note.orEmpty(),
             locationPathText = selectedLocation.displayPath,
         )
@@ -241,6 +283,7 @@ class CreateManualItemUseCase(
                 initialLocationEvent = locationEvent,
                 changeRecord = changeRecord,
                 searchContent = searchContent,
+                aliases = aliases,
             ),
         )
         // 先提交数据库再转正文件，避免事务失败后留下引用不存在文件的正式记录。

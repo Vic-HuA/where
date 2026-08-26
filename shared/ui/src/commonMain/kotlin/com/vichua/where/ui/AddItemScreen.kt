@@ -42,9 +42,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import com.vichua.where.core.model.CategoryId
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.MvpLimits
@@ -118,6 +121,10 @@ fun AddItemScreen(
         mutableStateOf(draft?.locationDescription.orEmpty())
     }
     var note by remember(draft) { mutableStateOf(draft?.note.orEmpty()) }
+    var aliasesText by remember { mutableStateOf("") }
+    var selectedCategoryId by remember { mutableStateOf<CategoryId?>(null) }
+    var quantityText by remember { mutableStateOf("1") }
+    var unitText by remember { mutableStateOf("") }
     var moreInformationExpanded by remember(draft) {
         mutableStateOf(
             !draft?.locationDescription.isNullOrBlank() || !draft?.note.isNullOrBlank(),
@@ -140,8 +147,23 @@ fun AddItemScreen(
     val selectedLocation = context?.availableLocations?.singleOrNull { location ->
         location.locationId == selectedLocationId
     }
+    val selectedCategory = context?.categories?.singleOrNull { option ->
+        option.categoryId == selectedCategoryId
+    }
+    val aliasInputs = aliasesText
+        .split(Regex("[,，;；\\n]+"))
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+    val parsedQuantity = quantityText.trim().let { text ->
+        if (text.isEmpty()) 1.0 else text.toDoubleOrNull()
+    }
+    val quantityValid = parsedQuantity != null &&
+        parsedQuantity.isFinite() &&
+        parsedQuantity > 0.0
+    val trimmedUnit = unitText.trim().takeIf(String::isNotEmpty)
     val canContinue = itemName.isNotBlank() &&
         selectedLocation != null &&
+        quantityValid &&
         !loading &&
         !submitting
     val currentDraft = ItemDraftContent(
@@ -373,7 +395,7 @@ fun AddItemScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "更多信息 · 位置说明、备注",
+                    text = "更多信息 · 别名、分类、数量、位置说明、备注",
                     color = WherePrimaryTextColor,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -386,6 +408,78 @@ fun AddItemScreen(
         }
 
         if (moreInformationExpanded) {
+            OutlinedTextField(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                value = aliasesText,
+                onValueChange = { value ->
+                    aliasesText = value
+                },
+                enabled = !submitting,
+                label = {
+                    Text("别名")
+                },
+                placeholder = {
+                    Text("遥控器，电视开关")
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = addItemTextFieldColors(),
+            )
+            val availableCategories = context?.categories.orEmpty()
+            if (availableCategories.isNotEmpty()) {
+                AddItemFieldLabel(
+                    modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+                    text = "分类",
+                )
+                ItemCategoryChipRow(
+                    categories = availableCategories,
+                    selectedCategoryId = selectedCategoryId,
+                    enabled = !submitting,
+                    onSelect = { categoryId ->
+                        selectedCategoryId = categoryId
+                    },
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = quantityText,
+                    onValueChange = { value ->
+                        quantityText = value
+                    },
+                    enabled = !submitting,
+                    label = {
+                        Text("数量")
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = addItemTextFieldColors(),
+                )
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = unitText,
+                    onValueChange = { value ->
+                        unitText = value
+                    },
+                    enabled = !submitting,
+                    label = {
+                        Text("单位")
+                    },
+                    placeholder = {
+                        Text("个、盒")
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = addItemTextFieldColors(),
+                )
+            }
             OutlinedTextField(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -661,6 +755,10 @@ fun AddItemScreen(
         ConfirmManualItemDialog(
             itemName = itemName.trim(),
             locationPath = visibleLocationPath(selectedLocation.displayPath),
+            aliases = aliasInputs,
+            categoryName = selectedCategory?.name,
+            quantityLabel = formatAddItemQuantity(parsedQuantity ?: 1.0, trimmedUnit),
+            showQuantity = parsedQuantity != 1.0 || trimmedUnit != null,
             submitting = submitting,
             onDismiss = {
                 if (!submitting) {
@@ -675,6 +773,10 @@ fun AddItemScreen(
                         locationId = selectedLocation.locationId,
                         locationDescription = locationDescription,
                         note = note,
+                        aliases = aliasInputs,
+                        categoryId = selectedCategoryId,
+                        quantity = parsedQuantity ?: 1.0,
+                        unit = trimmedUnit,
                     ),
                 )
             },
@@ -1265,6 +1367,10 @@ private fun LocationSelectionDialog(
 private fun ConfirmManualItemDialog(
     itemName: String,
     locationPath: String,
+    aliases: List<String>,
+    categoryName: String?,
+    quantityLabel: String,
+    showQuantity: Boolean,
     submitting: Boolean,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
@@ -1291,7 +1397,43 @@ private fun ConfirmManualItemDialog(
             color = WhereSecondaryTextColor,
             style = MaterialTheme.typography.bodyLarge,
         )
+        if (aliases.isNotEmpty() || !categoryName.isNullOrBlank() || showQuantity) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = buildString {
+                    if (aliases.isNotEmpty()) {
+                        append("别名 ")
+                        append(aliases.joinToString("、"))
+                    }
+                    if (!categoryName.isNullOrBlank()) {
+                        if (isNotEmpty()) append("  ·  ")
+                        append("分类 ")
+                        append(categoryName)
+                    }
+                    if (showQuantity) {
+                        if (isNotEmpty()) append("  ·  ")
+                        append("数量 ")
+                        append(quantityLabel)
+                    }
+                },
+                color = WhereSecondaryTextColor,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
+}
+
+/**
+ * 把录入页数量格式化成确认框可读文本，整数不带小数点。
+ */
+private fun formatAddItemQuantity(quantity: Double, unit: String?): String {
+    val quantityText = if (quantity == quantity.toLong().toDouble()) {
+        quantity.toLong().toString()
+    } else {
+        quantity.toString()
+    }
+    val trimmedUnit = unit?.trim().orEmpty()
+    return if (trimmedUnit.isEmpty()) quantityText else "$quantityText $trimmedUnit"
 }
 
 /**

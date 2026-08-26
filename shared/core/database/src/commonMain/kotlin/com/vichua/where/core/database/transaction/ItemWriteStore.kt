@@ -63,6 +63,13 @@ class ItemWriteStore(
                 "Created item current location does not exist."
             }
             DomainValidators.validateItemLocation(item, listOf(currentLocation))
+            val createdCategoryId = item.categoryId
+            if (createdCategoryId != null) {
+                val category = categoryDao().findActiveById(createdCategoryId.value)
+                require(category != null && category.householdId == item.householdId.value) {
+                    "Created item category must belong to the same household."
+                }
+            }
 
             itemDao().insert(item.toEntity())
             if (aliases.isNotEmpty()) {
@@ -141,6 +148,7 @@ class ItemWriteStore(
         updatedItem: Item,
         changeRecord: ChangeRecord,
         searchDocument: ItemSearchDocument,
+        aliases: List<ItemAlias> = emptyList(),
     ) {
         require(updatedItem.deletedAt == null) {
             "Soft-deleted item cannot be updated."
@@ -155,6 +163,7 @@ class ItemWriteStore(
         require(searchDocument.noteText == updatedItem.note.orEmpty()) {
             "Search document note must match the updated item."
         }
+        DomainValidators.validateItemAliases(updatedItem.id, aliases)
 
         transactionRunner.write {
             val currentEntity = itemDao().findActiveById(updatedItem.id.value)
@@ -172,10 +181,22 @@ class ItemWriteStore(
                 ?.toDomain()
             require(currentLocation != null) { "Updated item current location does not exist." }
             DomainValidators.validateItemLocation(updatedItem, listOf(currentLocation))
+            val updatedCategoryId = updatedItem.categoryId
+            if (updatedCategoryId != null) {
+                val category = categoryDao().findActiveById(updatedCategoryId.value)
+                require(category != null && category.householdId == updatedItem.householdId.value) {
+                    "Updated item category must belong to the same household."
+                }
+            }
 
             require(itemDao().update(updatedItem.toEntity()) == 1) {
                 "Item profile update must affect exactly one row."
             }
+            replaceItemAliases(
+                itemId = updatedItem.id,
+                desiredAliases = aliases,
+                deletedAt = updatedItem.updatedAt,
+            )
             changeRecordDao().insert(changeRecord.toEntity())
             itemSearchDao().deleteByItemId(updatedItem.id.value)
             itemSearchDao().insert(searchDocument.toEntity())
@@ -501,6 +522,44 @@ class ItemWriteStore(
             itemSearchDao().deleteByItemId(restoredItem.id.value)
             itemSearchDao().insert(searchDocument.toEntity())
             changeRecordDao().insertAll(changeRecords.map(ChangeRecord::toEntity))
+        }
+    }
+
+    /**
+     * 按标准化别名对齐当前别名：去掉不再使用的，补上新增的。
+     */
+    private suspend fun WhereDatabase.replaceItemAliases(
+        itemId: ItemId,
+        desiredAliases: List<ItemAlias>,
+        deletedAt: UtcTimestamp,
+    ) {
+        val storedAliases = itemAliasDao()
+            .findAllByItem(itemId.value)
+            .map { entity -> entity.toDomain() }
+        val desiredNormalized = desiredAliases
+            .filter { alias -> alias.deletedAt == null }
+            .map(ItemAlias::normalizedAlias)
+            .toSet()
+        storedAliases
+            .filter { alias ->
+                alias.deletedAt == null && alias.normalizedAlias !in desiredNormalized
+            }
+            .forEach { alias ->
+                require(
+                    itemAliasDao().update(alias.copy(deletedAt = deletedAt).toEntity()) == 1,
+                ) {
+                    "Item alias deletion must affect exactly one row."
+                }
+            }
+        val existingActiveNormalized = storedAliases
+            .filter { alias -> alias.deletedAt == null }
+            .map(ItemAlias::normalizedAlias)
+            .toSet()
+        val aliasesToInsert = desiredAliases.filter { alias ->
+            alias.deletedAt == null && alias.normalizedAlias !in existingActiveNormalized
+        }
+        if (aliasesToInsert.isNotEmpty()) {
+            itemAliasDao().insertAll(aliasesToInsert.map(ItemAlias::toEntity))
         }
     }
 

@@ -21,6 +21,7 @@ class RoomItemDetailRepository(
             itemId = detail.item.id,
             name = detail.item.name,
             aliases = detail.aliases.map { alias -> alias.alias },
+            categoryId = detail.item.categoryId,
             categoryName = detail.categoryName,
             quantity = detail.item.quantity,
             unit = detail.item.unit,

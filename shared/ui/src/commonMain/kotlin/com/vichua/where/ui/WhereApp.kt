@@ -695,16 +695,24 @@ fun WhereApp(
     }
 
     LaunchedEffect(destination, itemCreationAttempt) {
-        if (destination == AppDestination.ADD_ITEM) {
-            itemCreationLoading = true
-            itemCreationError = null
+        if (destination == AppDestination.ADD_ITEM || destination == AppDestination.ITEM_DETAIL) {
+            if (destination == AppDestination.ADD_ITEM) {
+                itemCreationLoading = true
+                itemCreationError = null
+            }
             try {
                 itemCreationContext = loadItemCreationContextUseCase()
-                itemDraft = loadLatestItemDraftUseCase()
+                if (destination == AppDestination.ADD_ITEM) {
+                    itemDraft = loadLatestItemDraftUseCase()
+                }
             } catch (_: Exception) {
-                itemCreationError = "暂时无法读取可用位置。"
+                if (destination == AppDestination.ADD_ITEM) {
+                    itemCreationError = "暂时无法读取可用位置。"
+                }
             } finally {
-                itemCreationLoading = false
+                if (destination == AppDestination.ADD_ITEM) {
+                    itemCreationLoading = false
+                }
             }
         }
     }
@@ -2024,7 +2032,8 @@ fun WhereApp(
                             itemProfileError = null
                         }
                     },
-                    onSaveProfile = { name, locationDescription, note ->
+                    categories = itemCreationContext?.categories.orEmpty(),
+                    onSaveProfile = { edits ->
                         val itemId = selectedItemId
                         if (itemId != null && !itemProfileSubmitting) {
                             coroutineScope.launch {
@@ -2034,9 +2043,13 @@ fun WhereApp(
                                     updateItemProfileUseCase(
                                         UpdateItemProfileRequest(
                                             itemId = itemId,
-                                            name = name,
-                                            locationDescription = locationDescription,
-                                            note = note,
+                                            name = edits.name,
+                                            locationDescription = edits.locationDescription,
+                                            note = edits.note,
+                                            aliases = edits.aliases,
+                                            categoryId = edits.categoryId,
+                                            quantity = edits.quantity,
+                                            unit = edits.unit,
                                         ),
                                     )
                                     itemDetail = loadItemDetailUseCase(itemId)

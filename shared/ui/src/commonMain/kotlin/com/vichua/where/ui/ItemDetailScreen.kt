@@ -45,7 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -54,9 +56,12 @@ import com.vichua.where.core.model.MvpLimits
 import com.vichua.where.core.model.PhotoAssetId
 import com.vichua.where.core.model.PhotoRole
 import com.vichua.where.core.model.ItemLocationReason
+import com.vichua.where.core.model.CategoryId
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.ItemDetailLocationHistory
 import com.vichua.where.feature.item.detail.ItemDetailPhoto
+import com.vichua.where.feature.item.profile.ItemCategoryOption
+import com.vichua.where.feature.item.profile.ItemProfileEdits
 
 /**
  * 按 Pencil 原型展示物品照片、当前位置、历史和主要操作。
@@ -79,9 +84,10 @@ import com.vichua.where.feature.item.detail.ItemDetailPhoto
  * @param editorVisible 是否展示档案编辑对话框。
  * @param editorSubmitting 是否正在保存档案。
  * @param editorErrorMessage 可展示的中文保存错误。
+ * @param categories 可供选择的物品分类。
  * @param onEditProfile 打开档案编辑对话框。
  * @param onDismissEditor 关闭档案编辑对话框。
- * @param onSaveProfile 保存名称、位置说明和备注。
+ * @param onSaveProfile 保存名称、别名、分类、数量、位置说明和备注。
  * @param photoSubmitting 是否正在保存照片变更。
  * @param photoErrorMessage 可展示的中文照片错误。
  * @param onAddPhoto 选择用途后从相册追加照片。
@@ -114,9 +120,10 @@ fun ItemDetailScreen(
     editorVisible: Boolean,
     editorSubmitting: Boolean,
     editorErrorMessage: String?,
+    categories: List<ItemCategoryOption> = emptyList(),
     onEditProfile: () -> Unit,
     onDismissEditor: () -> Unit,
-    onSaveProfile: (String, String?, String?) -> Unit,
+    onSaveProfile: (ItemProfileEdits) -> Unit,
     photoSubmitting: Boolean,
     photoErrorMessage: String?,
     onAddPhoto: (PhotoRole) -> Unit,
@@ -291,6 +298,7 @@ fun ItemDetailScreen(
                 }
             }
         }
+        ItemDetailArchiveSummary(detail = detail)
 
         Surface(
             modifier = Modifier
@@ -529,6 +537,11 @@ fun ItemDetailScreen(
             initialName = detail.name,
             initialLocationDescription = detail.locationDescription.orEmpty(),
             initialNote = detail.note.orEmpty(),
+            initialAliases = detail.aliases,
+            initialCategoryId = detail.categoryId,
+            initialQuantity = detail.quantity,
+            initialUnit = detail.unit.orEmpty(),
+            categories = categories,
             submitting = editorSubmitting,
             errorMessage = editorErrorMessage,
             onDismiss = onDismissEditor,
@@ -1105,19 +1118,78 @@ private fun ItemDetailShareAndDelete(
 }
 
 /**
- * 编辑名称、位置说明和备注；当前位置仍走独立的更新位置流程。
+ * 展示别名、分类和数量，没有填写时不占位置。
+ */
+@Composable
+private fun ItemDetailArchiveSummary(detail: ItemDetail) {
+    val quantityLabel = formatItemQuantity(detail.quantity, detail.unit)
+    val showQuantity = detail.quantity != 1.0 || !detail.unit.isNullOrBlank()
+    if (detail.aliases.isEmpty() && detail.categoryName.isNullOrBlank() && !showQuantity) {
+        return
+    }
+    Text(
+        modifier = Modifier.padding(top = 8.dp),
+        text = buildString {
+            if (detail.aliases.isNotEmpty()) {
+                append("别名 ")
+                append(detail.aliases.joinToString("、"))
+            }
+            if (!detail.categoryName.isNullOrBlank()) {
+                if (isNotEmpty()) append("  ·  ")
+                append("分类 ")
+                append(detail.categoryName)
+            }
+            if (showQuantity) {
+                if (isNotEmpty()) append("  ·  ")
+                append("数量 ")
+                append(quantityLabel)
+            }
+        },
+        color = WhereSecondaryTextColor,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+}
+
+/**
+ * 把数量格式化成用户可读文本，整数不带小数点。
+ */
+private fun formatItemQuantity(quantity: Double, unit: String?): String {
+    val quantityText = if (quantity == quantity.toLong().toDouble()) {
+        quantity.toLong().toString()
+    } else {
+        quantity.toString()
+    }
+    val trimmedUnit = unit?.trim().orEmpty()
+    return if (trimmedUnit.isEmpty()) quantityText else "$quantityText $trimmedUnit"
+}
+
+/**
+ * 编辑名称、别名、分类、数量、位置说明和备注；当前位置仍走独立的更新位置流程。
  */
 @Composable
 private fun EditItemProfileDialog(
     initialName: String,
     initialLocationDescription: String,
     initialNote: String,
+    initialAliases: List<String>,
+    initialCategoryId: CategoryId?,
+    initialQuantity: Double,
+    initialUnit: String,
+    categories: List<ItemCategoryOption>,
     submitting: Boolean,
     errorMessage: String?,
     onDismiss: () -> Unit,
-    onConfirm: (String, String?, String?) -> Unit,
+    onConfirm: (ItemProfileEdits) -> Unit,
 ) {
     var name by remember(initialName) { mutableStateOf(initialName) }
+    var aliasesText by remember(initialAliases) {
+        mutableStateOf(initialAliases.joinToString("，"))
+    }
+    var selectedCategoryId by remember(initialCategoryId) { mutableStateOf(initialCategoryId) }
+    var quantityText by remember(initialQuantity) {
+        mutableStateOf(formatItemQuantity(initialQuantity, null))
+    }
+    var unit by remember(initialUnit) { mutableStateOf(initialUnit) }
     var locationDescription by remember(initialLocationDescription) {
         mutableStateOf(initialLocationDescription)
     }
@@ -1125,10 +1197,17 @@ private fun EditItemProfileDialog(
     val trimmedName = name.trim()
     val trimmedLocationDescription = locationDescription.trim().takeIf(String::isNotEmpty)
     val trimmedNote = note.trim().takeIf(String::isNotEmpty)
+    val parsedQuantity = quantityText.trim().toDoubleOrNull()
+    val trimmedUnit = unit.trim().takeIf(String::isNotEmpty)
+    val aliasNames = aliasesText.split(Regex("[,，;；\\n]+")).map(String::trim).filter(String::isNotEmpty)
     // 没有任何可见字段变化时禁用保存，避免产生空变更记录。
     val hasVisibleChange = trimmedName != initialName.trim() ||
         trimmedLocationDescription != initialLocationDescription.trim().takeIf(String::isNotEmpty) ||
-        trimmedNote != initialNote.trim().takeIf(String::isNotEmpty)
+        trimmedNote != initialNote.trim().takeIf(String::isNotEmpty) ||
+        aliasNames != initialAliases ||
+        selectedCategoryId != initialCategoryId ||
+        parsedQuantity != initialQuantity ||
+        trimmedUnit != initialUnit.trim().takeIf(String::isNotEmpty)
 
     WhereDialog(
         onDismissRequest = {
@@ -1139,9 +1218,23 @@ private fun EditItemProfileDialog(
         title = "编辑物品",
         confirmText = "保存",
         onConfirm = {
-            onConfirm(trimmedName, trimmedLocationDescription, trimmedNote)
+            onConfirm(
+                ItemProfileEdits(
+                    name = trimmedName,
+                    locationDescription = trimmedLocationDescription,
+                    note = trimmedNote,
+                    aliases = aliasNames,
+                    categoryId = selectedCategoryId,
+                    quantity = parsedQuantity ?: 1.0,
+                    unit = trimmedUnit,
+                ),
+            )
         },
-        confirmEnabled = !submitting && trimmedName.isNotEmpty() && hasVisibleChange,
+        confirmEnabled = !submitting &&
+            trimmedName.isNotEmpty() &&
+            parsedQuantity != null &&
+            parsedQuantity > 0.0 &&
+            hasVisibleChange,
         dismissText = "取消",
         onDismiss = onDismiss,
         dismissEnabled = !submitting,
@@ -1154,6 +1247,57 @@ private fun EditItemProfileDialog(
                     label = { Text("物品名称") },
                     singleLine = true,
                 )
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    value = aliasesText,
+                    onValueChange = { value -> aliasesText = value },
+                    enabled = !submitting,
+                    label = { Text("别名") },
+                    placeholder = { Text("遥控器，电视开关") },
+                )
+                if (categories.isNotEmpty()) {
+                    Text(
+                        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+                        text = "分类",
+                        color = WhereSecondaryTextColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    ItemCategoryChipRow(
+                        categories = categories,
+                        selectedCategoryId = selectedCategoryId,
+                        enabled = !submitting,
+                        onSelect = { categoryId ->
+                            selectedCategoryId = categoryId
+                        },
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    OutlinedTextField(
+                        modifier = Modifier.weight(1f),
+                        value = quantityText,
+                        onValueChange = { value -> quantityText = value },
+                        enabled = !submitting,
+                        label = { Text("数量") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    OutlinedTextField(
+                        modifier = Modifier.weight(1f),
+                        value = unit,
+                        onValueChange = { value -> unit = value },
+                        enabled = !submitting,
+                        label = { Text("单位") },
+                        placeholder = { Text("个、盒") },
+                        singleLine = true,
+                    )
+                }
                 OutlinedTextField(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1180,6 +1324,49 @@ private fun EditItemProfileDialog(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+    }
+}
+
+/**
+ * 分类选项做成一排可点卡片，再点一次可以取消选择。
+ */
+@Composable
+internal fun ItemCategoryChipRow(
+    categories: List<ItemCategoryOption>,
+    selectedCategoryId: CategoryId?,
+    enabled: Boolean,
+    onSelect: (CategoryId?) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        categories.forEach { option ->
+            val selected = option.categoryId == selectedCategoryId
+            Surface(
+                modifier = Modifier
+                    .heightIn(min = 40.dp)
+                    .clickable(
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = {
+                            onSelect(if (selected) null else option.categoryId)
+                        },
+                    ),
+                color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, if (selected) WherePrimaryColor else WhereOutlineColor),
+            ) {
+                Text(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    text = option.name,
+                    color = WherePrimaryTextColor,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
     }
 }
 

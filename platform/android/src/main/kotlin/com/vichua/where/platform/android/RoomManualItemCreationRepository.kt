@@ -6,6 +6,7 @@ import com.vichua.where.feature.item.creation.ItemCreationContext
 import com.vichua.where.feature.item.creation.ItemCreationLocation
 import com.vichua.where.feature.item.creation.ManualItemCreation
 import com.vichua.where.feature.item.creation.ManualItemCreationRepository
+import com.vichua.where.feature.item.profile.ItemCategoryOption
 
 /**
  * 使用共享 Room Store 实现 Android 基础手动物品录入仓储。
@@ -32,6 +33,12 @@ class RoomManualItemCreationRepository(
                     iconKey = location.iconKey,
                 )
             },
+            categories = context.categories.map { category ->
+                ItemCategoryOption(
+                    categoryId = category.id,
+                    name = category.name,
+                )
+            },
         )
     }
 
@@ -52,6 +59,7 @@ class RoomManualItemCreationRepository(
                 noteText = creation.searchContent.noteText,
                 locationPathText = creation.searchContent.locationPathText,
             ),
+            aliases = creation.aliases,
         )
     }
 }

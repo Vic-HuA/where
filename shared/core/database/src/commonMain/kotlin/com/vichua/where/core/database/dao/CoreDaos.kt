@@ -191,6 +191,20 @@ interface CategoryDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: CategoryEntity)
 
+    /** 批量插入分类，供家庭首次补种系统分类。 */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(entities: List<CategoryEntity>)
+
+    /** 查询家庭中未删除分类，供录入和编辑选择。 */
+    @Query(
+        """
+        SELECT * FROM categories
+        WHERE household_id = :householdId AND deleted_at IS NULL
+        ORDER BY sort_order ASC, normalized_name ASC, id ASC
+        """,
+    )
+    suspend fun findActiveByHousehold(householdId: String): List<CategoryEntity>
+
     /** 更新分类记录。 */
     @Update
     suspend fun update(entity: CategoryEntity): Int

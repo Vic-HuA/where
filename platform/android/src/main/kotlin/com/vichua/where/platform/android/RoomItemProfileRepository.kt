@@ -2,6 +2,7 @@ package com.vichua.where.platform.android
 
 import com.vichua.where.core.database.transaction.ItemProfileStore
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.feature.item.profile.ItemCategoryOption
 import com.vichua.where.feature.item.profile.ItemProfileContext
 import com.vichua.where.feature.item.profile.ItemProfileRepository
 import com.vichua.where.feature.item.profile.ItemProfileUpdate
@@ -21,6 +22,13 @@ class RoomItemProfileRepository(
             aliasesText = context.aliasesText,
             categoryText = context.categoryText,
             currentDeviceId = context.currentDeviceId,
+            aliases = context.aliases,
+            categories = context.categories.map { category ->
+                ItemCategoryOption(
+                    categoryId = category.id,
+                    name = category.name,
+                )
+            },
         )
     }
 
@@ -32,6 +40,7 @@ class RoomItemProfileRepository(
             aliasesText = update.aliasesText,
             categoryText = update.categoryText,
             locationPathText = update.locationPathText,
+            aliases = update.aliases,
         )
     }
 }

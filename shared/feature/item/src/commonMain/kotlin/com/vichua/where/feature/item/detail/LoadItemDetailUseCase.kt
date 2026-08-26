@@ -1,5 +1,6 @@
 package com.vichua.where.feature.item.detail
 
+import com.vichua.where.core.model.CategoryId
 import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.ItemLocationReason
 import com.vichua.where.core.model.PhotoAssetId
@@ -62,6 +63,7 @@ data class ItemDetail(
     val itemId: ItemId,
     val name: String,
     val aliases: List<String>,
+    val categoryId: CategoryId? = null,
     val categoryName: String?,
     val quantity: Double,
     val unit: String?,

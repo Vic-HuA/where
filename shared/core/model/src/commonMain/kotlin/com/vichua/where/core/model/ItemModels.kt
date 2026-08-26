@@ -151,3 +151,48 @@ data class Category(
         }
     }
 }
+
+/**
+ * 内置系统分类的稳定键和展示名。
+ *
+ * 用固定键生成家庭内确定性 ID，方便已有家庭在首次录入时补种，而不覆盖恢复回来的分类。
+ */
+data class SystemCategorySpec(
+    val key: String,
+    val name: String,
+    val iconKey: String,
+)
+
+/** 首版内置分类，覆盖证件、电子等常见家庭物品。 */
+val SYSTEM_CATEGORY_SPECS: List<SystemCategorySpec> = listOf(
+    SystemCategorySpec("documents", "证件", "category.documents"),
+    SystemCategorySpec("electronics", "电子", "category.electronics"),
+    SystemCategorySpec("clothing", "衣物", "category.clothing"),
+    SystemCategorySpec("kitchen", "厨房", "category.kitchen"),
+    SystemCategorySpec("medicine", "药品", "category.medicine"),
+    SystemCategorySpec("stationery", "文具", "category.stationery"),
+    SystemCategorySpec("tools", "工具", "category.tools"),
+    SystemCategorySpec("other", "其他", "category.other"),
+)
+
+/**
+ * 按家庭生成一套尚未写入数据库的系统分类。
+ */
+fun systemCategoriesForHousehold(householdId: HouseholdId): List<Category> {
+    val createdAt = UtcTimestamp(SYSTEM_CATEGORY_CREATED_AT)
+    return SYSTEM_CATEGORY_SPECS.mapIndexed { index, spec ->
+        Category(
+            id = CategoryId("sys.${householdId.value}.${spec.key}"),
+            householdId = householdId,
+            name = spec.name,
+            normalizedName = spec.key,
+            iconKey = spec.iconKey,
+            sortOrder = SortOrder(index),
+            isSystem = true,
+            createdAt = createdAt,
+            updatedAt = createdAt,
+        )
+    }
+}
+
+private const val SYSTEM_CATEGORY_CREATED_AT = 1L

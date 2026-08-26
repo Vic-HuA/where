@@ -2,16 +2,20 @@ package com.vichua.where.core.database.transaction
 
 import com.vichua.where.core.database.WhereDatabase
 import com.vichua.where.core.database.mapper.toDomain
+import com.vichua.where.core.database.mapper.toEntity
 import com.vichua.where.core.database.model.ItemSearchDocument
+import com.vichua.where.core.model.Category
 import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemAlias
 import com.vichua.where.core.model.ItemLocationEvent
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.PhotoAsset
+import com.vichua.where.core.model.systemCategoriesForHousehold
 
 /**
  * 数据库层提供的物品可选位置。
@@ -39,12 +43,14 @@ data class StoredItemCreationLocation(
  * @property sourceDeviceId 当前有效设备 ID。
  * @property rootLocationId 家庭根位置，录入页新建房间时作为父节点。
  * @property availableLocations 未删除非根位置。
+ * @property categories 可供选择的未删除分类；家庭还没有分类时会先补种系统分类。
  */
 data class StoredItemCreationContext(
     val householdId: HouseholdId,
     val sourceDeviceId: DeviceId,
     val rootLocationId: LocationNodeId,
     val availableLocations: List<StoredItemCreationLocation>,
+    val categories: List<Category>,
 )
 
 /**
@@ -97,6 +103,7 @@ class ManualItemCreationStore(
             sourceDeviceId = DeviceId(device.id),
             rootLocationId = rootLocationId,
             availableLocations = availableLocations,
+            categories = ensureSystemCategories(household.id),
         )
     }
 
@@ -109,15 +116,31 @@ class ManualItemCreationStore(
         locationEvent: ItemLocationEvent,
         changeRecord: ChangeRecord,
         searchDocument: ItemSearchDocument,
+        aliases: List<ItemAlias> = emptyList(),
     ) {
         itemWriteStore.createItem(
             item = item,
-            aliases = emptyList(),
+            aliases = aliases,
             photos = photos,
             initialLocationEvent = locationEvent,
             changeRecord = changeRecord,
             searchDocument = searchDocument,
         )
+    }
+
+    /**
+     * 家庭还没有任何分类时写入内置系统分类，避免已初始化家庭永远选不到分类。
+     */
+    private suspend fun ensureSystemCategories(householdId: String): List<Category> {
+        val existing = database.categoryDao()
+            .findActiveByHousehold(householdId)
+            .map { entity -> entity.toDomain() }
+        if (existing.isNotEmpty()) {
+            return existing
+        }
+        val seeded = systemCategoriesForHousehold(HouseholdId(householdId))
+        database.categoryDao().insertAll(seeded.map(Category::toEntity))
+        return seeded
     }
 
     /**

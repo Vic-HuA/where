@@ -3,10 +3,16 @@ package com.vichua.where.core.database.transaction
 import com.vichua.where.core.database.WhereDatabase
 import com.vichua.where.core.database.model.ItemSearchDocument
 import com.vichua.where.core.database.query.ItemDetailStore
+import com.vichua.where.core.model.Category
 import com.vichua.where.core.model.ChangeRecord
 import com.vichua.where.core.model.DeviceId
+import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemAlias
 import com.vichua.where.core.model.ItemId
+import com.vichua.where.core.model.systemCategoriesForHousehold
+import com.vichua.where.core.database.mapper.toDomain
+import com.vichua.where.core.database.mapper.toEntity
 
 /**
  * 数据库层提供的物品档案编辑上下文。
@@ -16,6 +22,8 @@ import com.vichua.where.core.model.ItemId
  * @property aliasesText 未删除别名拼接文本。
  * @property categoryText 当前分类名称。
  * @property currentDeviceId 当前有效设备，用于记录本次修改来源。
+ * @property aliases 当前未删除别名原文。
+ * @property categories 可供选择的未删除分类。
  */
 data class StoredItemProfileContext(
     val item: Item,
@@ -23,6 +31,8 @@ data class StoredItemProfileContext(
     val aliasesText: String,
     val categoryText: String,
     val currentDeviceId: DeviceId,
+    val aliases: List<String>,
+    val categories: List<Category>,
 )
 
 /**
@@ -46,12 +56,15 @@ class ItemProfileStore(
         ) {
             "Cannot edit an item without an active source device."
         }
+        val aliasNames = detail.aliases.map(ItemAlias::alias)
         return StoredItemProfileContext(
             item = detail.item,
             locationPath = detail.locationPath,
-            aliasesText = detail.aliases.joinToString(" ") { alias -> alias.alias },
+            aliasesText = aliasNames.joinToString(" "),
             categoryText = detail.categoryName.orEmpty(),
             currentDeviceId = DeviceId(currentDevice.id),
+            aliases = aliasNames,
+            categories = ensureSystemCategories(detail.item.householdId.value),
         )
     }
 
@@ -64,6 +77,7 @@ class ItemProfileStore(
         aliasesText: String,
         categoryText: String,
         locationPathText: String,
+        aliases: List<ItemAlias> = emptyList(),
     ) {
         writeStore.updateProfile(
             updatedItem = updatedItem,
@@ -76,6 +90,22 @@ class ItemProfileStore(
                 noteText = updatedItem.note.orEmpty(),
                 locationPathText = locationPathText,
             ),
+            aliases = aliases,
         )
+    }
+
+    /**
+     * 家庭还没有任何分类时写入内置系统分类。
+     */
+    private suspend fun ensureSystemCategories(householdId: String): List<Category> {
+        val existing = database.categoryDao()
+            .findActiveByHousehold(householdId)
+            .map { entity -> entity.toDomain() }
+        if (existing.isNotEmpty()) {
+            return existing
+        }
+        val seeded = systemCategoriesForHousehold(HouseholdId(householdId))
+        database.categoryDao().insertAll(seeded.map(Category::toEntity))
+        return seeded
     }
 }
