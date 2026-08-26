@@ -79,6 +79,10 @@ import com.vichua.where.feature.search.home.PinnedItemSummary
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
  * @param elderFriendlyMode 是否使用适老首页：两大入口替代搜索框和拍照记录按钮。
+ * @param familyHelpActive 是否已在本机切换到家人帮助布局。
+ * @param offerFamilyHelp 是否展示「请家人帮助」。
+ * @param onFamilyHelp 临时露出键盘和完整查找入口，不改设置里的适老开关。
+ * @param onExitFamilyHelp 结束本机帮忙并回到适老首页。
  * @param voiceListening 是否正在听用户主动说的查找内容。
  * @param voicePreparing 是否正在下载或冷启动加载离线语音模型。
  */
@@ -109,6 +113,10 @@ fun HomeScreen(
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
     elderFriendlyMode: Boolean = false,
+    familyHelpActive: Boolean = false,
+    offerFamilyHelp: Boolean = false,
+    onFamilyHelp: () -> Unit = {},
+    onExitFamilyHelp: () -> Unit = {},
     voiceListening: Boolean = false,
     voicePreparing: Boolean = false,
 ) {
@@ -119,6 +127,8 @@ fun HomeScreen(
             Column {
                 HomePrimaryActionDock(
                     elderFriendlyMode = elderFriendlyMode,
+                    offerFamilyHelp = offerFamilyHelp,
+                    onFamilyHelp = onFamilyHelp,
                     onTextSearch = onTextSearch,
                     onVoiceSearchRequested = onVoiceSearchRequested,
                     onVoiceSearchReleased = onVoiceSearchReleased,
@@ -152,6 +162,10 @@ fun HomeScreen(
                 text = "今天要找什么？",
                 color = WherePrimaryTextColor,
                 style = MaterialTheme.typography.headlineMedium,
+            )
+            FamilyHelpBanner(
+                visible = familyHelpActive,
+                onExit = onExitFamilyHelp,
             )
 
             if (deletionUndo != null) {
@@ -374,6 +388,8 @@ fun HomeScreen(
 @Composable
 private fun HomePrimaryActionDock(
     elderFriendlyMode: Boolean,
+    offerFamilyHelp: Boolean,
+    onFamilyHelp: () -> Unit,
     onTextSearch: (String) -> Unit,
     onVoiceSearchRequested: () -> Unit,
     onVoiceSearchReleased: () -> Unit,
@@ -413,6 +429,10 @@ private fun HomePrimaryActionDock(
                     description = "拍照或说一句记录存放位置",
                     primary = false,
                     onClick = onRecordItemClick,
+                )
+                FamilyHelpAction(
+                    visible = offerFamilyHelp,
+                    onClick = onFamilyHelp,
                 )
             } else {
                 HomeSearchSurface(

@@ -54,6 +54,11 @@ import com.vichua.where.feature.location.movement.MoveTargetLocation
 /**
  * 选择并保存物品新位置。
  *
+ * @param elderFriendlyMode 是否优先展示常用位置和照片卡片。
+ * @param familyHelpActive 是否已在本机切换到家人帮助布局。
+ * @param offerFamilyHelp 是否展示「请家人帮助」。
+ * @param onFamilyHelp 临时露出位置搜索和完整位置树，不改设置里的适老开关。
+ * @param onExitFamilyHelp 结束本机帮忙并回到适老更新位置。
  * @param voicePreparing 是否正在下载或冷启动加载离线语音模型。
  * @param pendingCreatedLocationId 刚新建完成、需要自动选中的位置。
  * @param onPendingCreatedLocationConsumed 界面已经选中新建位置后清空待选 ID。
@@ -73,6 +78,10 @@ fun MoveItemScreen(
     onVoiceReleased: () -> Unit,
     onVoiceQueryConsumed: () -> Unit,
     elderFriendlyMode: Boolean = false,
+    familyHelpActive: Boolean = false,
+    offerFamilyHelp: Boolean = false,
+    onFamilyHelp: () -> Unit = {},
+    onExitFamilyHelp: () -> Unit = {},
     voicePreparing: Boolean = false,
     pendingCreatedLocationId: LocationNodeId? = null,
     onPendingCreatedLocationConsumed: () -> Unit = {},
@@ -121,6 +130,15 @@ fun MoveItemScreen(
                 style = MaterialTheme.typography.titleLarge,
             )
         }
+        FamilyHelpBanner(
+            visible = familyHelpActive,
+            onExit = onExitFamilyHelp,
+        )
+        FamilyHelpAction(
+            modifier = Modifier.padding(top = 8.dp),
+            visible = offerFamilyHelp,
+            onClick = onFamilyHelp,
+        )
 
         if (loading || context == null) {
             CircularProgressIndicator(

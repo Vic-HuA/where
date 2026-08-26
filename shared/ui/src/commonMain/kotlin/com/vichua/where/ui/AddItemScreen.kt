@@ -77,6 +77,10 @@ import com.vichua.where.feature.location.management.CreateLocationPathRequest
  * @param onDiscardDraft 放弃当前草稿并离开页面。
  * @param onSubmit 确认后提交基础手动物品请求。
  * @param elderFriendlyMode 是否突出拍物品、拍存放位置、说一句和继续确认。
+ * @param familyHelpActive 是否已在本机切换到家人帮助布局。
+ * @param offerFamilyHelp 是否展示「请家人帮助」。
+ * @param onFamilyHelp 临时露出键盘和完整位置选择，不改设置里的适老开关。
+ * @param onExitFamilyHelp 结束本机帮忙并回到适老录入。
  * @param onSpeakRequested 用户主动说话后返回转写文字；取消或失败时为空。
  * @param onSpeakReleased 松开语音区域后结束本轮收听。
  * @param voicePreparing 是否正在下载或冷启动加载离线语音模型。
@@ -102,6 +106,10 @@ fun AddItemScreen(
     onDiscardDraft: () -> Unit,
     onSubmit: (CreateManualItemRequest) -> Unit,
     elderFriendlyMode: Boolean = false,
+    familyHelpActive: Boolean = false,
+    offerFamilyHelp: Boolean = false,
+    onFamilyHelp: () -> Unit = {},
+    onExitFamilyHelp: () -> Unit = {},
     voicePreparing: Boolean = false,
     onSpeakRequested: suspend () -> String? = { null },
     onSpeakReleased: () -> Unit = {},
@@ -220,6 +228,10 @@ fun AddItemScreen(
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         AddItemHeader(onBack = requestLeave)
+        FamilyHelpBanner(
+            visible = familyHelpActive,
+            onExit = onExitFamilyHelp,
+        )
         Text(
             modifier = Modifier.padding(top = 8.dp),
             text = "拍照或说一句，确认名称和位置后保存。",
@@ -252,6 +264,11 @@ fun AddItemScreen(
                 onContinue = {
                     confirmationDialogVisible = true
                 },
+            )
+            FamilyHelpAction(
+                modifier = Modifier.padding(top = 10.dp),
+                visible = offerFamilyHelp,
+                onClick = onFamilyHelp,
             )
         } else {
             Row(
@@ -765,6 +782,11 @@ fun AddItemScreen(
                 if (!submitting) {
                     confirmationDialogVisible = false
                 }
+            },
+            offerFamilyHelp = offerFamilyHelp,
+            onFamilyHelp = {
+                confirmationDialogVisible = false
+                onFamilyHelp()
             },
             onConfirm = {
                 confirmationDialogVisible = false
@@ -1373,6 +1395,8 @@ private fun ConfirmManualItemDialog(
     quantityLabel: String,
     showQuantity: Boolean,
     submitting: Boolean,
+    offerFamilyHelp: Boolean = false,
+    onFamilyHelp: () -> Unit = {},
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -1421,6 +1445,11 @@ private fun ConfirmManualItemDialog(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
+        FamilyHelpAction(
+            modifier = Modifier.padding(top = 12.dp),
+            visible = offerFamilyHelp && !submitting,
+            onClick = onFamilyHelp,
+        )
     }
 }
 

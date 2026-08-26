@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Replay
@@ -35,6 +36,8 @@ import com.vichua.where.core.model.LocationType
 /**
  * 将稳定 `iconKey` 映射到共享 Compose 线性矢量图标。
  *
+ * 核心操作只使用下面这 8 个白名单图标，同一图标不得表达另一种操作：
+ * 拍照、说话、朗读、再听一遍、确认、返回、首页、家人帮助。
  * 未知位置键安全回退到位置图标，不加载外部文件或网络资源。
  */
 object WhereIcons {
@@ -97,6 +100,9 @@ object WhereIcons {
 
     /** 返回图标。 */
     val Back: ImageVector = Icons.AutoMirrored.Outlined.ArrowBack
+
+    /** 同一设备上请家人帮助的人物组合图标。 */
+    val FamilyHelp: ImageVector = Icons.Outlined.People
 
     /**
      * 根据冻结位置图标键返回房间图标。

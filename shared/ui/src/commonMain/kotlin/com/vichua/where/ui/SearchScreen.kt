@@ -54,6 +54,10 @@ import com.vichua.where.feature.search.text.ItemTextSearchResult
  * @param resolveMediaPath 把封面缩略图标识解析为本地绝对路径。
  * @param onResultClick 打开物品详情。
  * @param elderFriendlyMode 是否使用更大卡片，并为每条结果提供朗读位置。
+ * @param familyHelpActive 是否已在本机切换到家人帮助布局。
+ * @param offerFamilyHelp 是否展示「请家人帮助」。
+ * @param onFamilyHelp 临时切到普通结果卡片，不改设置里的适老开关。
+ * @param onExitFamilyHelp 结束本机帮忙并回到适老搜索。
  * @param speechErrorMessage 可展示的中文朗读错误。
  * @param onReadLocation 朗读单条搜索结果的名称、位置和更新时间。
  */
@@ -68,6 +72,10 @@ fun SearchScreen(
     resolveMediaPath: (String) -> String?,
     onResultClick: (ItemTextSearchResult) -> Unit,
     elderFriendlyMode: Boolean = false,
+    familyHelpActive: Boolean = false,
+    offerFamilyHelp: Boolean = false,
+    onFamilyHelp: () -> Unit = {},
+    onExitFamilyHelp: () -> Unit = {},
     speechErrorMessage: String? = null,
     onReadLocation: (ItemTextSearchResult) -> Unit = {},
 ) {
@@ -108,6 +116,10 @@ fun SearchScreen(
                 style = MaterialTheme.typography.titleLarge,
             )
         }
+        FamilyHelpBanner(
+            visible = familyHelpActive,
+            onExit = onExitFamilyHelp,
+        )
 
         Row(
             modifier = Modifier
@@ -147,6 +159,11 @@ fun SearchScreen(
                 Text("查找")
             }
         }
+        FamilyHelpAction(
+            modifier = Modifier.padding(top = 10.dp),
+            visible = offerFamilyHelp,
+            onClick = onFamilyHelp,
+        )
 
         if (searching) {
             Row(

@@ -99,6 +99,10 @@ import com.vichua.where.feature.item.profile.ItemProfileEdits
  * @param deletionErrorMessage 可展示的中文删除错误。
  * @param onDeleteItem 二次确认后删除当前物品。
  * @param elderFriendlyMode 是否优先展示主图、位置和朗读/更新，并把次要操作折进更多信息。
+ * @param familyHelpActive 是否已在本机切换到家人帮助布局。
+ * @param offerFamilyHelp 是否展示「请家人帮助」。
+ * @param onFamilyHelp 临时展开照片管理和更多信息，不改设置里的适老开关。
+ * @param onExitFamilyHelp 结束本机帮忙并回到适老详情。
  */
 @Composable
 fun ItemDetailScreen(
@@ -136,6 +140,10 @@ fun ItemDetailScreen(
     deletionErrorMessage: String?,
     onDeleteItem: () -> Unit,
     elderFriendlyMode: Boolean = false,
+    familyHelpActive: Boolean = false,
+    offerFamilyHelp: Boolean = false,
+    onFamilyHelp: () -> Unit = {},
+    onExitFamilyHelp: () -> Unit = {},
     onRecordVoiceLabel: () -> Unit = {},
     onPlayVoiceLabel: () -> Unit = {},
     onDeleteVoiceLabel: () -> Unit = {},
@@ -186,6 +194,10 @@ fun ItemDetailScreen(
                 style = MaterialTheme.typography.titleLarge,
             )
         }
+        FamilyHelpBanner(
+            visible = familyHelpActive,
+            onExit = onExitFamilyHelp,
+        )
 
         if (loading) {
             CircularProgressIndicator(
@@ -420,6 +432,11 @@ fun ItemDetailScreen(
                 )
             }
         }
+        FamilyHelpAction(
+            modifier = Modifier.padding(top = 8.dp),
+            visible = offerFamilyHelp,
+            onClick = onFamilyHelp,
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()

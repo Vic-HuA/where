@@ -464,7 +464,16 @@ fun WhereApp(
 
     var searchSpeechError by remember { mutableStateOf<String?>(null) }
     var confirmationSpeechError by remember { mutableStateOf<String?>(null) }
-    val elderFriendlyMode = accessibilityPreferences?.elderFriendly == true
+    var familyHelpActive by remember { mutableStateOf(false) }
+    val elderPreferenceEnabled = accessibilityPreferences?.elderFriendly == true
+    // 家人帮助时临时关掉适老布局，露出键盘和完整位置树，但不改设置里的适老开关。
+    val elderFriendlyMode = elderPreferenceEnabled && !familyHelpActive
+    val offerFamilyHelp = elderPreferenceEnabled && !familyHelpActive
+    LaunchedEffect(elderPreferenceEnabled) {
+        if (!elderPreferenceEnabled) {
+            familyHelpActive = false
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
     /**
      * 备份重活前先刷新进度文案，让转圈有一帧可画。
@@ -963,7 +972,7 @@ fun WhereApp(
 
     WhereTheme(
         highContrast = accessibilityPreferences?.highContrastEnabled == true,
-        elderFriendly = elderFriendlyMode,
+        elderFriendly = elderPreferenceEnabled,
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -1163,6 +1172,10 @@ fun WhereApp(
                         switchRootTab(AppDestination.SETTINGS)
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    familyHelpActive = familyHelpActive,
+                    offerFamilyHelp = offerFamilyHelp,
+                    onFamilyHelp = { familyHelpActive = true },
+                    onExitFamilyHelp = { familyHelpActive = false },
                     voiceListening = voiceListening,
                     voicePreparing = voicePreparing,
                 )
@@ -1231,6 +1244,10 @@ fun WhereApp(
                         navigateTo(AppDestination.ITEM_DETAIL, result.itemId)
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    familyHelpActive = familyHelpActive,
+                    offerFamilyHelp = offerFamilyHelp,
+                    onFamilyHelp = { familyHelpActive = true },
+                    onExitFamilyHelp = { familyHelpActive = false },
                     speechErrorMessage = searchSpeechError,
                     onReadLocation = { result ->
                         performHaptic(HapticFeedbackKind.CONFIRM)
@@ -1375,6 +1392,10 @@ fun WhereApp(
                         }
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    familyHelpActive = familyHelpActive,
+                    offerFamilyHelp = offerFamilyHelp,
+                    onFamilyHelp = { familyHelpActive = true },
+                    onExitFamilyHelp = { familyHelpActive = false },
                     voicePreparing = voicePreparing,
                     onAiRecognizeRequested = suspend {
                         val preferences = appPreferences ?: loadAppPreferencesUseCase()
@@ -2299,6 +2320,10 @@ fun WhereApp(
                     deletionSubmitting = itemDeletionSubmitting,
                     deletionErrorMessage = itemDeletionError,
                     elderFriendlyMode = elderFriendlyMode,
+                    familyHelpActive = familyHelpActive,
+                    offerFamilyHelp = offerFamilyHelp,
+                    onFamilyHelp = { familyHelpActive = true },
+                    onExitFamilyHelp = { familyHelpActive = false },
                     onDeleteItem = {
                         val itemId = selectedItemId
                         if (itemId != null && !itemDeletionSubmitting) {
@@ -2381,6 +2406,10 @@ fun WhereApp(
                         popNavigation()
                     },
                     elderFriendlyMode = elderFriendlyMode,
+                    familyHelpActive = familyHelpActive,
+                    offerFamilyHelp = offerFamilyHelp,
+                    onFamilyHelp = { familyHelpActive = true },
+                    onExitFamilyHelp = { familyHelpActive = false },
                     onVoiceRequested = {
                         if (!voiceListening) {
                             performHaptic(HapticFeedbackKind.CONFIRM)
