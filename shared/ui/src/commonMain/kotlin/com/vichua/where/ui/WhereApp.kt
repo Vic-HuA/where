@@ -60,6 +60,7 @@ import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.ItemDraftContent
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
+import com.vichua.where.feature.item.draft.photoStorageKeys
 import com.vichua.where.feature.item.photo.AddItemPhotoUseCase
 import com.vichua.where.feature.item.photo.DeleteItemPhotoUseCase
 import com.vichua.where.feature.item.photo.ImportItemPhotoUseCase
@@ -740,6 +741,9 @@ fun WhereApp(
                 itemCreationContext = loadItemCreationContextUseCase()
                 if (destination == AppDestination.ADD_ITEM) {
                     itemDraft = loadLatestItemDraftUseCase()
+                    if (pendingItemPhotos.isEmpty()) {
+                        pendingItemPhotos = itemDraft?.photos.orEmpty()
+                    }
                 }
             } catch (_: Exception) {
                 if (destination == AppDestination.ADD_ITEM) {
@@ -1316,19 +1320,28 @@ fun WhereApp(
                                 itemCreationSubmitting = true
                                 itemCreationError = null
                                 try {
+                                    val obsoletePhotoKeys = (
+                                        itemDraft?.photoStorageKeys().orEmpty() +
+                                            pendingItemPhotos.flatMap { photo ->
+                                                listOf(
+                                                    photo.media.tempStorageKey,
+                                                    photo.media.thumbnailTempStorageKey,
+                                                )
+                                            }
+                                        ).toSet() - content.photoStorageKeys().toSet()
                                     saveItemDraftUseCase(
                                         householdId = creationContext.householdId,
                                         deviceId = creationContext.sourceDeviceId,
                                         content = content,
                                     )
-                                    discardPendingPhotos(
-                                        photos = pendingItemPhotos,
-                                        discardImportedPhotos = discardImportedPhotos,
-                                    )
+                                    if (obsoletePhotoKeys.isNotEmpty()) {
+                                        discardImportedPhotos(obsoletePhotoKeys)
+                                    }
                                     pendingItemPhotos = emptyList()
+                                    itemDraft = content
                                     navigateHome()
                                 } catch (_: IllegalArgumentException) {
-                                    itemCreationError = "请先填写物品名称、位置或备注。"
+                                    itemCreationError = "请先填写物品名称、位置、照片或备注。"
                                 } catch (_: Exception) {
                                     itemCreationError = "草稿保存失败，请稍后重试。"
                                 } finally {
@@ -1345,7 +1358,9 @@ fun WhereApp(
                                 try {
                                     discardLatestItemDraftUseCase()
                                     discardPendingPhotos(
-                                        photos = pendingItemPhotos,
+                                        photos = pendingItemPhotos.ifEmpty {
+                                            itemDraft?.photos.orEmpty()
+                                        },
                                         discardImportedPhotos = discardImportedPhotos,
                                     )
                                     pendingItemPhotos = emptyList()

@@ -171,6 +171,7 @@ fun AddItemScreen(
         locationId = selectedLocationId,
         locationDescription = locationDescription,
         note = note,
+        photos = photos,
     )
     val requestAiRecognize: () -> Unit = {
         if (!aiSubmitting && !submitting && !speechSubmitting) {
