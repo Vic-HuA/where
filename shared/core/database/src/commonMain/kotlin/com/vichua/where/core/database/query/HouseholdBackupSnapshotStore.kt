@@ -42,6 +42,9 @@ class HouseholdBackupSnapshotStore(
             favoriteLocations = database.homeSupportDao()
                 .findAllFavoriteLocationsByHousehold(householdId)
                 .map { it.toDomain() },
+            pinnedItems = database.homeSupportDao()
+                .findAllPinnedItemsByHousehold(householdId)
+                .map { it.toDomain() },
         )
     }
 }

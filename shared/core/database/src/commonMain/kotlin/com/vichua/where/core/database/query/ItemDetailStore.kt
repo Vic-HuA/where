@@ -31,6 +31,7 @@ data class StoredItemDetail(
     val photos: List<PhotoAsset>,
     val locationHistory: List<ItemLocationEvent>,
     val voiceLabelStorageKey: String? = null,
+    val isPinned: Boolean = false,
 )
 
 /**
@@ -75,6 +76,8 @@ class ItemDetailStore(
                 .findActiveByItem(item.id.value)
                 .firstOrNull()
                 ?.storageKey,
+            isPinned = database.homeSupportDao()
+                .findActivePinnedByItem(item.id.value) != null,
         )
     }
 

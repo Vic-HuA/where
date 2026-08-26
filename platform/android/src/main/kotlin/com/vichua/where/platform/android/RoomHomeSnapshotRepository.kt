@@ -6,6 +6,7 @@ import com.vichua.where.feature.search.home.FavoriteLocationSummary
 import com.vichua.where.feature.search.home.HomeItemSummary
 import com.vichua.where.feature.search.home.HomeSnapshot
 import com.vichua.where.feature.search.home.HomeSnapshotRepository
+import com.vichua.where.feature.search.home.PinnedItemSummary
 import com.vichua.where.feature.search.home.RecentSearchSummary
 
 /**
@@ -43,6 +44,16 @@ class RoomHomeSnapshotRepository(
                     iconKey = storedFavorite.location.iconKey,
                     itemCount = storedFavorite.itemCount,
                     coverThumbnailStorageKey = storedFavorite.coverThumbnailStorageKey,
+                )
+            },
+            pinnedItems = snapshot.pinnedItems.map { storedPinned ->
+                PinnedItemSummary(
+                    pinnedId = storedPinned.pinned.id,
+                    itemId = storedPinned.item.id,
+                    name = storedPinned.item.name,
+                    locationPath = storedPinned.locationPath,
+                    thumbnailStorageKey = storedPinned.thumbnailStorageKey,
+                    locationUnconfirmed = storedPinned.locationUnconfirmed,
                 )
             },
             locationUnconfirmedCount = snapshot.locationUnconfirmedCount,

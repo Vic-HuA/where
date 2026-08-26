@@ -358,6 +358,23 @@ private fun buildImportPreview(
         entityType = ChangeEntityType.FAVORITE_LOCATION,
         allowKeepBoth = false,
     )
+    accumulate(
+        localItems = current.pinnedItems,
+        incomingItems = incoming.pinnedItems,
+        idOf = { pinned -> pinned.id.value },
+        versionOf = { pinned -> pinned.version.value },
+        equalTo = { left, right ->
+            left.itemId == right.itemId && left.deletedAt == right.deletedAt
+        },
+        labelOf = { pinned -> "常用物品" },
+        localTextOf = { pinned -> pinned.itemId.value },
+        incomingTextOf = { pinned -> pinned.itemId.value },
+        fieldsOf = { left, right ->
+            differingFields("物品" to (left.itemId != right.itemId))
+        },
+        entityType = ChangeEntityType.PINNED_ITEM,
+        allowKeepBoth = false,
+    )
 
     return ImportPreview(
         manifest = envelope.manifest,
@@ -472,6 +489,15 @@ private fun mergeSnapshots(
         locationEvents = events,
         changeRecords = changeRecords,
         favoriteLocations = favorites,
+        pinnedItems = mergeById(
+            local = local.pinnedItems,
+            incoming = incoming.pinnedItems,
+            idOf = { pinned -> pinned.id.value },
+            entityType = ChangeEntityType.PINNED_ITEM,
+            resolutions = resolutions,
+            versionOf = { pinned -> pinned.version.value },
+            copyIncoming = { pinned -> pinned },
+        ),
     )
 }
 

@@ -172,6 +172,19 @@ value class FavoriteLocationId(val value: String) {
 }
 
 /**
+ * 常用物品入口的全局唯一标识。
+ *
+ * @property value 客户端生成的标识文本。
+ */
+@Serializable
+@JvmInline
+value class PinnedItemId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Pinned item ID must not be blank." }
+    }
+}
+
+/**
  * 当前设备最近查找记录的唯一标识。
  *
  * @property value 当前设备生成的标识文本。

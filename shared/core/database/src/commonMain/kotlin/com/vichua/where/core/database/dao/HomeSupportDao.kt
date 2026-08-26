@@ -8,6 +8,7 @@ import androidx.room.Update
 import androidx.room.Upsert
 import com.vichua.where.core.database.entity.FavoriteLocationEntity
 import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
+import com.vichua.where.core.database.entity.PinnedItemEntity
 
 /**
  * 首页常用位置和当前设备最近查找的数据访问接口。
@@ -124,4 +125,58 @@ interface HomeSupportDao {
     /** 删除家庭全部常用位置引用，供替换恢复或清除使用。 */
     @Query("DELETE FROM favorite_locations WHERE household_id = :householdId")
     suspend fun deleteFavoriteLocationsByHousehold(householdId: String): Int
+
+    /** 批量插入常用物品入口。 */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertPinnedItems(entities: List<PinnedItemEntity>)
+
+    /**
+     * 查询家庭仍有效且目标物品未删除的常用物品入口。
+     *
+     * 位置待确认物品仍返回，由展示层改成提醒态，避免入口消失后老人找不到。
+     */
+    @Query(
+        """
+        SELECT pinned_items.* FROM pinned_items
+        INNER JOIN items
+            ON items.id = pinned_items.item_id
+        WHERE pinned_items.household_id = :householdId
+          AND pinned_items.deleted_at IS NULL
+          AND items.deleted_at IS NULL
+        ORDER BY pinned_items.sort_order ASC, pinned_items.id ASC
+        LIMIT :limit
+        """,
+    )
+    suspend fun findActivePinnedItems(
+        householdId: String,
+        limit: Int,
+    ): List<PinnedItemEntity>
+
+    /** 查询指定物品当前仍有效的常用入口。 */
+    @Query(
+        """
+        SELECT * FROM pinned_items
+        WHERE item_id = :itemId AND deleted_at IS NULL
+        LIMIT 1
+        """,
+    )
+    suspend fun findActivePinnedByItem(itemId: String): PinnedItemEntity?
+
+    /** 查询家庭全部常用物品入口，包括已取消固定记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM pinned_items
+        WHERE household_id = :householdId
+        ORDER BY sort_order ASC, id ASC
+        """,
+    )
+    suspend fun findAllPinnedItemsByHousehold(householdId: String): List<PinnedItemEntity>
+
+    /** 更新常用物品入口的取消固定状态，调用方必须先完成版本校验。 */
+    @Update
+    suspend fun updatePinnedItem(entity: PinnedItemEntity): Int
+
+    /** 删除家庭全部常用物品入口，供替换恢复或清除使用。 */
+    @Query("DELETE FROM pinned_items WHERE household_id = :householdId")
+    suspend fun deletePinnedItemsByHousehold(householdId: String): Int
 }

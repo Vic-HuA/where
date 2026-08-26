@@ -74,6 +74,7 @@ fun LocationManagementScreen(
     onRecordVoice: (LocationTreeNode) -> Unit = {},
     onPlayVoice: (LocationTreeNode) -> Unit = {},
     onDeleteVoice: (LocationTreeNode) -> Unit = {},
+    onToggleFavorite: (LocationTreeNode) -> Unit = {},
     resolveMediaPath: (String) -> String? = { null },
     onLocationUnconfirmedClick: () -> Unit = {},
 ) {
@@ -200,6 +201,9 @@ fun LocationManagementScreen(
                                 },
                                 onDeleteVoice = {
                                     onDeleteVoice(node)
+                                },
+                                onToggleFavorite = {
+                                    onToggleFavorite(node)
                                 },
                                 resolveMediaPath = resolveMediaPath,
                             )
@@ -402,6 +406,7 @@ private fun LocationTreeRow(
     onRecordVoice: () -> Unit,
     onPlayVoice: () -> Unit,
     onDeleteVoice: () -> Unit,
+    onToggleFavorite: () -> Unit,
     resolveMediaPath: (String) -> String?,
 ) {
     var menuExpanded by remember(node.locationId) { mutableStateOf(false) }
@@ -584,6 +589,14 @@ private fun LocationTreeRow(
                                                 },
                                             )
                                         }
+                                        LocationNodeMenuRow(
+                                            icon = WhereIcons.Pin,
+                                            label = if (node.isFavorite) "取消常用" else "设为常用位置",
+                                            onClick = {
+                                                menuExpanded = false
+                                                onToggleFavorite()
+                                            },
+                                        )
                                         LocationNodeMenuRow(
                                             icon = WhereIcons.Edit,
                                             label = "重命名",

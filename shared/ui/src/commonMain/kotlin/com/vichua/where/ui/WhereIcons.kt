@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Search
@@ -84,6 +85,9 @@ object WhereIcons {
 
     /** 删除图标。 */
     val Delete: ImageVector = Icons.Outlined.Delete
+
+    /** 常用物品或常用位置固定图标。 */
+    val Pin: ImageVector = Icons.Outlined.PushPin
 
     /** 展开子位置图标。 */
     val ExpandMore: ImageVector = Icons.Outlined.ExpandMore

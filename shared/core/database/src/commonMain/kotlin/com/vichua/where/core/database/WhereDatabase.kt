@@ -26,6 +26,7 @@ import com.vichua.where.core.database.entity.ChangeRecordEntity
 import com.vichua.where.core.database.entity.DeviceEntity
 import com.vichua.where.core.database.entity.HouseholdEntity
 import com.vichua.where.core.database.entity.FavoriteLocationEntity
+import com.vichua.where.core.database.entity.PinnedItemEntity
 import com.vichua.where.core.database.entity.ItemAliasEntity
 import com.vichua.where.core.database.entity.ItemDraftEntity
 import com.vichua.where.core.database.entity.ItemEntity
@@ -60,6 +61,7 @@ import com.vichua.where.core.database.entity.PhotoAssetEntity
         ChangeRecordEntity::class,
         ItemSearchFtsEntity::class,
         FavoriteLocationEntity::class,
+        PinnedItemEntity::class,
         LocalSearchHistoryEntity::class,
         LocalAccessibilityPreferencesEntity::class,
         LocalBackupRecordEntity::class,
@@ -72,6 +74,7 @@ import com.vichua.where.core.database.entity.PhotoAssetEntity
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
         AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7),
     ],
 )
 @ConstructedBy(WhereDatabaseConstructor::class)
@@ -126,7 +129,7 @@ abstract class WhereDatabase : RoomDatabase() {
 
     companion object {
         /** 当前 Room Schema 版本。 */
-        const val VERSION = 6
+        const val VERSION = 7
 
         /** 各平台使用的稳定数据库文件名。 */
         const val FILE_NAME = "where.db"

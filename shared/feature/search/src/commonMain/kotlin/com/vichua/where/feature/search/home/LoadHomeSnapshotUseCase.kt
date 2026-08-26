@@ -4,6 +4,7 @@ import com.vichua.where.core.model.FavoriteLocationId
 import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.LocalSearchHistoryId
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.PinnedItemId
 import com.vichua.where.core.model.UtcTimestamp
 
 /**
@@ -54,17 +55,38 @@ data class FavoriteLocationSummary(
 )
 
 /**
+ * 首页常用物品入口的只读摘要。
+ *
+ * @property pinnedId 常用入口 ID。
+ * @property itemId 被固定的物品 ID。
+ * @property name 物品名称。
+ * @property locationPath 当前完整位置路径。
+ * @property thumbnailStorageKey 可选封面缩略图文件标识。
+ * @property locationUnconfirmed 物品位置待确认时入口改为提醒态。
+ */
+data class PinnedItemSummary(
+    val pinnedId: PinnedItemId,
+    val itemId: ItemId,
+    val name: String,
+    val locationPath: String,
+    val thumbnailStorageKey: String?,
+    val locationUnconfirmed: Boolean,
+)
+
+/**
  * 首页一次性加载所需的全部本地数据。
  *
  * @property recentItems 最近更新的最多三件物品。
  * @property recentSearches 当前设备最近执行的最多五条去重查询。
  * @property favoriteLocations 用户主动固定的常用位置。
+ * @property pinnedItems 家人主动固定的常用物品入口。
  * @property locationUnconfirmedCount 位置待确认物品数量。
  */
 data class HomeSnapshot(
     val recentItems: List<HomeItemSummary>,
     val recentSearches: List<RecentSearchSummary>,
     val favoriteLocations: List<FavoriteLocationSummary>,
+    val pinnedItems: List<PinnedItemSummary> = emptyList(),
     val locationUnconfirmedCount: Long,
 )
 

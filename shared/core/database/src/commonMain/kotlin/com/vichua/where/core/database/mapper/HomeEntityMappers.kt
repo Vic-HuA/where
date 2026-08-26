@@ -4,12 +4,14 @@ import com.vichua.where.core.database.entity.FavoriteLocationEntity
 import com.vichua.where.core.database.entity.LocalAccessibilityPreferencesEntity
 import com.vichua.where.core.database.entity.LocalBackupRecordEntity
 import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
+import com.vichua.where.core.database.entity.PinnedItemEntity
 import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.DisplayMode
 import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.FavoriteLocationId
 import com.vichua.where.core.model.HouseholdId
+import com.vichua.where.core.model.ItemId
 import com.vichua.where.core.model.LocalAccessibilityPreferences
 import com.vichua.where.core.model.LocalBackupRecord
 import com.vichua.where.core.model.LocalBackupRecordId
@@ -17,6 +19,8 @@ import com.vichua.where.core.model.LocalBackupStatus
 import com.vichua.where.core.model.LocalSearchHistory
 import com.vichua.where.core.model.LocalSearchHistoryId
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.PinnedItem
+import com.vichua.where.core.model.PinnedItemId
 import com.vichua.where.core.model.SortOrder
 import com.vichua.where.core.model.UtcTimestamp
 
@@ -38,6 +42,32 @@ internal fun FavoriteLocationEntity.toDomain(): FavoriteLocation = FavoriteLocat
     id = FavoriteLocationId(id),
     householdId = HouseholdId(householdId),
     locationNodeId = LocationNodeId(locationNodeId),
+    sortOrder = SortOrder(sortOrder),
+    createdAt = UtcTimestamp(createdAt),
+    updatedAt = UtcTimestamp(updatedAt),
+    version = EntityVersion(version),
+    sourceDeviceId = DeviceId(sourceDeviceId),
+    deletedAt = deletedAt?.let(::UtcTimestamp),
+)
+
+/** 将常用物品入口领域模型转换为 Room 实体。 */
+internal fun PinnedItem.toEntity(): PinnedItemEntity = PinnedItemEntity(
+    id = id.value,
+    householdId = householdId.value,
+    itemId = itemId.value,
+    sortOrder = sortOrder.value,
+    createdAt = createdAt.epochMilliseconds,
+    updatedAt = updatedAt.epochMilliseconds,
+    version = version.value,
+    sourceDeviceId = sourceDeviceId.value,
+    deletedAt = deletedAt?.epochMilliseconds,
+)
+
+/** 将常用物品入口 Room 实体还原为领域模型。 */
+internal fun PinnedItemEntity.toDomain(): PinnedItem = PinnedItem(
+    id = PinnedItemId(id),
+    householdId = HouseholdId(householdId),
+    itemId = ItemId(itemId),
     sortOrder = SortOrder(sortOrder),
     createdAt = UtcTimestamp(createdAt),
     updatedAt = UtcTimestamp(updatedAt),

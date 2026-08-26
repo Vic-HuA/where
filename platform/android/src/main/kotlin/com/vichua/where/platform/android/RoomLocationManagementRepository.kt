@@ -4,6 +4,8 @@ import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.StoredLocationTreeNode
 import com.vichua.where.core.model.Item
 import com.vichua.where.core.model.LocationNodeId
+import com.vichua.where.core.model.ChangeRecord
+import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.feature.location.management.LocationCreation
 import com.vichua.where.feature.location.management.LocationDeletion
 import com.vichua.where.feature.location.management.LocationManagementRepository
@@ -21,6 +23,10 @@ class RoomLocationManagementRepository(
     /** 加载位置树和统计摘要。 */
     override suspend fun loadTree(): LocationTreeSnapshot {
         val snapshot = store.loadTree()
+        val favoriteLocationIds = snapshot.favoriteLocations
+            .filter { favorite -> favorite.deletedAt == null }
+            .map { favorite -> favorite.locationNodeId }
+            .toSet()
         return LocationTreeSnapshot(
             householdId = snapshot.householdId,
             sourceDeviceId = snapshot.sourceDeviceId,
@@ -31,7 +37,7 @@ class RoomLocationManagementRepository(
             locationUnconfirmedCount = snapshot.locationUnconfirmedCount,
             locations = snapshot.locations,
             favoriteLocations = snapshot.favoriteLocations,
-            nodes = snapshot.nodes.map(::toTreeNode),
+            nodes = snapshot.nodes.map { node -> toTreeNode(node, favoriteLocationIds) },
         )
     }
 
@@ -66,10 +72,21 @@ class RoomLocationManagementRepository(
     override suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item> =
         store.findActiveItemsAt(locationId)
 
+    override suspend fun pinFavorite(favorite: FavoriteLocation, changeRecord: ChangeRecord) {
+        store.pinFavorite(favorite, changeRecord)
+    }
+
+    override suspend fun unpinFavorite(favorite: FavoriteLocation, changeRecord: ChangeRecord) {
+        store.unpinFavorite(favorite, changeRecord)
+    }
+
     /**
      * 将数据库节点映射为页面展示模型，并补齐可操作状态。
      */
-    private fun toTreeNode(node: StoredLocationTreeNode): LocationTreeNode {
+    private fun toTreeNode(
+        node: StoredLocationTreeNode,
+        favoriteLocationIds: Set<LocationNodeId>,
+    ): LocationTreeNode {
         val location = node.location
         return LocationTreeNode(
             locationId = location.id,
@@ -87,6 +104,7 @@ class RoomLocationManagementRepository(
             coverThumbnailStorageKey = node.coverThumbnailStorageKey,
             hasVoiceLabel = node.hasVoiceLabel,
             voiceLabelStorageKey = node.voiceLabelStorageKey,
+            isFavorite = location.id in favoriteLocationIds,
         )
     }
 }

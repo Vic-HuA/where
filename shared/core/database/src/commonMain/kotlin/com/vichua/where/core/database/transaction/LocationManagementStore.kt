@@ -163,6 +163,52 @@ class LocationManagementStore(
     }
 
     /**
+     * 固定一个仍有效的常用位置引用。
+     */
+    suspend fun pinFavorite(
+        favorite: FavoriteLocation,
+        changeRecord: ChangeRecord,
+    ) {
+        require(favorite.deletedAt == null) { "Pinned favorite location must be active." }
+        require(changeRecord.entityType == ChangeEntityType.FAVORITE_LOCATION) {
+            "Favorite location change record entity type must be FAVORITE_LOCATION."
+        }
+        transactionRunner.write {
+            val location = locationNodeDao().findById(favorite.locationNodeId.value)?.toDomain()
+            require(location != null && location.deletedAt == null) {
+                "Favorite location target does not exist."
+            }
+            require(!location.isHouseholdRoot) { "Household root cannot be a favorite location." }
+            require(
+                homeSupportDao().findActiveFavoriteByLocation(favorite.locationNodeId.value) == null,
+            ) {
+                "Location is already a favorite."
+            }
+            homeSupportDao().insertFavoriteLocations(listOf(favorite.toEntity()))
+            changeRecordDao().insert(changeRecord.toEntity())
+        }
+    }
+
+    /**
+     * 取消固定常用位置。
+     */
+    suspend fun unpinFavorite(
+        favorite: FavoriteLocation,
+        changeRecord: ChangeRecord,
+    ) {
+        require(favorite.deletedAt != null) { "Unpinned favorite location must be soft-deleted." }
+        require(changeRecord.entityType == ChangeEntityType.FAVORITE_LOCATION) {
+            "Favorite location change record entity type must be FAVORITE_LOCATION."
+        }
+        transactionRunner.write {
+            require(homeSupportDao().updateFavoriteLocation(favorite.toEntity()) == 1) {
+                "Favorite location update must affect exactly one row."
+            }
+            changeRecordDao().insert(changeRecord.toEntity())
+        }
+    }
+
+    /**
      * 原子保存新位置和对应变更记录。
      */
     suspend fun create(

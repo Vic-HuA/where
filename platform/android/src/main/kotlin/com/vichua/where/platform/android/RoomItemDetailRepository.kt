@@ -50,6 +50,7 @@ class RoomItemDetailRepository(
             },
             locationUnconfirmed = detail.item.status == ItemStatus.LOCATION_UNCONFIRMED,
             voiceLabelStorageKey = detail.voiceLabelStorageKey,
+            isPinned = detail.isPinned,
         )
     }
 }

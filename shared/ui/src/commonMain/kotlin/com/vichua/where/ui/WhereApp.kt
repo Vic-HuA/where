@@ -50,6 +50,8 @@ import com.vichua.where.feature.item.deletion.ItemDeletionResult
 import com.vichua.where.feature.item.deletion.RestoreDeletedItemUseCase
 import com.vichua.where.feature.item.detail.ItemDetail
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
+import com.vichua.where.feature.item.pin.PinPinnedItemUseCase
+import com.vichua.where.feature.item.pin.UnpinPinnedItemUseCase
 import com.vichua.where.feature.item.share.BuildItemLocationShareUseCase
 import com.vichua.where.feature.item.share.BuildItemLocationSpeechUseCase
 import com.vichua.where.feature.item.profile.UpdateItemProfileRequest
@@ -75,7 +77,9 @@ import com.vichua.where.feature.location.management.CreateLocationUseCase
 import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
 import com.vichua.where.feature.location.management.LocationTreeSnapshot
+import com.vichua.where.feature.location.management.PinFavoriteLocationUseCase
 import com.vichua.where.feature.location.management.RenameLocationUseCase
+import com.vichua.where.feature.location.management.UnpinFavoriteLocationUseCase
 import com.vichua.where.core.platform.RecordedVoiceLabel
 import com.vichua.where.core.platform.VoiceLabelGateway
 import com.vichua.where.feature.location.photo.AddLocationPhotoUseCase
@@ -175,6 +179,10 @@ import kotlinx.coroutines.yield
  * @param importLocationPhotoUseCase 把相册图片写入临时目录供位置代表照使用。
  * @param addLocationPhotoUseCase 为位置写入或更换代表照。
  * @param deleteLocationPhotoUseCase 删除位置当前代表照。
+ * @param pinFavoriteLocationUseCase 把位置固定为常用位置。
+ * @param unpinFavoriteLocationUseCase 取消固定常用位置。
+ * @param pinPinnedItemUseCase 把物品固定为常用入口。
+ * @param unpinPinnedItemUseCase 取消固定常用物品入口。
  * @param loadAccessibilityPreferencesUseCase 读取当前设备适老偏好的用例。
  * @param updateAccessibilityPreferencesUseCase 更新当前设备适老偏好的用例。
  * @param loadAppPreferencesUseCase 读取当前设备应用开关的用例。
@@ -245,6 +253,10 @@ fun WhereApp(
     importVoiceLabelUseCase: ImportVoiceLabelUseCase,
     saveVoiceLabelUseCase: SaveVoiceLabelUseCase,
     deleteVoiceLabelUseCase: DeleteVoiceLabelUseCase,
+    pinFavoriteLocationUseCase: PinFavoriteLocationUseCase,
+    unpinFavoriteLocationUseCase: UnpinFavoriteLocationUseCase,
+    pinPinnedItemUseCase: PinPinnedItemUseCase,
+    unpinPinnedItemUseCase: UnpinPinnedItemUseCase,
     loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
     loadAppPreferencesUseCase: LoadAppPreferencesUseCase,
@@ -1132,6 +1144,9 @@ fun WhereApp(
                     onFavoriteLocationClick = { favorite ->
                         navigateToLocationItems(favorite.locationNodeId, favorite.name)
                     },
+                    onPinnedItemClick = { pinned ->
+                        navigateTo(AppDestination.ITEM_DETAIL, pinned.itemId)
+                    },
                     onRecordItemClick = {
                         performHaptic(HapticFeedbackKind.CONFIRM)
                         confirmationSpeechError = null
@@ -1590,6 +1605,29 @@ fun WhereApp(
                                     locationTree = loadLocationTreeUseCase()
                                 } catch (_: Exception) {
                                     locationTreeError = "删除语音名称失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
+                    },
+                    onToggleFavorite = { node ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                locationTreeError = null
+                                try {
+                                    if (node.isFavorite) {
+                                        unpinFavoriteLocationUseCase(node.locationId)
+                                    } else {
+                                        pinFavoriteLocationUseCase(node.locationId)
+                                    }
+                                    locationTree = loadLocationTreeUseCase()
+                                    homeLoadAttempt += 1
+                                } catch (_: IllegalArgumentException) {
+                                    locationTreeError = "无法更改常用位置。"
+                                } catch (_: Exception) {
+                                    locationTreeError = "设置常用位置失败，请稍后重试。"
                                 } finally {
                                     locationTreeSubmitting = false
                                 }
@@ -2077,6 +2115,24 @@ fun WhereApp(
                                 itemDetail = loadItemDetailUseCase(itemId)
                             } catch (_: Exception) {
                                 itemDetailError = "删除语音名称失败，请稍后重试。"
+                            }
+                        }
+                    },
+                    onTogglePinned = {
+                        val detail = itemDetail ?: return@ItemDetailScreen
+                        coroutineScope.launch {
+                            try {
+                                if (detail.isPinned) {
+                                    unpinPinnedItemUseCase(detail.itemId)
+                                } else {
+                                    pinPinnedItemUseCase(detail.itemId)
+                                }
+                                itemDetail = loadItemDetailUseCase(detail.itemId)
+                                homeLoadAttempt += 1
+                            } catch (_: IllegalArgumentException) {
+                                itemDetailError = "无法更改常用物品。"
+                            } catch (_: Exception) {
+                                itemDetailError = "设置常用物品失败，请稍后重试。"
                             }
                         }
                     },

@@ -129,6 +129,7 @@ data class HouseholdBackupSnapshot(
     val locationEvents: List<ItemLocationEvent>,
     val changeRecords: List<ChangeRecord>,
     val favoriteLocations: List<FavoriteLocation>,
+    val pinnedItems: List<PinnedItem> = emptyList(),
 ) {
     init {
         require(devices.all { device -> device.householdId == household.id }) {
@@ -145,6 +146,9 @@ data class HouseholdBackupSnapshot(
         }
         require(voiceLabels.all { label -> label.householdId == household.id }) {
             "Backup snapshot voice labels must belong to the household."
+        }
+        require(pinnedItems.all { pinned -> pinned.householdId == household.id }) {
+            "Backup snapshot pinned items must belong to the household."
         }
     }
 }

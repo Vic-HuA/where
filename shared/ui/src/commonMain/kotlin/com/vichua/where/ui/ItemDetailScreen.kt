@@ -139,6 +139,7 @@ fun ItemDetailScreen(
     onRecordVoiceLabel: () -> Unit = {},
     onPlayVoiceLabel: () -> Unit = {},
     onDeleteVoiceLabel: () -> Unit = {},
+    onTogglePinned: () -> Unit = {},
 ) {
     var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
     var lastPhotoCount by remember(detail?.itemId) { mutableIntStateOf(detail?.photos?.size ?: 0) }
@@ -425,6 +426,9 @@ fun ItemDetailScreen(
                 .padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            TextButton(onClick = onTogglePinned) {
+                Text(if (detail.isPinned) "取消常用" else "设为常用物品")
+            }
             TextButton(onClick = onRecordVoiceLabel) {
                 Text(if (detail.voiceLabelStorageKey == null) "录制语音名称" else "重录语音名称")
             }

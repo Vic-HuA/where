@@ -69,6 +69,9 @@ enum class ChangeEntityType {
 
     /** 用户主动固定的常用位置。 */
     FAVORITE_LOCATION,
+
+    /** 家人主动固定的常用物品入口。 */
+    PINNED_ITEM,
 }
 
 /**

@@ -62,6 +62,61 @@ data class FavoriteLocationEntity(
 )
 
 /**
+ * 常用物品入口的 Room 持久化结构。
+ *
+ * @property id 快捷入口全局 ID。
+ * @property householdId 所属家庭 ID。
+ * @property itemId 被固定的物品 ID。
+ * @property sortOrder 用户设置的展示顺序。
+ * @property createdAt 创建时间。
+ * @property updatedAt 最近更新时间。
+ * @property version 实体版本。
+ * @property sourceDeviceId 最近修改设备 ID。
+ * @property deletedAt 取消固定时间。
+ */
+@Entity(
+    tableName = "pinned_items",
+    foreignKeys = [
+        ForeignKey(
+            entity = HouseholdEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["household_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+        ForeignKey(
+            entity = ItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["item_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+    indices = [
+        Index(value = ["household_id", "item_id", "deleted_at"]),
+        Index(value = ["household_id", "sort_order", "deleted_at"]),
+        Index(value = ["item_id"]),
+    ],
+)
+data class PinnedItemEntity(
+    @PrimaryKey
+    val id: String,
+    @ColumnInfo(name = "household_id")
+    val householdId: String,
+    @ColumnInfo(name = "item_id")
+    val itemId: String,
+    @ColumnInfo(name = "sort_order")
+    val sortOrder: Int,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long,
+    val version: Long,
+    @ColumnInfo(name = "source_device_id")
+    val sourceDeviceId: String,
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long?,
+)
+
+/**
  * 当前设备最近查找的 Room 持久化结构。
  *
  * @property id 搜索历史记录 ID。

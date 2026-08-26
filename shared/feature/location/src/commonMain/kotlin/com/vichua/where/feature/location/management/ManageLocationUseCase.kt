@@ -11,6 +11,7 @@ import com.vichua.where.core.model.DeviceId
 import com.vichua.where.core.model.DomainValidators
 import com.vichua.where.core.model.EntityVersion
 import com.vichua.where.core.model.FavoriteLocation
+import com.vichua.where.core.model.FavoriteLocationId
 import com.vichua.where.core.model.HouseholdId
 import com.vichua.where.core.model.Item
 import com.vichua.where.core.model.ItemLocationEvent
@@ -56,6 +57,7 @@ data class LocationTreeNode(
     val coverThumbnailStorageKey: String? = null,
     val hasVoiceLabel: Boolean = false,
     val voiceLabelStorageKey: String? = null,
+    val isFavorite: Boolean = false,
 )
 
 /**
@@ -181,6 +183,98 @@ interface LocationManagementRepository {
 
     /** 加载直接放在指定位置上的未删除物品。 */
     suspend fun findActiveItemsAt(locationId: LocationNodeId): List<Item>
+
+    /** 固定一个常用位置。 */
+    suspend fun pinFavorite(favorite: FavoriteLocation, changeRecord: ChangeRecord)
+
+    /** 取消固定一个常用位置。 */
+    suspend fun unpinFavorite(favorite: FavoriteLocation, changeRecord: ChangeRecord)
+}
+
+/**
+ * 把非根位置固定为常用位置。
+ */
+class PinFavoriteLocationUseCase(
+    private val repository: LocationManagementRepository,
+    private val idGenerator: UniqueIdGenerator,
+    private val clock: EpochMillisecondsClock,
+) {
+    /**
+     * 家庭根节点不能固定；已经是常用位置时拒绝。
+     */
+    suspend operator fun invoke(locationId: LocationNodeId) {
+        val snapshot = repository.loadTree()
+        val location = requireNotNull(
+            snapshot.locations.firstOrNull { node -> node.id == locationId },
+        ) { "Location does not exist." }
+        require(!location.isHouseholdRoot) { "Household root cannot be a favorite location." }
+        require(snapshot.favoriteLocations.none { favorite -> favorite.locationNodeId == locationId }) {
+            "Location is already a favorite."
+        }
+        val now = UtcTimestamp(clock.now())
+        val favorite = FavoriteLocation(
+            id = FavoriteLocationId(idGenerator.generate()),
+            householdId = snapshot.householdId,
+            locationNodeId = locationId,
+            sortOrder = SortOrder(snapshot.favoriteLocations.size),
+            createdAt = now,
+            updatedAt = now,
+            version = EntityVersion(INITIAL_ENTITY_VERSION),
+            sourceDeviceId = snapshot.sourceDeviceId,
+        )
+        repository.pinFavorite(
+            favorite = favorite,
+            changeRecord = ChangeRecord(
+                id = ChangeRecordId(idGenerator.generate()),
+                householdId = snapshot.householdId,
+                entityType = ChangeEntityType.FAVORITE_LOCATION,
+                entityId = favorite.id.value,
+                operation = ChangeOperation.CREATE,
+                entityVersion = favorite.version,
+                sourceDeviceId = snapshot.sourceDeviceId,
+                occurredAt = now,
+            ),
+        )
+    }
+}
+
+/**
+ * 取消固定常用位置。
+ */
+class UnpinFavoriteLocationUseCase(
+    private val repository: LocationManagementRepository,
+    private val idGenerator: UniqueIdGenerator,
+    private val clock: EpochMillisecondsClock,
+) {
+    /**
+     * 目标必须是当前仍有效的常用位置。
+     */
+    suspend operator fun invoke(locationId: LocationNodeId) {
+        val snapshot = repository.loadTree()
+        val favorite = requireNotNull(
+            snapshot.favoriteLocations.firstOrNull { item -> item.locationNodeId == locationId },
+        ) { "Location is not a favorite." }
+        val now = UtcTimestamp(clock.now())
+        val updated = favorite.copy(
+            deletedAt = now,
+            updatedAt = now,
+            version = favorite.version.next(),
+            sourceDeviceId = snapshot.sourceDeviceId,
+        )
+        repository.unpinFavorite(
+            favorite = updated,
+            changeRecord = ChangeRecord(
+                id = ChangeRecordId(idGenerator.generate()),
+                householdId = snapshot.householdId,
+                entityType = ChangeEntityType.FAVORITE_LOCATION,
+                entityId = updated.id.value,
+                operation = ChangeOperation.DELETE,
+                entityVersion = updated.version,
+                sourceDeviceId = snapshot.sourceDeviceId,
+                occurredAt = now,
+            ),
+        )
+    }
 }
 
 /**

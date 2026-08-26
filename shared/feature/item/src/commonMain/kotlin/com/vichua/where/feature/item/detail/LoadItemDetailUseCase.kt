@@ -76,6 +76,7 @@ data class ItemDetail(
     val locationHistory: List<ItemDetailLocationHistory>,
     val locationUnconfirmed: Boolean = false,
     val voiceLabelStorageKey: String? = null,
+    val isPinned: Boolean = false,
 )
 
 /**

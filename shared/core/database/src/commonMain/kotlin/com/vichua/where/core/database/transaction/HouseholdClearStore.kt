@@ -80,6 +80,7 @@ class HouseholdClearStore(
         val householdId = household.id
         transactionRunner.write {
             itemLocationEventDao().deleteByHousehold(householdId)
+            homeSupportDao().deletePinnedItemsByHousehold(householdId)
             voiceLabelAssetDao().deleteByHousehold(householdId)
             locationPhotoAssetDao().deleteByHousehold(householdId)
             photoAssetDao().deleteByHousehold(householdId)

@@ -74,6 +74,7 @@ class HouseholdRestoreStore(
         val targetHouseholdId = snapshot.household.id.value
 
         itemLocationEventDao().deleteByHousehold(previousHouseholdId)
+        homeSupportDao().deletePinnedItemsByHousehold(previousHouseholdId)
         voiceLabelAssetDao().deleteByHousehold(previousHouseholdId)
         locationPhotoAssetDao().deleteByHousehold(previousHouseholdId)
         photoAssetDao().deleteByHousehold(previousHouseholdId)
@@ -143,6 +144,11 @@ class HouseholdRestoreStore(
         if (snapshot.favoriteLocations.isNotEmpty()) {
             homeSupportDao().insertFavoriteLocations(
                 snapshot.favoriteLocations.map { favorite -> favorite.toEntity() },
+            )
+        }
+        if (snapshot.pinnedItems.isNotEmpty()) {
+            homeSupportDao().insertPinnedItems(
+                snapshot.pinnedItems.map { pinned -> pinned.toEntity() },
             )
         }
         if (snapshot.changeRecords.isNotEmpty()) {

@@ -19,6 +19,7 @@ import com.vichua.where.core.database.transaction.ItemDeletionStore
 import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.LocationPhotoStore
+import com.vichua.where.core.database.transaction.PinnedItemStore
 import com.vichua.where.core.database.transaction.VoiceLabelStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
@@ -44,12 +45,16 @@ import com.vichua.where.feature.item.draft.DiscardLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.LoadLatestItemDraftUseCase
 import com.vichua.where.feature.item.draft.SaveItemDraftUseCase
 import com.vichua.where.feature.item.detail.LoadItemDetailUseCase
+import com.vichua.where.feature.item.pin.PinPinnedItemUseCase
+import com.vichua.where.feature.item.pin.UnpinPinnedItemUseCase
 import com.vichua.where.feature.item.profile.UpdateItemProfileUseCase
 import com.vichua.where.feature.location.initialization.HasActiveHouseholdUseCase
 import com.vichua.where.feature.location.initialization.InitializeHouseholdUseCase
 import com.vichua.where.feature.location.management.CreateLocationUseCase
 import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
+import com.vichua.where.feature.location.management.PinFavoriteLocationUseCase
+import com.vichua.where.feature.location.management.UnpinFavoriteLocationUseCase
 import com.vichua.where.feature.location.photo.AddLocationPhotoUseCase
 import com.vichua.where.feature.location.photo.DeleteLocationPhotoUseCase
 import com.vichua.where.feature.location.photo.ImportLocationPhotoUseCase
@@ -120,6 +125,8 @@ class AndroidAppContainer(
         RoomLocationPhotoRepository(LocationPhotoStore(database))
     private val voiceLabelRepository =
         RoomVoiceLabelRepository(VoiceLabelStore(database))
+    private val pinnedItemRepository =
+        RoomPinnedItemRepository(PinnedItemStore(database))
     private val accessibilityPreferencesRepository =
         RoomAccessibilityPreferencesRepository(
             store = AccessibilityPreferencesStore(database),
@@ -367,6 +374,30 @@ class AndroidAppContainer(
     /** 删除空位置的用例。 */
     val deleteEmptyLocationUseCase = DeleteEmptyLocationUseCase(
         repository = locationManagementRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    val pinFavoriteLocationUseCase = PinFavoriteLocationUseCase(
+        repository = locationManagementRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    val unpinFavoriteLocationUseCase = UnpinFavoriteLocationUseCase(
+        repository = locationManagementRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    val pinPinnedItemUseCase = PinPinnedItemUseCase(
+        repository = pinnedItemRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    val unpinPinnedItemUseCase = UnpinPinnedItemUseCase(
+        repository = pinnedItemRepository,
         idGenerator = AndroidUniqueIdGenerator(),
         clock = AndroidEpochMillisecondsClock,
     )

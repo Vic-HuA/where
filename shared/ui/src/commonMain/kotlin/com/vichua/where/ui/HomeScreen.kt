@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.vichua.where.feature.search.home.FavoriteLocationSummary
 import com.vichua.where.feature.search.home.HomeItemSummary
 import com.vichua.where.feature.search.home.HomeSnapshot
+import com.vichua.where.feature.search.home.PinnedItemSummary
 
 /**
  * 首页：上面展示问候和最近内容，查找与记录固定在底栏上方方便单手按住。
@@ -73,6 +74,7 @@ import com.vichua.where.feature.search.home.HomeSnapshot
  * @param onViewAllItems 打开全部物品列表。
  * @param onRecentSearchClick 用同一查询再次执行本地搜索。
  * @param onFavoriteLocationClick 按常用位置名称查找该处物品。
+ * @param onPinnedItemClick 打开常用物品详情。
  * @param onRecordItemClick 打开新增物品流程。
  * @param onLocationClick 打开位置管理。
  * @param onSettingsClick 打开设置与数据。
@@ -102,6 +104,7 @@ fun HomeScreen(
     onViewAllItems: () -> Unit = {},
     onRecentSearchClick: (String) -> Unit,
     onFavoriteLocationClick: (FavoriteLocationSummary) -> Unit,
+    onPinnedItemClick: (PinnedItemSummary) -> Unit = {},
     onRecordItemClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -261,6 +264,31 @@ fun HomeScreen(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
+                }
+            }
+
+            if (loadedSnapshot.pinnedItems.isNotEmpty()) {
+                HomeSectionTitle(
+                    modifier = Modifier.padding(top = 24.dp),
+                    text = "常用物品",
+                )
+                Row(
+                    modifier = Modifier
+                        .padding(top = 10.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    loadedSnapshot.pinnedItems
+                        .take(MAX_VISIBLE_CHIPS)
+                        .forEach { pinned ->
+                            PinnedItemChip(
+                                pinned = pinned,
+                                resolveMediaPath = resolveMediaPath,
+                                onClick = {
+                                    onPinnedItemClick(pinned)
+                                },
+                            )
+                        }
                 }
             }
 
@@ -738,6 +766,69 @@ private fun HomeChip(
             )
             Text(
                 text = text,
+                color = WherePrimaryTextColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+/**
+ * 常用物品胶囊；位置待确认时改成提醒文案，避免当成正常位置快捷项。
+ */
+@Composable
+private fun PinnedItemChip(
+    pinned: PinnedItemSummary,
+    resolveMediaPath: (String) -> String?,
+    onClick: () -> Unit,
+) {
+    val coverPath = pinned.thumbnailStorageKey?.let(resolveMediaPath)
+    Surface(
+        color = if (pinned.locationUnconfirmed) {
+            WhereSelectedContainerColor
+        } else {
+            WhereSurfaceColor
+        },
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(WhereStrokeWidth, WhereOutlineColor),
+    ) {
+        Row(
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .clickable(role = Role.Button, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (coverPath != null) {
+                LocalStorageImage(
+                    absolutePath = coverPath,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                ) {
+                    Icon(
+                        modifier = Modifier.size(15.dp),
+                        imageVector = WhereIcons.Pin,
+                        contentDescription = null,
+                        tint = WherePrimaryColor,
+                    )
+                }
+            } else {
+                Icon(
+                    modifier = Modifier.size(15.dp),
+                    imageVector = WhereIcons.Pin,
+                    contentDescription = null,
+                    tint = WherePrimaryColor,
+                )
+            }
+            Text(
+                text = if (pinned.locationUnconfirmed) {
+                    "${pinned.name} · 位置待确认"
+                } else {
+                    pinned.name
+                },
                 color = WherePrimaryTextColor,
                 style = MaterialTheme.typography.bodySmall,
             )

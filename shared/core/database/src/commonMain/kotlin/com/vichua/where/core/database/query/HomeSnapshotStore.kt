@@ -5,10 +5,12 @@ import com.vichua.where.core.database.entity.ItemEntity
 import com.vichua.where.core.database.mapper.toDomain
 import com.vichua.where.core.model.FavoriteLocation
 import com.vichua.where.core.model.Item
+import com.vichua.where.core.model.ItemStatus
 import com.vichua.where.core.model.LocalSearchHistory
 import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationType
+import com.vichua.where.core.model.PinnedItem
 
 /**
  * 数据库层提供的首页最近物品数据。
@@ -39,6 +41,23 @@ data class StoredFavoriteLocation(
 )
 
 /**
+ * 数据库层提供的首页常用物品入口。
+ *
+ * @property pinned 常用物品入口领域模型。
+ * @property item 对应的未删除物品。
+ * @property locationPath 当前完整位置路径；待确认时为提醒文案。
+ * @property thumbnailStorageKey 可选封面缩略图文件标识。
+ * @property locationUnconfirmed 物品是否处于位置待确认，入口应改为提醒态。
+ */
+data class StoredPinnedItem(
+    val pinned: PinnedItem,
+    val item: Item,
+    val locationPath: String,
+    val thumbnailStorageKey: String?,
+    val locationUnconfirmed: Boolean,
+)
+
+/**
  * 数据库层首页快照。
  *
  * @property recentItems 最近更新物品。
@@ -50,6 +69,7 @@ data class StoredHomeSnapshot(
     val recentItems: List<StoredHomeItem>,
     val recentSearches: List<LocalSearchHistory>,
     val favoriteLocations: List<StoredFavoriteLocation>,
+    val pinnedItems: List<StoredPinnedItem> = emptyList(),
     val locationUnconfirmedCount: Long,
 )
 
@@ -123,10 +143,41 @@ class HomeSnapshotStore(
                 )
             }
 
+        val pinnedEntities = database.homeSupportDao()
+            .findActivePinnedItems(household.id, MAX_PINNED_ITEMS)
+        val pinnedItemIds = pinnedEntities.map { entity -> entity.itemId }
+        val pinnedItemsById = if (pinnedItemIds.isEmpty()) {
+            emptyMap()
+        } else {
+            database.itemDao()
+                .findActiveByHousehold(household.id)
+                .associateBy { entity -> entity.id }
+        }
+        val pinnedCoverByItemId = if (pinnedItemIds.isEmpty()) {
+            emptyMap()
+        } else {
+            database.photoAssetDao()
+                .findActiveCovers(pinnedItemIds)
+                .associateBy { entity -> entity.itemId }
+        }
+        val pinnedItems = pinnedEntities.mapNotNull { pinnedEntity ->
+            val pinned = pinnedEntity.toDomain()
+            val itemEntity = pinnedItemsById[pinned.itemId.value] ?: return@mapNotNull null
+            val item = itemEntity.toDomain()
+            StoredPinnedItem(
+                pinned = pinned,
+                item = item,
+                locationPath = buildLocationPath(item.currentLocationId, locationsById),
+                thumbnailStorageKey = pinnedCoverByItemId[item.id.value]?.thumbnailStorageKey,
+                locationUnconfirmed = item.status == ItemStatus.LOCATION_UNCONFIRMED,
+            )
+        }
+
         return StoredHomeSnapshot(
             recentItems = recentItems,
             recentSearches = recentSearches,
             favoriteLocations = favoriteLocations,
+            pinnedItems = pinnedItems,
             locationUnconfirmedCount = database.itemDao()
                 .countLocationUnconfirmed(household.id),
         )
@@ -252,6 +303,7 @@ class HomeSnapshotStore(
         const val MAX_RECENT_ITEMS = 3
         const val MAX_RECENT_SEARCHES = 5
         const val MAX_FAVORITE_LOCATIONS = 8
+        const val MAX_PINNED_ITEMS = 8
         const val PATH_SEPARATOR = " · "
         const val UNKNOWN_LOCATION_TEXT = "位置待确认"
 
@@ -259,6 +311,7 @@ class HomeSnapshotStore(
             recentItems = emptyList(),
             recentSearches = emptyList(),
             favoriteLocations = emptyList(),
+            pinnedItems = emptyList(),
             locationUnconfirmedCount = 0L,
         )
     }
