@@ -38,6 +38,8 @@ data class StoredLocationTreeNode(
     val itemCount: Int,
     val directItemCount: Int,
     val coverThumbnailStorageKey: String? = null,
+    val hasVoiceLabel: Boolean = false,
+    val voiceLabelStorageKey: String? = null,
 )
 
 /**
@@ -111,12 +113,24 @@ class LocationManagementStore(
         ) {
             "Active household must contain exactly one home root."
         }
-        val coverThumbnailByLocationId = if (locations.isEmpty()) {
+        val locationIds = locations.map { location -> location.id.value }
+        val coverThumbnailByLocationId = if (locationIds.isEmpty()) {
             emptyMap()
         } else {
             database.locationPhotoAssetDao()
-                .findActiveCovers(locations.map { location -> location.id.value })
+                .findActiveCovers(locationIds)
                 .associate { photo -> photo.locationNodeId to photo.thumbnailStorageKey }
+        }
+        val voiceLabelByLocationId = if (locationIds.isEmpty()) {
+            emptyMap()
+        } else {
+            database.voiceLabelAssetDao()
+                .findActiveByLocations(locationIds)
+                .mapNotNull { label ->
+                    val locationId = label.locationNodeId ?: return@mapNotNull null
+                    locationId to label.storageKey
+                }
+                .toMap()
         }
         val nodes = mutableListOf<StoredLocationTreeNode>()
         appendNodes(
@@ -127,6 +141,7 @@ class LocationManagementStore(
             descendantIdsByLocation = descendantIdsByLocation,
             directItemCountByLocation = directItemCountByLocation,
             coverThumbnailByLocationId = coverThumbnailByLocationId,
+            voiceLabelByLocationId = voiceLabelByLocationId,
             nodes = nodes,
         )
 
@@ -381,6 +396,7 @@ class LocationManagementStore(
         descendantIdsByLocation: Map<LocationNodeId, Set<LocationNodeId>>,
         directItemCountByLocation: Map<LocationNodeId, Int>,
         coverThumbnailByLocationId: Map<String, String>,
+        voiceLabelByLocationId: Map<String, String>,
         nodes: MutableList<StoredLocationTreeNode>,
     ) {
         val children = childrenByParent[current.id].orEmpty()
@@ -398,6 +414,8 @@ class LocationManagementStore(
             itemCount = itemCount,
             directItemCount = directItemCount,
             coverThumbnailStorageKey = coverThumbnailByLocationId[current.id.value],
+            hasVoiceLabel = voiceLabelByLocationId.containsKey(current.id.value),
+            voiceLabelStorageKey = voiceLabelByLocationId[current.id.value],
         )
         children.forEach { child ->
             appendNodes(
@@ -408,6 +426,7 @@ class LocationManagementStore(
                 descendantIdsByLocation = descendantIdsByLocation,
                 directItemCountByLocation = directItemCountByLocation,
                 coverThumbnailByLocationId = coverThumbnailByLocationId,
+                voiceLabelByLocationId = voiceLabelByLocationId,
                 nodes = nodes,
             )
         }

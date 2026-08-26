@@ -71,6 +71,9 @@ fun LocationManagementScreen(
     onViewItems: (LocationTreeNode) -> Unit,
     onAddPhoto: (LocationTreeNode) -> Unit = {},
     onRemovePhoto: (LocationTreeNode) -> Unit = {},
+    onRecordVoice: (LocationTreeNode) -> Unit = {},
+    onPlayVoice: (LocationTreeNode) -> Unit = {},
+    onDeleteVoice: (LocationTreeNode) -> Unit = {},
     resolveMediaPath: (String) -> String? = { null },
     onLocationUnconfirmedClick: () -> Unit = {},
 ) {
@@ -188,6 +191,15 @@ fun LocationManagementScreen(
                                 },
                                 onRemovePhoto = {
                                     onRemovePhoto(node)
+                                },
+                                onRecordVoice = {
+                                    onRecordVoice(node)
+                                },
+                                onPlayVoice = {
+                                    onPlayVoice(node)
+                                },
+                                onDeleteVoice = {
+                                    onDeleteVoice(node)
                                 },
                                 resolveMediaPath = resolveMediaPath,
                             )
@@ -387,6 +399,9 @@ private fun LocationTreeRow(
     onViewItems: () -> Unit,
     onAddPhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
+    onRecordVoice: () -> Unit,
+    onPlayVoice: () -> Unit,
+    onDeleteVoice: () -> Unit,
     resolveMediaPath: (String) -> String?,
 ) {
     var menuExpanded by remember(node.locationId) { mutableStateOf(false) }
@@ -540,6 +555,32 @@ private fun LocationTreeRow(
                                                 onClick = {
                                                     menuExpanded = false
                                                     onRemovePhoto()
+                                                },
+                                            )
+                                        }
+                                        LocationNodeMenuRow(
+                                            icon = WhereIcons.Microphone,
+                                            label = if (node.hasVoiceLabel) "重录语音名称" else "录制语音名称",
+                                            onClick = {
+                                                menuExpanded = false
+                                                onRecordVoice()
+                                            },
+                                        )
+                                        if (node.hasVoiceLabel) {
+                                            LocationNodeMenuRow(
+                                                icon = WhereIcons.ReadAloud,
+                                                label = "试听语音名称",
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onPlayVoice()
+                                                },
+                                            )
+                                            LocationNodeMenuRow(
+                                                icon = WhereIcons.Delete,
+                                                label = "删除语音名称",
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onDeleteVoice()
                                                 },
                                             )
                                         }

@@ -74,6 +74,7 @@ class HouseholdRestoreStore(
         val targetHouseholdId = snapshot.household.id.value
 
         itemLocationEventDao().deleteByHousehold(previousHouseholdId)
+        voiceLabelAssetDao().deleteByHousehold(previousHouseholdId)
         locationPhotoAssetDao().deleteByHousehold(previousHouseholdId)
         photoAssetDao().deleteByHousehold(previousHouseholdId)
         itemAliasDao().deleteByHousehold(previousHouseholdId)
@@ -132,6 +133,9 @@ class HouseholdRestoreStore(
             locationPhotoAssetDao().insertAll(
                 snapshot.locationPhotos.map(LocationPhotoAsset::toEntity),
             )
+        }
+        if (snapshot.voiceLabels.isNotEmpty()) {
+            voiceLabelAssetDao().insertAll(snapshot.voiceLabels.map { label -> label.toEntity() })
         }
         snapshot.locationEvents.forEach { event ->
             itemLocationEventDao().insert(event.toEntity())

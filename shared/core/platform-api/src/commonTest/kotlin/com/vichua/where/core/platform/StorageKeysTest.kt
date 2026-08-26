@@ -33,7 +33,7 @@ class StorageKeysTest {
             StorageKeys.validate("items\\photo.jpg")
         }
         assertFailsWith<IllegalArgumentException> {
-            StorageKeys.validate("voice/name.m4a")
+            StorageKeys.validate("external/name.m4a")
         }
     }
 }

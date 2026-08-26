@@ -11,6 +11,7 @@ import com.vichua.where.core.database.entity.ItemLocationEventEntity
 import com.vichua.where.core.database.entity.LocationNodeEntity
 import com.vichua.where.core.database.entity.LocationPhotoAssetEntity
 import com.vichua.where.core.database.entity.PhotoAssetEntity
+import com.vichua.where.core.database.entity.VoiceLabelAssetEntity
 import com.vichua.where.core.model.Category
 import com.vichua.where.core.model.CategoryId
 import com.vichua.where.core.model.ChangeEntityType
@@ -37,6 +38,8 @@ import com.vichua.where.core.model.LocationNode
 import com.vichua.where.core.model.LocationNodeId
 import com.vichua.where.core.model.LocationPhotoAsset
 import com.vichua.where.core.model.LocationPhotoAssetId
+import com.vichua.where.core.model.VoiceLabelAsset
+import com.vichua.where.core.model.VoiceLabelAssetId
 import com.vichua.where.core.model.LocationType
 import com.vichua.where.core.model.MediaIntegrityStatus
 import com.vichua.where.core.model.PhotoAsset
@@ -306,6 +309,46 @@ internal fun LocationPhotoAssetEntity.toDomain(): LocationPhotoAsset = LocationP
     lastIntegrityCheckedAt = lastIntegrityCheckedAt?.let(::UtcTimestamp),
     sortOrder = SortOrder(sortOrder),
     isCover = isCover,
+    createdAt = UtcTimestamp(createdAt),
+    updatedAt = UtcTimestamp(updatedAt),
+    version = EntityVersion(version),
+    sourceDeviceId = DeviceId(sourceDeviceId),
+    deletedAt = deletedAt?.let(::UtcTimestamp),
+)
+
+/** 将语音名称领域模型转换为 Room 实体。 */
+internal fun VoiceLabelAsset.toEntity(): VoiceLabelAssetEntity = VoiceLabelAssetEntity(
+    id = id.value,
+    householdId = householdId.value,
+    locationNodeId = locationNodeId?.value,
+    itemId = itemId?.value,
+    storageKey = storageKey,
+    mimeType = mimeType,
+    durationMillis = durationMillis,
+    sizeBytes = sizeBytes,
+    contentHash = contentHash,
+    integrityStatus = integrityStatus.name,
+    lastIntegrityCheckedAt = lastIntegrityCheckedAt?.epochMilliseconds,
+    createdAt = createdAt.epochMilliseconds,
+    updatedAt = updatedAt.epochMilliseconds,
+    version = version.value,
+    sourceDeviceId = sourceDeviceId.value,
+    deletedAt = deletedAt?.epochMilliseconds,
+)
+
+/** 将语音名称 Room 实体还原为领域模型。 */
+internal fun VoiceLabelAssetEntity.toDomain(): VoiceLabelAsset = VoiceLabelAsset(
+    id = VoiceLabelAssetId(id),
+    householdId = HouseholdId(householdId),
+    locationNodeId = locationNodeId?.let(::LocationNodeId),
+    itemId = itemId?.let(::ItemId),
+    storageKey = storageKey,
+    mimeType = mimeType,
+    durationMillis = durationMillis,
+    sizeBytes = sizeBytes,
+    contentHash = contentHash,
+    integrityStatus = enumValueOf<MediaIntegrityStatus>(integrityStatus),
+    lastIntegrityCheckedAt = lastIntegrityCheckedAt?.let(::UtcTimestamp),
     createdAt = UtcTimestamp(createdAt),
     updatedAt = UtcTimestamp(updatedAt),
     version = EntityVersion(version),

@@ -451,6 +451,15 @@ private fun mergeSnapshots(
         items = items,
         aliases = aliases.filter { alias -> alias.itemId in itemIds },
         photos = photos,
+        voiceLabels = mergeById(
+            local = local.voiceLabels,
+            incoming = incoming.voiceLabels,
+            idOf = { label -> label.id.value },
+            entityType = ChangeEntityType.VOICE_LABEL_ASSET,
+            resolutions = resolutions,
+            versionOf = { label -> label.version.value },
+            copyIncoming = { label -> label },
+        ),
         locationPhotos = mergeById(
             local = local.locationPhotos,
             incoming = incoming.locationPhotos,
@@ -558,7 +567,16 @@ private fun collectRestoredMedia(
             bytes = payload.bytes,
         )
     }
-    return itemMedia + locationMedia
+    val voiceMedia = target.voiceLabels.mapNotNull { label ->
+        val payload = payloadByKey[label.storageKey] ?: return@mapNotNull null
+        RestoredMedia(
+            storageKey = label.storageKey,
+            thumbnailStorageKey = "",
+            bytes = payload.bytes,
+            isAudio = true,
+        )
+    }
+    return itemMedia + locationMedia + voiceMedia
 }
 
 private suspend fun writeMedia(
@@ -566,11 +584,18 @@ private suspend fun writeMedia(
     media: List<RestoredMedia>,
 ) {
     media.forEach { item ->
-        mediaFileStore.writeRestoredPhoto(
-            storageKey = item.storageKey,
-            thumbnailStorageKey = item.thumbnailStorageKey,
-            bytes = item.bytes,
-        )
+        if (item.isAudio) {
+            mediaFileStore.writeRestoredAudio(
+                storageKey = item.storageKey,
+                bytes = item.bytes,
+            )
+        } else {
+            mediaFileStore.writeRestoredPhoto(
+                storageKey = item.storageKey,
+                thumbnailStorageKey = item.thumbnailStorageKey,
+                bytes = item.bytes,
+            )
+        }
     }
 }
 
@@ -630,6 +655,7 @@ private data class RestoredMedia(
     val storageKey: String,
     val thumbnailStorageKey: String,
     val bytes: ByteArray,
+    val isAudio: Boolean = false,
 )
 
 private val BACKUP_JSON = Json {

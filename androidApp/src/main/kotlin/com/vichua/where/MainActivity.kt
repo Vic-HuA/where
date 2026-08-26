@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as WhereApplication).container
         val photoPickerGateway = AndroidPhotoPickerGateway(this)
+        val voiceLabelGateway = AndroidVoiceLabelGateway(this)
         textToSpeechGateway = AndroidTextToSpeechGateway(this)
         val hapticFeedbackGateway = AndroidHapticFeedbackGateway(this)
         val shareGateway = AndroidShareGateway(this)
@@ -70,6 +71,10 @@ class MainActivity : ComponentActivity() {
                 importLocationPhotoUseCase = container.importLocationPhotoUseCase,
                 addLocationPhotoUseCase = container.addLocationPhotoUseCase,
                 deleteLocationPhotoUseCase = container.deleteLocationPhotoUseCase,
+                voiceLabelGateway = voiceLabelGateway,
+                importVoiceLabelUseCase = container.importVoiceLabelUseCase,
+                saveVoiceLabelUseCase = container.saveVoiceLabelUseCase,
+                deleteVoiceLabelUseCase = container.deleteVoiceLabelUseCase,
                 loadAccessibilityPreferencesUseCase = container.loadAccessibilityPreferencesUseCase,
                 updateAccessibilityPreferencesUseCase = container.updateAccessibilityPreferencesUseCase,
                 loadAppPreferencesUseCase = container.loadAppPreferencesUseCase,

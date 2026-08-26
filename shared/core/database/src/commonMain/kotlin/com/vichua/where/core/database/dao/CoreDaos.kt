@@ -17,6 +17,7 @@ import com.vichua.where.core.database.entity.ItemLocationEventEntity
 import com.vichua.where.core.database.entity.LocationNodeEntity
 import com.vichua.where.core.database.entity.LocationPhotoAssetEntity
 import com.vichua.where.core.database.entity.PhotoAssetEntity
+import com.vichua.where.core.database.entity.VoiceLabelAssetEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -546,6 +547,75 @@ interface LocationPhotoAssetDao {
 
     /** 删除家庭全部位置照片元数据，供替换恢复或清除使用。 */
     @Query("DELETE FROM location_photo_assets WHERE household_id = :householdId")
+    suspend fun deleteByHousehold(householdId: String): Int
+}
+
+/**
+ * 语音名称的数据访问接口。
+ */
+@Dao
+interface VoiceLabelAssetDao {
+    /** 批量插入语音名称元数据，文件转正由事务编排层在提交后处理。 */
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(entities: List<VoiceLabelAssetEntity>)
+
+    /** 更新完整性或软删除状态。 */
+    @Update
+    suspend fun update(entity: VoiceLabelAssetEntity): Int
+
+    /** 查询位置全部语音名称，包括软删除记录。 */
+    @Query(
+        """
+        SELECT * FROM voice_label_assets
+        WHERE location_node_id = :locationNodeId
+        ORDER BY updated_at DESC, id ASC
+        """,
+    )
+    suspend fun findAllByLocation(locationNodeId: String): List<VoiceLabelAssetEntity>
+
+    /** 查询物品全部语音名称，包括软删除记录。 */
+    @Query(
+        """
+        SELECT * FROM voice_label_assets
+        WHERE item_id = :itemId
+        ORDER BY updated_at DESC, id ASC
+        """,
+    )
+    suspend fun findAllByItem(itemId: String): List<VoiceLabelAssetEntity>
+
+    /** 批量查询位置当前未删除语音名称。 */
+    @Query(
+        """
+        SELECT * FROM voice_label_assets
+        WHERE location_node_id IN (:locationNodeIds)
+          AND deleted_at IS NULL
+        ORDER BY location_node_id ASC, id ASC
+        """,
+    )
+    suspend fun findActiveByLocations(locationNodeIds: List<String>): List<VoiceLabelAssetEntity>
+
+    /** 查询物品当前未删除语音名称。 */
+    @Query(
+        """
+        SELECT * FROM voice_label_assets
+        WHERE item_id = :itemId AND deleted_at IS NULL
+        ORDER BY id ASC
+        """,
+    )
+    suspend fun findActiveByItem(itemId: String): List<VoiceLabelAssetEntity>
+
+    /** 查询家庭全部语音名称，包括软删除记录，供加密备份快照使用。 */
+    @Query(
+        """
+        SELECT * FROM voice_label_assets
+        WHERE household_id = :householdId
+        ORDER BY id ASC
+        """,
+    )
+    suspend fun findAllByHousehold(householdId: String): List<VoiceLabelAssetEntity>
+
+    /** 删除家庭全部语音名称元数据，供替换恢复或清除使用。 */
+    @Query("DELETE FROM voice_label_assets WHERE household_id = :householdId")
     suspend fun deleteByHousehold(householdId: String): Int
 }
 

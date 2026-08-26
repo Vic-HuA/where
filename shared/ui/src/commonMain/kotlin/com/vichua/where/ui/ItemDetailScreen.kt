@@ -136,6 +136,9 @@ fun ItemDetailScreen(
     deletionErrorMessage: String?,
     onDeleteItem: () -> Unit,
     elderFriendlyMode: Boolean = false,
+    onRecordVoiceLabel: () -> Unit = {},
+    onPlayVoiceLabel: () -> Unit = {},
+    onDeleteVoiceLabel: () -> Unit = {},
 ) {
     var selectedPhotoIndex by remember(detail?.itemId) { mutableIntStateOf(0) }
     var lastPhotoCount by remember(detail?.itemId) { mutableIntStateOf(detail?.photos?.size ?: 0) }
@@ -414,6 +417,24 @@ fun ItemDetailScreen(
                     modifier = Modifier.padding(start = 4.dp),
                     text = "再听一遍",
                 )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            TextButton(onClick = onRecordVoiceLabel) {
+                Text(if (detail.voiceLabelStorageKey == null) "录制语音名称" else "重录语音名称")
+            }
+            if (detail.voiceLabelStorageKey != null) {
+                TextButton(onClick = onPlayVoiceLabel) {
+                    Text("试听语音名称")
+                }
+                TextButton(onClick = onDeleteVoiceLabel) {
+                    Text("删除语音名称")
+                }
             }
         }
         if (speechErrorMessage != null) {

@@ -20,6 +20,7 @@ import com.vichua.where.core.database.dao.ItemSearchDao
 import com.vichua.where.core.database.dao.LocationNodeDao
 import com.vichua.where.core.database.dao.LocationPhotoAssetDao
 import com.vichua.where.core.database.dao.PhotoAssetDao
+import com.vichua.where.core.database.dao.VoiceLabelAssetDao
 import com.vichua.where.core.database.entity.CategoryEntity
 import com.vichua.where.core.database.entity.ChangeRecordEntity
 import com.vichua.where.core.database.entity.DeviceEntity
@@ -32,6 +33,7 @@ import com.vichua.where.core.database.entity.ItemLocationEventEntity
 import com.vichua.where.core.database.entity.ItemSearchFtsEntity
 import com.vichua.where.core.database.entity.LocationNodeEntity
 import com.vichua.where.core.database.entity.LocationPhotoAssetEntity
+import com.vichua.where.core.database.entity.VoiceLabelAssetEntity
 import com.vichua.where.core.database.entity.LocalAccessibilityPreferencesEntity
 import com.vichua.where.core.database.entity.LocalBackupRecordEntity
 import com.vichua.where.core.database.entity.LocalSearchHistoryEntity
@@ -52,6 +54,7 @@ import com.vichua.where.core.database.entity.PhotoAssetEntity
         ItemAliasEntity::class,
         PhotoAssetEntity::class,
         LocationPhotoAssetEntity::class,
+        VoiceLabelAssetEntity::class,
         ItemLocationEventEntity::class,
         ItemDraftEntity::class,
         ChangeRecordEntity::class,
@@ -68,6 +71,7 @@ import com.vichua.where.core.database.entity.PhotoAssetEntity
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
+        AutoMigration(from = 5, to = 6),
     ],
 )
 @ConstructedBy(WhereDatabaseConstructor::class)
@@ -96,6 +100,9 @@ abstract class WhereDatabase : RoomDatabase() {
     /** 返回位置代表照片 DAO。 */
     abstract fun locationPhotoAssetDao(): LocationPhotoAssetDao
 
+    /** 返回语音名称 DAO。 */
+    abstract fun voiceLabelAssetDao(): VoiceLabelAssetDao
+
     /** 返回位置历史 DAO。 */
     abstract fun itemLocationEventDao(): ItemLocationEventDao
 
@@ -119,7 +126,7 @@ abstract class WhereDatabase : RoomDatabase() {
 
     companion object {
         /** 当前 Room Schema 版本。 */
-        const val VERSION = 5
+        const val VERSION = 6
 
         /** 各平台使用的稳定数据库文件名。 */
         const val FILE_NAME = "where.db"

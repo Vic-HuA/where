@@ -19,6 +19,7 @@ import com.vichua.where.core.database.transaction.ItemDeletionStore
 import com.vichua.where.core.database.transaction.ItemDraftStore
 import com.vichua.where.core.database.transaction.LocationManagementStore
 import com.vichua.where.core.database.transaction.LocationPhotoStore
+import com.vichua.where.core.database.transaction.VoiceLabelStore
 import com.vichua.where.core.database.transaction.ManualItemCreationStore
 import com.vichua.where.core.database.transaction.ItemMovementStore
 import com.vichua.where.core.database.transaction.ItemPhotoStore
@@ -52,6 +53,9 @@ import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
 import com.vichua.where.feature.location.photo.AddLocationPhotoUseCase
 import com.vichua.where.feature.location.photo.DeleteLocationPhotoUseCase
 import com.vichua.where.feature.location.photo.ImportLocationPhotoUseCase
+import com.vichua.where.feature.location.voice.DeleteVoiceLabelUseCase
+import com.vichua.where.feature.location.voice.ImportVoiceLabelUseCase
+import com.vichua.where.feature.location.voice.SaveVoiceLabelUseCase
 import com.vichua.where.feature.location.management.RenameLocationUseCase
 import com.vichua.where.feature.location.movement.MoveItemUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
@@ -114,6 +118,8 @@ class AndroidAppContainer(
         RoomLocationManagementRepository(LocationManagementStore(database))
     private val locationPhotoRepository =
         RoomLocationPhotoRepository(LocationPhotoStore(database))
+    private val voiceLabelRepository =
+        RoomVoiceLabelRepository(VoiceLabelStore(database))
     private val accessibilityPreferencesRepository =
         RoomAccessibilityPreferencesRepository(
             store = AccessibilityPreferencesStore(database),
@@ -336,7 +342,22 @@ class AndroidAppContainer(
         clock = AndroidEpochMillisecondsClock,
     )
 
-    /** 删除位置当前代表照。 */
+    /** 把短录音写入临时目录供语音名称使用。 */
+    val importVoiceLabelUseCase = ImportVoiceLabelUseCase(mediaFileStore)
+
+    val saveVoiceLabelUseCase = SaveVoiceLabelUseCase(
+        repository = voiceLabelRepository,
+        mediaFileStore = mediaFileStore,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
+    val deleteVoiceLabelUseCase = DeleteVoiceLabelUseCase(
+        repository = voiceLabelRepository,
+        idGenerator = AndroidUniqueIdGenerator(),
+        clock = AndroidEpochMillisecondsClock,
+    )
+
     val deleteLocationPhotoUseCase = DeleteLocationPhotoUseCase(
         repository = locationPhotoRepository,
         idGenerator = AndroidUniqueIdGenerator(),

@@ -30,6 +30,7 @@ data class StoredItemDetail(
     val sourceDeviceName: String,
     val photos: List<PhotoAsset>,
     val locationHistory: List<ItemLocationEvent>,
+    val voiceLabelStorageKey: String? = null,
 )
 
 /**
@@ -70,6 +71,10 @@ class ItemDetailStore(
             locationHistory = database.itemLocationEventDao()
                 .findActiveByItem(item.id.value)
                 .map { entity -> entity.toDomain() },
+            voiceLabelStorageKey = database.voiceLabelAssetDao()
+                .findActiveByItem(item.id.value)
+                .firstOrNull()
+                ?.storageKey,
         )
     }
 

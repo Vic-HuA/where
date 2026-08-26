@@ -75,6 +75,7 @@ data class ItemDetail(
     val photos: List<ItemDetailPhoto>,
     val locationHistory: List<ItemDetailLocationHistory>,
     val locationUnconfirmed: Boolean = false,
+    val voiceLabelStorageKey: String? = null,
 )
 
 /**

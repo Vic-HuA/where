@@ -169,3 +169,54 @@ data class LocationPhotoAsset(
         }
     }
 }
+
+/**
+ * 用户主动保存的短语音名称。
+ *
+ * 只关联位置或物品其中之一；识别过程中的原始录音不得写入本实体。
+ */
+@Serializable
+data class VoiceLabelAsset(
+    val id: VoiceLabelAssetId,
+    val householdId: HouseholdId,
+    val locationNodeId: LocationNodeId? = null,
+    val itemId: ItemId? = null,
+    val storageKey: String,
+    val mimeType: String,
+    val durationMillis: Long,
+    val sizeBytes: Long,
+    val contentHash: String,
+    val integrityStatus: MediaIntegrityStatus = MediaIntegrityStatus.UNCHECKED,
+    val lastIntegrityCheckedAt: UtcTimestamp? = null,
+    val createdAt: UtcTimestamp,
+    val updatedAt: UtcTimestamp,
+    val version: EntityVersion,
+    val sourceDeviceId: DeviceId,
+    val deletedAt: UtcTimestamp? = null,
+) {
+    init {
+        require((locationNodeId == null) != (itemId == null)) {
+            "Voice label must belong to exactly one location or item."
+        }
+        require(storageKey.isNotBlank()) { "Voice label storage key must not be blank." }
+        require(mimeType.isNotBlank()) { "Voice label MIME type must not be blank." }
+        require(durationMillis > 0L) { "Voice label duration must be greater than zero." }
+        require(sizeBytes > 0L) { "Voice label size must be greater than zero." }
+        require(contentHash.isNotBlank()) { "Voice label content hash must not be blank." }
+        require(
+            integrityStatus == MediaIntegrityStatus.UNCHECKED ||
+                lastIntegrityCheckedAt != null,
+        ) {
+            "Checked voice label integrity status requires a check timestamp."
+        }
+        require(lastIntegrityCheckedAt == null || lastIntegrityCheckedAt >= createdAt) {
+            "Voice label integrity check time must not precede import time."
+        }
+        require(updatedAt >= createdAt) {
+            "Voice label update time must not precede import time."
+        }
+        require(deletedAt == null || deletedAt >= createdAt) {
+            "Voice label deletion time must not precede import time."
+        }
+    }
+}

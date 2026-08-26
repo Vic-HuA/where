@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.vichua.where.core.platform.ControlledMediaFileStore
+import com.vichua.where.core.platform.ImportedAudioFile
 import com.vichua.where.core.platform.ImportedMediaFile
 import com.vichua.where.core.platform.MediaFilePromotion
 import com.vichua.where.core.platform.StorageKeys
@@ -114,6 +115,40 @@ class AndroidControlledMediaFileStore(
     /**
      * 把恢复包中的原图写到正式标识，并按现有规则重建缩略图。
      */
+    override suspend fun importAudio(
+        bytes: ByteArray,
+        sourceMimeType: String?,
+        durationMillis: Long,
+    ): ImportedAudioFile = withContext(Dispatchers.IO) {
+        require(bytes.isNotEmpty()) { "Imported audio bytes must not be empty." }
+        require(bytes.size <= MAX_AUDIO_IMPORT_BYTES) { "Imported audio exceeds the size limit." }
+        require(durationMillis > 0L) { "Imported audio duration must be greater than zero." }
+        val mimeType = when (sourceMimeType?.lowercase()) {
+            "audio/mp4", "audio/m4a", "audio/x-m4a" -> "audio/mp4"
+            "audio/aac" -> "audio/aac"
+            else -> "audio/mp4"
+        }
+        val importId = UUID.randomUUID().toString()
+        val tempKey = StorageKeys.tempAudio(importId, "m4a")
+        writeAtomically(resolveExistingOrCreate(tempKey), bytes)
+        ImportedAudioFile(
+            tempStorageKey = tempKey,
+            mimeType = mimeType,
+            durationMillis = durationMillis,
+            sizeBytes = bytes.size.toLong(),
+            contentHash = sha256Hex(bytes),
+        )
+    }
+
+    override suspend fun writeRestoredAudio(
+        storageKey: String,
+        bytes: ByteArray,
+    ) = withContext(Dispatchers.IO) {
+        require(bytes.isNotEmpty()) { "Restored audio bytes must not be empty." }
+        StorageKeys.validate(storageKey)
+        writeAtomically(resolveExistingOrCreate(storageKey), bytes)
+    }
+
     override suspend fun writeRestoredPhoto(
         storageKey: String,
         thumbnailStorageKey: String,
@@ -286,6 +321,7 @@ class AndroidControlledMediaFileStore(
     private companion object {
         const val MEDIA_DIRECTORY_NAME = "media"
         const val MAX_IMPORT_BYTES = 15 * 1024 * 1024
+        const val MAX_AUDIO_IMPORT_BYTES = 2 * 1024 * 1024
         const val THUMBNAIL_MAX_EDGE = 256
         const val THUMBNAIL_JPEG_QUALITY = 80
     }

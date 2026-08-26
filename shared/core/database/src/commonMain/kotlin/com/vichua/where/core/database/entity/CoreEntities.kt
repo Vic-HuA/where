@@ -474,6 +474,75 @@ data class LocationPhotoAssetEntity(
 )
 
 /**
+ * 语音名称的 Room 持久化结构。
+ *
+ * location_node_id 与 item_id 必须且只能有一个非空，由写入层校验。
+ */
+@Entity(
+    tableName = "voice_label_assets",
+    foreignKeys = [
+        ForeignKey(
+            entity = HouseholdEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["household_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+        ForeignKey(
+            entity = LocationNodeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["location_node_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+        ForeignKey(
+            entity = ItemEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["item_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+    indices = [
+        Index(value = ["location_node_id", "deleted_at"]),
+        Index(value = ["item_id", "deleted_at"]),
+        Index(value = ["content_hash"]),
+        Index(value = ["integrity_status", "deleted_at"]),
+        Index(value = ["household_id"]),
+    ],
+)
+data class VoiceLabelAssetEntity(
+    @PrimaryKey
+    val id: String,
+    @ColumnInfo(name = "household_id")
+    val householdId: String,
+    @ColumnInfo(name = "location_node_id")
+    val locationNodeId: String?,
+    @ColumnInfo(name = "item_id")
+    val itemId: String?,
+    @ColumnInfo(name = "storage_key")
+    val storageKey: String,
+    @ColumnInfo(name = "mime_type")
+    val mimeType: String,
+    @ColumnInfo(name = "duration_millis")
+    val durationMillis: Long,
+    @ColumnInfo(name = "size_bytes")
+    val sizeBytes: Long,
+    @ColumnInfo(name = "content_hash")
+    val contentHash: String,
+    @ColumnInfo(name = "integrity_status")
+    val integrityStatus: String,
+    @ColumnInfo(name = "last_integrity_checked_at")
+    val lastIntegrityCheckedAt: Long?,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long,
+    val version: Long,
+    @ColumnInfo(name = "source_device_id")
+    val sourceDeviceId: String,
+    @ColumnInfo(name = "deleted_at")
+    val deletedAt: Long?,
+)
+
+/**
  * 物品位置历史的 Room 持久化结构。
  *
  * @property id 位置事件全局唯一 ID。

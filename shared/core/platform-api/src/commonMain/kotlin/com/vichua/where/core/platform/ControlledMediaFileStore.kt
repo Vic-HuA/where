@@ -50,6 +50,84 @@ data class MediaFilePromotion(
 }
 
 /**
+ * 一次成功导入后的临时音频文件。
+ *
+ * 正式 storageKey 在保存语音名称时生成，数据库事务成功后再转正。
+ */
+data class ImportedAudioFile(
+    val tempStorageKey: String,
+    val mimeType: String,
+    val durationMillis: Long,
+    val sizeBytes: Long,
+    val contentHash: String,
+) {
+    init {
+        StorageKeys.validate(tempStorageKey)
+        require(mimeType.isNotBlank()) { "Imported audio MIME type must not be blank." }
+        require(durationMillis > 0L) { "Imported audio duration must be greater than zero." }
+        require(sizeBytes > 0L) { "Imported audio size must be greater than zero." }
+        require(contentHash.isNotBlank()) { "Imported audio hash must not be blank." }
+    }
+}
+
+/**
+ * 用户主动录制并确认保存的短语音。
+ */
+data class RecordedVoiceLabel(
+    val bytes: ByteArray,
+    val mimeType: String,
+    val durationMillis: Long,
+) {
+    init {
+        require(bytes.isNotEmpty()) { "Recorded voice label must not be empty." }
+        require(mimeType.isNotBlank()) { "Recorded voice label MIME type must not be blank." }
+        require(durationMillis > 0L) { "Recorded voice label duration must be greater than zero." }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is RecordedVoiceLabel) return false
+        return bytes.contentEquals(other.bytes) &&
+            mimeType == other.mimeType &&
+            durationMillis == other.durationMillis
+    }
+
+    override fun hashCode(): Int {
+        return 31 * bytes.contentHashCode() + mimeType.hashCode() + durationMillis.hashCode()
+    }
+}
+
+/**
+ * 录制和试听语音名称。识别用的原始录音不得走这条接口。
+ */
+interface VoiceLabelGateway {
+    /**
+     * 开始录制短语音名称。已在录制时拒绝。
+     */
+    suspend fun startRecording()
+
+    /**
+     * 停止录制并返回音频；时长过短或失败时为空。
+     */
+    suspend fun stopRecording(): RecordedVoiceLabel?
+
+    /**
+     * 试听尚未保存的录音。
+     */
+    suspend fun preview(bytes: ByteArray, mimeType: String)
+
+    /**
+     * 播放已保存的语音名称。
+     */
+    suspend fun play(absolutePath: String)
+
+    /**
+     * 停止当前试听或播放。
+     */
+    fun stopPlayback()
+}
+
+/**
  * 系统相册返回的原始图片字节。
  *
  * @property bytes 图片完整字节，调用方负责在导入后丢弃。
@@ -130,6 +208,25 @@ interface ControlledMediaFileStore {
     suspend fun readBytes(storageKey: String): ByteArray?
 
     /**
+     * 把用户录制的短音频写入临时目录。
+     *
+     * 正式语音名称 ID 在保存时再确定，因此这里只写临时文件。
+     */
+    suspend fun importAudio(
+        bytes: ByteArray,
+        sourceMimeType: String?,
+        durationMillis: Long,
+    ): ImportedAudioFile
+
+    /**
+     * 按备份中的正式标识写入音频，不生成缩略图。
+     */
+    suspend fun writeRestoredAudio(
+        storageKey: String,
+        bytes: ByteArray,
+    )
+
+    /**
      * 按备份中的正式标识写入原图并重建缩略图。
      *
      * 只用于恢复回滚和正式应用，不允许写入临时目录以外的任意路径。
@@ -160,9 +257,10 @@ object StorageKeys {
         require(
             storageKey.startsWith("tmp/") ||
                 storageKey.startsWith("items/") ||
-                storageKey.startsWith("locations/"),
+                storageKey.startsWith("locations/") ||
+                storageKey.startsWith("voice/"),
         ) {
-            "Storage key must stay inside tmp, items, or locations directories."
+            "Storage key must stay inside tmp, items, locations, or voice directories."
         }
     }
 
@@ -183,6 +281,44 @@ object StorageKeys {
         require(itemId.isNotBlank()) { "Item ID for storage key must not be blank." }
         require(photoId.isNotBlank()) { "Photo ID for storage key must not be blank." }
         return "items/$itemId/thumb-$photoId.jpg".also(::validate)
+    }
+
+    /**
+     * 生成导入阶段音频临时标识。
+     */
+    fun tempAudio(importId: String, extension: String): String {
+        require(importId.isNotBlank()) { "Import ID for storage key must not be blank." }
+        val safeExtension = normalizeAudioExtension(extension)
+        return "tmp/$importId.$safeExtension".also(::validate)
+    }
+
+    /**
+     * 生成位置语音名称正式标识。
+     */
+    fun locationVoice(locationNodeId: String, labelId: String): String {
+        require(locationNodeId.isNotBlank()) { "Location ID for storage key must not be blank." }
+        require(labelId.isNotBlank()) { "Voice label ID for storage key must not be blank." }
+        return "voice/locations/$locationNodeId/$labelId.m4a".also(::validate)
+    }
+
+    /**
+     * 生成物品语音名称正式标识。
+     */
+    fun itemVoice(itemId: String, labelId: String): String {
+        require(itemId.isNotBlank()) { "Item ID for storage key must not be blank." }
+        require(labelId.isNotBlank()) { "Voice label ID for storage key must not be blank." }
+        return "voice/items/$itemId/$labelId.m4a".also(::validate)
+    }
+
+    /**
+     * 只允许短语音使用的受控扩展名。
+     */
+    fun normalizeAudioExtension(extension: String): String {
+        return when (extension.lowercase().removePrefix(".")) {
+            "m4a", "mp4" -> "m4a"
+            "aac" -> "aac"
+            else -> error("Unsupported audio file extension.")
+        }
     }
 
     /**

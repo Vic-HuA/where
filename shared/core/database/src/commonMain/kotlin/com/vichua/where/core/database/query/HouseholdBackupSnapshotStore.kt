@@ -30,6 +30,9 @@ class HouseholdBackupSnapshotStore(
             locationPhotos = database.locationPhotoAssetDao()
                 .findAllByHousehold(householdId)
                 .map { it.toDomain() },
+            voiceLabels = database.voiceLabelAssetDao()
+                .findAllByHousehold(householdId)
+                .map { it.toDomain() },
             locationEvents = database.itemLocationEventDao()
                 .findAllByHousehold(householdId)
                 .map { it.toDomain() },

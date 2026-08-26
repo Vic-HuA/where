@@ -125,6 +125,7 @@ data class HouseholdBackupSnapshot(
     val aliases: List<ItemAlias>,
     val photos: List<PhotoAsset>,
     val locationPhotos: List<LocationPhotoAsset> = emptyList(),
+    val voiceLabels: List<VoiceLabelAsset> = emptyList(),
     val locationEvents: List<ItemLocationEvent>,
     val changeRecords: List<ChangeRecord>,
     val favoriteLocations: List<FavoriteLocation>,
@@ -141,6 +142,9 @@ data class HouseholdBackupSnapshot(
         }
         require(locationPhotos.all { photo -> photo.householdId == household.id }) {
             "Backup snapshot location photos must belong to the household."
+        }
+        require(voiceLabels.all { label -> label.householdId == household.id }) {
+            "Backup snapshot voice labels must belong to the household."
         }
     }
 }

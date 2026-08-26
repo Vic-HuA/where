@@ -54,6 +54,8 @@ data class LocationTreeNode(
     val canDelete: Boolean,
     val allowedChildTypes: List<LocationType>,
     val coverThumbnailStorageKey: String? = null,
+    val hasVoiceLabel: Boolean = false,
+    val voiceLabelStorageKey: String? = null,
 )
 
 /**

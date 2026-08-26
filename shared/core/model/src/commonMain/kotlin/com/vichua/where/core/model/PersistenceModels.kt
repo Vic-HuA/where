@@ -61,6 +61,9 @@ enum class ChangeEntityType {
     /** 位置代表照片。 */
     LOCATION_PHOTO_ASSET,
 
+    /** 用户主动保存的语音名称。 */
+    VOICE_LABEL_ASSET,
+
     /** 物品位置历史。 */
     ITEM_LOCATION_EVENT,
 

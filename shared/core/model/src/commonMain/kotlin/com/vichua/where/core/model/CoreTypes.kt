@@ -107,6 +107,19 @@ value class LocationPhotoAssetId(val value: String) {
 }
 
 /**
+ * 语音名称记录的全局唯一标识。
+ *
+ * @property value 客户端生成且不包含文件路径的标识文本。
+ */
+@Serializable
+@JvmInline
+value class VoiceLabelAssetId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Voice label asset ID must not be blank." }
+    }
+}
+
+/**
  * 位置历史事件的全局唯一标识。
  *
  * @property value 客户端生成的标识文本。

@@ -76,9 +76,14 @@ import com.vichua.where.feature.location.management.DeleteEmptyLocationUseCase
 import com.vichua.where.feature.location.management.LoadLocationTreeUseCase
 import com.vichua.where.feature.location.management.LocationTreeSnapshot
 import com.vichua.where.feature.location.management.RenameLocationUseCase
+import com.vichua.where.core.platform.RecordedVoiceLabel
+import com.vichua.where.core.platform.VoiceLabelGateway
 import com.vichua.where.feature.location.photo.AddLocationPhotoUseCase
 import com.vichua.where.feature.location.photo.DeleteLocationPhotoUseCase
 import com.vichua.where.feature.location.photo.ImportLocationPhotoUseCase
+import com.vichua.where.feature.location.voice.DeleteVoiceLabelUseCase
+import com.vichua.where.feature.location.voice.ImportVoiceLabelUseCase
+import com.vichua.where.feature.location.voice.SaveVoiceLabelUseCase
 import com.vichua.where.feature.location.movement.LoadMoveItemContextUseCase
 import com.vichua.where.feature.location.movement.MoveItemContext
 import com.vichua.where.feature.location.movement.MoveItemUseCase
@@ -236,6 +241,10 @@ fun WhereApp(
     importLocationPhotoUseCase: ImportLocationPhotoUseCase,
     addLocationPhotoUseCase: AddLocationPhotoUseCase,
     deleteLocationPhotoUseCase: DeleteLocationPhotoUseCase,
+    voiceLabelGateway: VoiceLabelGateway,
+    importVoiceLabelUseCase: ImportVoiceLabelUseCase,
+    saveVoiceLabelUseCase: SaveVoiceLabelUseCase,
+    deleteVoiceLabelUseCase: DeleteVoiceLabelUseCase,
     loadAccessibilityPreferencesUseCase: LoadAccessibilityPreferencesUseCase,
     updateAccessibilityPreferencesUseCase: UpdateAccessibilityPreferencesUseCase,
     loadAppPreferencesUseCase: LoadAppPreferencesUseCase,
@@ -384,6 +393,12 @@ fun WhereApp(
     var locationTreeLoading by remember { mutableStateOf(false) }
     var locationTreeSubmitting by remember { mutableStateOf(false) }
     var locationTreeError by remember { mutableStateOf<String?>(null) }
+    var voiceLabelLocationId by remember { mutableStateOf<LocationNodeId?>(null) }
+    var voiceLabelItemId by remember { mutableStateOf<ItemId?>(null) }
+    var voiceRecording by remember { mutableStateOf(false) }
+    var voicePreview by remember { mutableStateOf<RecordedVoiceLabel?>(null) }
+    var voiceLabelError by remember { mutableStateOf<String?>(null) }
+    var voiceLabelSubmitting by remember { mutableStateOf(false) }
     var locationTreeAttempt by remember { mutableIntStateOf(0) }
     var accessibilityPreferences by remember {
         mutableStateOf<LocalAccessibilityPreferences?>(null)
@@ -1551,6 +1566,36 @@ fun WhereApp(
                             }
                         }
                     },
+                    onRecordVoice = { node ->
+                        voiceLabelLocationId = node.locationId
+                        voiceLabelItemId = null
+                        voicePreview = null
+                        voiceLabelError = null
+                    },
+                    onPlayVoice = { node ->
+                        val path = node.voiceLabelStorageKey?.let(resolveMediaPath)
+                        if (path != null) {
+                            coroutineScope.launch {
+                                runCatching { voiceLabelGateway.play(path) }
+                            }
+                        }
+                    },
+                    onDeleteVoice = { node ->
+                        if (!locationTreeSubmitting) {
+                            coroutineScope.launch {
+                                locationTreeSubmitting = true
+                                locationTreeError = null
+                                try {
+                                    deleteVoiceLabelUseCase.deleteForLocation(node.locationId)
+                                    locationTree = loadLocationTreeUseCase()
+                                } catch (_: Exception) {
+                                    locationTreeError = "删除语音名称失败，请稍后重试。"
+                                } finally {
+                                    locationTreeSubmitting = false
+                                }
+                            }
+                        }
+                    },
                     onLocationUnconfirmedClick = {
                         navigateTo(AppDestination.UNCONFIRMED_ITEMS)
                     },
@@ -2009,6 +2054,32 @@ fun WhereApp(
                     onBack = {
                         leaveItemDetailAndPop()
                     },
+                    onRecordVoiceLabel = {
+                        val detail = itemDetail ?: return@ItemDetailScreen
+                        voiceLabelItemId = detail.itemId
+                        voiceLabelLocationId = null
+                        voicePreview = null
+                        voiceLabelError = null
+                    },
+                    onPlayVoiceLabel = {
+                        val path = itemDetail?.voiceLabelStorageKey?.let(resolveMediaPath)
+                        if (path != null) {
+                            coroutineScope.launch {
+                                runCatching { voiceLabelGateway.play(path) }
+                            }
+                        }
+                    },
+                    onDeleteVoiceLabel = {
+                        val itemId = itemDetail?.itemId ?: return@ItemDetailScreen
+                        coroutineScope.launch {
+                            try {
+                                deleteVoiceLabelUseCase.deleteForItem(itemId)
+                                itemDetail = loadItemDetailUseCase(itemId)
+                            } catch (_: Exception) {
+                                itemDetailError = "删除语音名称失败，请稍后重试。"
+                            }
+                        }
+                    },
                     onReadLocation = {
                         val detail = itemDetail
                         if (detail != null && !itemSpeechSubmitting) {
@@ -2320,6 +2391,93 @@ fun WhereApp(
                     },
                 )
             }
+            }
+            if (voiceLabelLocationId != null || voiceLabelItemId != null) {
+                VoiceLabelRecordDialog(
+                    title = "录制语音名称",
+                    recording = voiceRecording,
+                    hasPreview = voicePreview != null,
+                    submitting = voiceLabelSubmitting,
+                    errorMessage = voiceLabelError,
+                    onStart = {
+                        coroutineScope.launch {
+                            voiceLabelError = null
+                            try {
+                                voiceLabelGateway.startRecording()
+                                voiceRecording = true
+                                voicePreview = null
+                            } catch (_: Exception) {
+                                voiceLabelError = "无法开始录音，请检查麦克风权限。"
+                            }
+                        }
+                    },
+                    onStop = {
+                        coroutineScope.launch {
+                            try {
+                                voicePreview = voiceLabelGateway.stopRecording()
+                                if (voicePreview == null) {
+                                    voiceLabelError = "录音太短，请再说一遍。"
+                                }
+                            } catch (_: Exception) {
+                                voiceLabelError = "停止录音失败，请重试。"
+                            } finally {
+                                voiceRecording = false
+                            }
+                        }
+                    },
+                    onPreview = {
+                        val preview = voicePreview ?: return@VoiceLabelRecordDialog
+                        coroutineScope.launch {
+                            runCatching {
+                                voiceLabelGateway.preview(preview.bytes, preview.mimeType)
+                            }
+                        }
+                    },
+                    onSave = {
+                        val preview = voicePreview ?: return@VoiceLabelRecordDialog
+                        val locationId = voiceLabelLocationId
+                        val itemId = voiceLabelItemId
+                        coroutineScope.launch {
+                            voiceLabelSubmitting = true
+                            voiceLabelError = null
+                            try {
+                                val imported = importVoiceLabelUseCase.import(
+                                    bytes = preview.bytes,
+                                    mimeType = preview.mimeType,
+                                    durationMillis = preview.durationMillis,
+                                )
+                                if (locationId != null) {
+                                    saveVoiceLabelUseCase.saveForLocation(locationId, imported)
+                                    locationTree = loadLocationTreeUseCase()
+                                } else if (itemId != null) {
+                                    saveVoiceLabelUseCase.saveForItem(itemId, imported)
+                                    itemDetail = loadItemDetailUseCase(itemId)
+                                }
+                                voiceLabelGateway.stopPlayback()
+                                voiceLabelLocationId = null
+                                voiceLabelItemId = null
+                                voicePreview = null
+                            } catch (_: Exception) {
+                                voiceLabelError = "保存语音名称失败，请稍后重试。"
+                            } finally {
+                                voiceLabelSubmitting = false
+                            }
+                        }
+                    },
+                    onDismiss = {
+                        coroutineScope.launch {
+                            if (voiceRecording) {
+                                voiceLabelGateway.stopRecording()
+                                voiceRecording = false
+                            }
+                            voiceLabelGateway.stopPlayback()
+                            voiceLabelLocationId = null
+                            voiceLabelItemId = null
+                            voicePreview = null
+                            voiceLabelError = null
+                        }
+                    },
+                )
             }
             val imageHandler = pendingImageHandler
             if (imageHandler != null) {

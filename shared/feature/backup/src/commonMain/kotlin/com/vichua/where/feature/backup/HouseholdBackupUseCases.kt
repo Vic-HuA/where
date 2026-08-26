@@ -183,7 +183,7 @@ class CreateEncryptedBackupUseCase(
                 snapshotHash = snapshotHash,
                 itemPhotoCount = snapshot.photos.size,
                 locationPhotoCount = snapshot.locationPhotos.size,
-                voiceLabelCount = 0,
+                voiceLabelCount = snapshot.voiceLabels.size,
                 mediaTotalBytes = packedMedia.payloads.sumOf { media -> media.bytes.size.toLong() },
                 mediaFiles = packedMedia.descriptors,
                 encryptionAlgorithm = BackupFormat.ENCRYPTION_ALGORITHM,
@@ -275,6 +275,23 @@ class CreateEncryptedBackupUseCase(
             if (originalBytes != null) {
                 payloads += BackupMediaPayload(
                     storageKey = photo.storageKey,
+                    bytes = originalBytes,
+                )
+            }
+        }
+        snapshot.voiceLabels.forEach { label ->
+            val originalBytes = mediaFileStore.readBytes(label.storageKey)
+            val included = originalBytes != null
+            descriptors += BackupMediaDescriptor(
+                kind = BackupMediaKind.VOICE_LABEL,
+                storageKey = label.storageKey,
+                sizeBytes = label.sizeBytes,
+                contentHash = label.contentHash,
+                included = included,
+            )
+            if (originalBytes != null) {
+                payloads += BackupMediaPayload(
+                    storageKey = label.storageKey,
                     bytes = originalBytes,
                 )
             }
