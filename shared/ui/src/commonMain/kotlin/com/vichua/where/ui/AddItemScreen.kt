@@ -372,7 +372,7 @@ fun AddItemScreen(
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             colors = addItemTextFieldColors(),
-            textStyle = MaterialTheme.typography.bodyMedium,
+            textStyle = MaterialTheme.typography.bodyLarge,
         )
 
         AddItemFieldLabel(
@@ -1259,7 +1259,7 @@ private fun LocationSelectionField(
                 } else {
                     WherePrimaryTextColor
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
             )
         }
     }

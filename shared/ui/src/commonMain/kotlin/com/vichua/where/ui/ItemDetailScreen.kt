@@ -8,7 +8,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +48,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -158,6 +163,7 @@ fun ItemDetailScreen(
     var shareDialogVisible by remember { mutableStateOf(false) }
     var fullscreenVisible by remember { mutableStateOf(false) }
     var moreInformationExpanded by remember { mutableStateOf(false) }
+    var moreMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(detail?.photos?.size) {
         val photoCount = detail?.photos?.size ?: 0
@@ -189,10 +195,113 @@ fun ItemDetailScreen(
                 tint = WherePrimaryTextColor,
             )
             Text(
+                modifier = Modifier.weight(1f),
                 text = "物品详情",
                 color = WherePrimaryTextColor,
                 style = MaterialTheme.typography.titleLarge,
             )
+            Box {
+                Icon(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clickable(
+                            enabled = !shareSubmitting && !deletionSubmitting &&
+                                !photoSubmitting && !editorSubmitting,
+                            role = Role.Button,
+                            onClick = { moreMenuExpanded = true },
+                        )
+                        .padding(12.dp),
+                    imageVector = WhereIcons.More,
+                    contentDescription = "更多操作",
+                    tint = WherePrimaryTextColor,
+                )
+                if (moreMenuExpanded) {
+                    Popup(
+                        alignment = Alignment.TopEnd,
+                        onDismissRequest = { moreMenuExpanded = false },
+                        properties = PopupProperties(focusable = true),
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .padding(top = 48.dp, end = 4.dp)
+                                .width(220.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            color = WhereSurfaceColor,
+                            border = BorderStroke(1.dp, WhereOutlineColor),
+                            shadowElevation = 8.dp,
+                        ) {
+                            Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                                if (detail != null) {
+                                    ItemDetailMoreMenuRow(
+                                        icon = WhereIcons.Pin,
+                                        label = if (detail.isPinned) "取消常用" else "设为常用物品",
+                                        enabled = true,
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            onTogglePinned()
+                                        },
+                                    )
+                                    ItemDetailMoreMenuRow(
+                                        icon = WhereIcons.Microphone,
+                                        label = if (detail.voiceLabelStorageKey == null) {
+                                            "录制语音名称"
+                                        } else {
+                                            "重录语音名称"
+                                        },
+                                        enabled = true,
+                                        onClick = {
+                                            moreMenuExpanded = false
+                                            onRecordVoiceLabel()
+                                        },
+                                    )
+                                    if (detail.voiceLabelStorageKey != null) {
+                                        ItemDetailMoreMenuRow(
+                                            icon = WhereIcons.ReadAloud,
+                                            label = "试听语音名称",
+                                            enabled = true,
+                                            onClick = {
+                                                moreMenuExpanded = false
+                                                onPlayVoiceLabel()
+                                            },
+                                        )
+                                        ItemDetailMoreMenuRow(
+                                            icon = WhereIcons.Delete,
+                                            label = "删除语音名称",
+                                            enabled = true,
+                                            destructive = true,
+                                            onClick = {
+                                                moreMenuExpanded = false
+                                                onDeleteVoiceLabel()
+                                            },
+                                        )
+                                    }
+                                }
+                                ItemDetailMoreMenuRow(
+                                    icon = WhereIcons.Share,
+                                    label = "分享位置",
+                                    enabled = !shareSubmitting && !speechSubmitting &&
+                                        !deletionSubmitting,
+                                    onClick = {
+                                        moreMenuExpanded = false
+                                        shareDialogVisible = true
+                                    },
+                                )
+                                ItemDetailMoreMenuRow(
+                                    icon = WhereIcons.Delete,
+                                    label = "删除物品",
+                                    enabled = !deletionSubmitting && !photoSubmitting &&
+                                        !editorSubmitting,
+                                    destructive = true,
+                                    onClick = {
+                                        moreMenuExpanded = false
+                                        deleteItemConfirmVisible = true
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
         FamilyHelpBanner(
             visible = familyHelpActive,
@@ -437,27 +546,6 @@ fun ItemDetailScreen(
             visible = offerFamilyHelp,
             onClick = onFamilyHelp,
         )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            TextButton(onClick = onTogglePinned) {
-                Text(if (detail.isPinned) "取消常用" else "设为常用物品")
-            }
-            TextButton(onClick = onRecordVoiceLabel) {
-                Text(if (detail.voiceLabelStorageKey == null) "录制语音名称" else "重录语音名称")
-            }
-            if (detail.voiceLabelStorageKey != null) {
-                TextButton(onClick = onPlayVoiceLabel) {
-                    Text("试听语音名称")
-                }
-                TextButton(onClick = onDeleteVoiceLabel) {
-                    Text("删除语音名称")
-                }
-            }
-        }
         if (speechErrorMessage != null) {
             Text(
                 modifier = Modifier.padding(top = 8.dp),
@@ -539,37 +627,22 @@ fun ItemDetailScreen(
                     detail = detail,
                     formatOccurredAt = formatOccurredAt,
                 )
-                ItemDetailShareAndDelete(
-                    shareSubmitting = shareSubmitting,
-                    speechSubmitting = speechSubmitting,
-                    deletionSubmitting = deletionSubmitting,
-                    photoSubmitting = photoSubmitting,
-                    editorSubmitting = editorSubmitting,
-                    shareErrorMessage = shareErrorMessage,
-                    deletionErrorMessage = deletionErrorMessage,
-                    onShare = {
-                        shareDialogVisible = true
-                    },
-                    onDelete = {
-                        deleteItemConfirmVisible = true
-                    },
-                )
             }
-        } else {
-            ItemDetailShareAndDelete(
-                shareSubmitting = shareSubmitting,
-                speechSubmitting = speechSubmitting,
-                deletionSubmitting = deletionSubmitting,
-                photoSubmitting = photoSubmitting,
-                editorSubmitting = editorSubmitting,
-                shareErrorMessage = shareErrorMessage,
-                deletionErrorMessage = deletionErrorMessage,
-                onShare = {
-                    shareDialogVisible = true
-                },
-                onDelete = {
-                    deleteItemConfirmVisible = true
-                },
+        }
+        if (shareErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = shareErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (deletionErrorMessage != null) {
+            Text(
+                modifier = Modifier.padding(top = 8.dp),
+                text = deletionErrorMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }
@@ -1092,70 +1165,44 @@ private fun locationHistoryReasonLabel(reason: ItemLocationReason): String = whe
 }
 
 /**
- * 分享和删除入口；适老详情默认折叠，避免误触危险操作。
+ * 详情右上角更多菜单的一行：固定宽度卡片里放图标和文字，避免 Popup 被拉满屏宽。
  */
 @Composable
-private fun ItemDetailShareAndDelete(
-    shareSubmitting: Boolean,
-    speechSubmitting: Boolean,
-    deletionSubmitting: Boolean,
-    photoSubmitting: Boolean,
-    editorSubmitting: Boolean,
-    shareErrorMessage: String?,
-    deletionErrorMessage: String?,
-    onShare: () -> Unit,
-    onDelete: () -> Unit,
+private fun ItemDetailMoreMenuRow(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
 ) {
-    Button(
+    val contentColor = if (destructive) {
+        MaterialTheme.colorScheme.error
+    } else {
+        WherePrimaryTextColor
+    }
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp)
-            .heightIn(min = 52.dp),
-        enabled = !shareSubmitting && !speechSubmitting && !deletionSubmitting,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = WhereSurfaceColor,
-            contentColor = WherePrimaryTextColor,
-        ),
-        onClick = onShare,
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = WhereIcons.Share,
+            modifier = Modifier.size(20.dp),
+            imageVector = icon,
             contentDescription = null,
+            tint = if (destructive) contentColor else WherePrimaryColor,
         )
         Text(
-            modifier = Modifier.padding(start = 6.dp),
-            text = "分享位置",
+            modifier = Modifier.padding(start = 12.dp),
+            text = label,
+            color = contentColor,
+            style = MaterialTheme.typography.bodyLarge,
         )
-    }
-    if (shareErrorMessage != null) {
-        Text(
-            modifier = Modifier.padding(top = 8.dp),
-            text = shareErrorMessage,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-    if (deletionErrorMessage != null) {
-        Text(
-            modifier = Modifier.padding(top = 10.dp),
-            text = deletionErrorMessage,
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-        )
-    }
-    Button(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 10.dp)
-            .heightIn(min = 52.dp),
-        enabled = !deletionSubmitting && !photoSubmitting && !editorSubmitting,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = WhereSurfaceColor,
-            contentColor = MaterialTheme.colorScheme.error,
-        ),
-        onClick = onDelete,
-    ) {
-        Text("删除物品")
     }
 }
 
@@ -1370,8 +1417,9 @@ private fun EditItemProfileDialog(
 }
 
 /**
- * 分类选项做成一排可点卡片，再点一次可以取消选择。
+ * 分类选项做成自动换行的圆角矩形，再点一次可以取消选择。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ItemCategoryChipRow(
     categories: List<ItemCategoryOption>,
@@ -1379,11 +1427,10 @@ internal fun ItemCategoryChipRow(
     enabled: Boolean,
     onSelect: (CategoryId?) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         categories.forEach { option ->
             val selected = option.categoryId == selectedCategoryId
@@ -1398,15 +1445,21 @@ internal fun ItemCategoryChipRow(
                         },
                     ),
                 color = if (selected) WhereSelectedContainerColor else WhereSurfaceColor,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, if (selected) WherePrimaryColor else WhereOutlineColor),
             ) {
-                Text(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    text = option.name,
-                    color = WherePrimaryTextColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = 40.dp)
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = option.name,
+                        color = WherePrimaryTextColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
     }

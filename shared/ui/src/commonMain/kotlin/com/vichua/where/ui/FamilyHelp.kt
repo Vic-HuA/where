@@ -1,7 +1,10 @@
 package com.vichua.where.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -13,9 +16,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -32,29 +36,41 @@ fun FamilyHelpBanner(
     if (!visible) {
         return
     }
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        color = WhereSelectedContainerColor,
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, WherePrimaryColor),
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "家人正在这台手机上帮忙",
-                color = WherePrimaryTextColor,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                modifier = Modifier.padding(top = 6.dp),
-                text = "现在显示键盘和完整位置，方便家人帮你确认。不会发消息、不会打电话，也不会上传家庭数据。",
-                color = WhereSecondaryTextColor,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            TextButton(onClick = onExit) {
-                Text("返回适老")
+        Text(
+            text = "家人正在帮忙",
+            color = WhereSecondaryTextColor,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Surface(
+            modifier = Modifier
+                .heightIn(min = 40.dp)
+                .clickable(
+                    role = Role.Button,
+                    onClick = onExit,
+                ),
+            color = WhereSelectedContainerColor,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, WherePrimaryColor),
+        ) {
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 40.dp)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "返回适老",
+                    color = WherePrimaryColor,
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
         }
     }

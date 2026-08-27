@@ -154,6 +154,7 @@ fun SearchScreen(
             Button(
                 modifier = Modifier.heightIn(min = 52.dp),
                 enabled = query.isNotBlank() && !searching,
+                shape = RoundedCornerShape(16.dp),
                 onClick = submitSearch,
             ) {
                 Text("查找")

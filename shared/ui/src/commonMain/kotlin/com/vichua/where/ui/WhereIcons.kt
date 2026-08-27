@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PushPin
@@ -100,6 +101,9 @@ object WhereIcons {
 
     /** 返回图标。 */
     val Back: ImageVector = Icons.AutoMirrored.Outlined.ArrowBack
+
+    /** 详情页次要操作的更多菜单图标。 */
+    val More: ImageVector = Icons.Outlined.MoreVert
 
     /** 同一设备上请家人帮助的人物组合图标。 */
     val FamilyHelp: ImageVector = Icons.Outlined.People

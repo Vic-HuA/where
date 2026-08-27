@@ -292,9 +292,7 @@ fun HomeScreen(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    loadedSnapshot.pinnedItems
-                        .take(MAX_VISIBLE_CHIPS)
-                        .forEach { pinned ->
+                    loadedSnapshot.pinnedItems.forEach { pinned ->
                             PinnedItemChip(
                                 pinned = pinned,
                                 resolveMediaPath = resolveMediaPath,
@@ -341,7 +339,7 @@ fun HomeScreen(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    loadedSnapshot.recentSearches.take(MAX_VISIBLE_CHIPS).forEach { search ->
+                    loadedSnapshot.recentSearches.forEach { search ->
                         HomeChip(
                             icon = WhereIcons.Search,
                             text = search.displayQuery,
@@ -364,9 +362,7 @@ fun HomeScreen(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    loadedSnapshot.favoriteLocations
-                        .take(MAX_VISIBLE_CHIPS)
-                        .forEach { favorite ->
+                    loadedSnapshot.favoriteLocations.forEach { favorite ->
                             FavoriteLocationChip(
                                 favorite = favorite,
                                 resolveMediaPath = resolveMediaPath,
@@ -541,6 +537,7 @@ private fun HomeSearchSurface(
             Button(
                 modifier = Modifier.heightIn(min = 56.dp),
                 enabled = query.isNotBlank(),
+                shape = RoundedCornerShape(16.dp),
                 onClick = submitTextSearch,
             ) {
                 Text("查找")
@@ -1021,6 +1018,5 @@ data class HomeDeletionUndo(
     val remainingSeconds: Int,
 )
 
-private const val MAX_VISIBLE_CHIPS = 3
 private val HOME_ACTION_NAV_GAP = 16.dp
 private const val HOME_VOICE_HOLD_DELAY_MILLIS = 300L
